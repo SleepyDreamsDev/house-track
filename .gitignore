@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.vitest-cache/
+
+# Prisma
+/prisma/dev.db
+/prisma/dev.db-journal
+/prisma/*.db
+/prisma/*.db-journal
+
+# Local crawler data (Docker uses a named volume; this is for ad-hoc local runs)
+data/*
+!data/.gitkeep
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.bak
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Claude session-local artifacts (framework files themselves are tracked)
+.claude/sessions/
+.claude/.token-usage*
+.claude/runs/

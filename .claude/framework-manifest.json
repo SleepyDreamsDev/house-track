@@ -1,0 +1,40 @@
+{
+  "_doc": "Tracks which .claude/ files are framework (sync from claude-tdd-starter, stay generic) vs project (free to customize). See .claude/rules/framework-boundary.md.",
+  "framework": [
+    ".claude/settings.json",
+    ".claude/agents/README.md",
+    ".claude/agents/discovery-explorer.md",
+    ".claude/agents/domain-implementer.md",
+    ".claude/agents/reviewer.md",
+    ".claude/hooks/auto-approve-plan.sh",
+    ".claude/hooks/block-commit-on-main.sh",
+    ".claude/hooks/block-dangerous.sh",
+    ".claude/hooks/block-edit-outside-worktree.sh",
+    ".claude/hooks/feature-parallel-session-start.sh",
+    ".claude/hooks/feature-parallel-stop.sh",
+    ".claude/hooks/format-on-write.sh",
+    ".claude/hooks/notify.sh",
+    ".claude/hooks/pre-commit-typecheck.sh",
+    ".claude/hooks/session-start.sh",
+    ".claude/hooks/stop-reminder.sh",
+    ".claude/hooks/style-audit.sh",
+    ".claude/hooks/token-logger.sh",
+    ".claude/hooks/typecheck-on-edit.sh",
+    ".claude/skills/caveman/SKILL.md",
+    ".claude/skills/feature/SKILL.md",
+    ".claude/skills/feature-parallel/SKILL.md",
+    ".claude/skills/fix/SKILL.md",
+    ".claude/skills/security/SKILL.md",
+    ".claude/rules/framework-boundary.md",
+    ".claude/rules/plugin-gate.md",
+    ".claude/rules/session-reporting.md",
+    ".claude/rules/tdd-workflow.md",
+    ".claude/plans/README.md"
+  ],
+  "project": [
+    ".claude/framework.json",
+    ".claude/framework-manifest.json",
+    ".claude/progress.md",
+    ".claude/plans/backlog.md"
+  ]
+}

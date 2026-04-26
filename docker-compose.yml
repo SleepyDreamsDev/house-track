@@ -1,0 +1,20 @@
+# Source: docs/poc-spec.md §"Docker Compose"
+services:
+  property-crawler:
+    build: .
+    container_name: property-crawler
+    restart: unless-stopped
+    volumes:
+      - crawler-data:/data # named volume (avoid bind-mount perf issues on Win/WSL)
+    environment:
+      - NODE_ENV=production
+      - TZ=Europe/Chisinau
+      - DATABASE_URL=file:/data/crawler.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  crawler-data:
