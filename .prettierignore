@@ -2,5 +2,15 @@ node_modules
 dist
 data
 prisma/migrations
-.claude/hooks
 pnpm-lock.yaml
+
+# Framework files (kept byte-identical to claude-tdd-starter — see
+# .claude/rules/framework-boundary.md). Project overrides like progress.md
+# and backlog.md are also under .claude/ but are excluded here so prettier
+# never touches them either; they're plain markdown maintained by hand.
+.claude/
+
+# Project-level docs imported from claude-tdd-starter; they're kept byte
+# identical for the sync workflow. The POC spec is project-specific but
+# treated the same way for consistency.
+docs/

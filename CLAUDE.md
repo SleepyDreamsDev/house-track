@@ -29,19 +29,19 @@ docker compose logs -f property-crawler
 
 ## Commands
 
-| Task | Command |
-|---|---|
-| Install | `pnpm install` |
-| Type-check | `pnpm typecheck` |
-| Lint | `pnpm lint` (`pnpm lint:fix` to auto-fix) |
-| Format | `pnpm format` |
-| Tests | `pnpm test` (`pnpm test:watch` / `pnpm test:coverage`) |
-| Build | `pnpm build` |
-| Run | `pnpm start` (compiled) / `pnpm dev` (watch) |
-| Prisma migrate | `pnpm prisma:migrate` |
-| Prisma studio | `pnpm prisma:studio` |
-| Docker up | `docker compose up --build -d` |
-| Docker logs | `docker compose logs -f property-crawler` |
+| Task           | Command                                                |
+| -------------- | ------------------------------------------------------ |
+| Install        | `pnpm install`                                         |
+| Type-check     | `pnpm typecheck`                                       |
+| Lint           | `pnpm lint` (`pnpm lint:fix` to auto-fix)              |
+| Format         | `pnpm format`                                          |
+| Tests          | `pnpm test` (`pnpm test:watch` / `pnpm test:coverage`) |
+| Build          | `pnpm build`                                           |
+| Run            | `pnpm start` (compiled) / `pnpm dev` (watch)           |
+| Prisma migrate | `pnpm prisma:migrate`                                  |
+| Prisma studio  | `pnpm prisma:studio`                                   |
+| Docker up      | `docker compose up --build -d`                         |
+| Docker logs    | `docker compose logs -f property-crawler`              |
 
 ## Architecture
 
@@ -106,12 +106,12 @@ Scopes: `fetch`, `parse`, `persist`, `cron`, `circuit`, `db`, `docker`, `config`
 
 ### Test Runner Reference
 
-| Goal | Command |
-|---|---|
-| Run once | `pnpm test` |
-| Watch | `pnpm test:watch` |
-| Coverage (≥ 70%) | `pnpm test:coverage` |
-| Single file | `pnpm vitest run src/parse-index.test.ts` |
+| Goal             | Command                                   |
+| ---------------- | ----------------------------------------- |
+| Run once         | `pnpm test`                               |
+| Watch            | `pnpm test:watch`                         |
+| Coverage (≥ 70%) | `pnpm test:coverage`                      |
+| Single file      | `pnpm vitest run src/parse-index.test.ts` |
 
 ### Test Utilities
 
