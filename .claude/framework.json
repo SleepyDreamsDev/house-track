@@ -1,0 +1,14 @@
+{
+  "PROJECT_NAME": "house-track",
+  "PACKAGE_MANAGER": "pnpm",
+  "TYPECHECK_CMD": "pnpm typecheck",
+  "TYPECHECK_CMD_RAW": "pnpm typecheck",
+  "TEST_CMD": "pnpm test",
+  "TEST_CMD_ALL": "pnpm test",
+  "FORMAT_CMD": "pnpm prettier --write",
+  "FORMAT_EXTENSIONS_CASE": "*.ts|*.tsx|*.js|*.jsx|*.json|*.md|*.yaml|*.yml|*.prisma",
+  "TYPES_FILE": "src/types.ts",
+  "COMPONENTS_GLOB": "src/**/*.ts",
+  "DATA_FILE": "prisma/schema.prisma",
+  "TEST_GLOB": "src/**/__tests__/*.test.ts"
+}

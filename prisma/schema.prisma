@@ -1,0 +1,69 @@
+// 999.md house crawler — POC schema.
+// Source of truth: docs/poc-spec.md §"Database schema (Prisma)".
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Listing {
+  id            String   @id // 999.md numeric ID, e.g. "76543210"
+  url           String   @unique
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime
+  lastFetchedAt DateTime
+  active        Boolean  @default(true) // false when no longer in index sweeps
+
+  // Core fields (parsed)
+  title       String
+  priceEur    Int? // null if not parseable
+  priceRaw    String? // original price string for audit
+  rooms       Int?
+  areaSqm     Float?
+  landSqm     Float? // houses have land
+  district    String? // raw value from breadcrumb/filter
+  street      String?
+  floors      Int? // for houses: number of floors
+  yearBuilt   Int?
+  heatingType String? // raw text
+  description String? // full body text
+  features    String? // JSON array of feature tags
+  imageUrls   String? // JSON array of CDN URLs (NOT downloaded)
+  sellerType  String? // private / agency (heuristic)
+  postedAt    DateTime?
+  bumpedAt    DateTime?
+
+  // Versioning: track price/desc changes over time
+  snapshots ListingSnapshot[]
+
+  @@index([active, lastSeenAt])
+  @@index([priceEur])
+}
+
+model ListingSnapshot {
+  id          Int      @id @default(autoincrement())
+  listingId   String
+  capturedAt  DateTime @default(now())
+  priceEur    Int?
+  description String?
+  rawHtmlHash String // sha256 of normalized HTML, for change detection
+  listing     Listing  @relation(fields: [listingId], references: [id])
+
+  @@index([listingId, capturedAt])
+}
+
+model SweepRun {
+  id              Int       @id @default(autoincrement())
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  status          String // ok / partial / failed / circuit_open
+  pagesFetched    Int       @default(0)
+  detailsFetched  Int       @default(0)
+  newListings     Int       @default(0)
+  updatedListings Int       @default(0)
+  errors          String? // JSON array of {url, status, msg}
+}
