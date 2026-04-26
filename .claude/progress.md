@@ -3,40 +3,40 @@
 > Auto-injected at session start. Update this file at the end of each session.
 
 **Last updated:** 2026-04-26
-**Branch:** `claude/scaffold-house-track-EW7gc`
-**Last commit:** _scaffold pending_
+**Branch:** `claude/scaffold-house-track-EW7gc` (PR #1 merged into main)
+**Last commit:** _io-layer impl pending_
 
 ---
 
 ## Current state
 
-Initial scaffold from `claude-tdd-starter` (TDD framework + express-simple
-preset adapted for a cron-driven crawler). All `src/` files are stubs with
-TODOs that reference sections of `docs/poc-spec.md`.
+I/O-layer implementation done via TDD. **36/36 tests pass.**
 
-What's wired:
+| Module | Status | Tests |
+|---|---|---|
+| `src/circuit.ts` | DONE — sentinel-file breaker, threshold + cooldown | 7 |
+| `src/fetch.ts` | DONE — undici client, 8s±jitter spacing, 5xx retries (10/30/90s), 403/429 → CircuitTrippingError | 10 |
+| `src/persist.ts` | DONE — Prisma upsert, snapshot diff on rawHtmlHash, sweep round-trip | 10 |
+| `src/sweep.ts` | DONE — orchestrator: pre-flight → paginate → diff → fetch+parse+persist details → markSeen → markInactiveOlderThan → finishSweep | 7 |
+| `src/log.ts` | DONE — pino w/ service binding | 2 |
+| `src/index.ts` | DONE — wires all the above + node-cron | (no test — too thin) |
+| `src/parse-index.ts` | STUB — needs real 999.md HTML fixture | — |
+| `src/parse-detail.ts` | STUB — needs real 999.md HTML fixtures | — |
+| `src/config.ts` | STUB params — needs `o_<id>_<id>` keys from real 999.md filter URL | — |
 
-- `.claude/` framework (agents, hooks, skills, rules, settings)
-- `.husky` + commitlint
-- `package.json` with crawler deps (undici, cheerio, node-cron, prisma, pino)
-- `tsconfig.json` (strict, NodeNext, Node 22 target)
-- `vitest.config.ts`
-- Prisma schema (`Listing`, `ListingSnapshot`, `SweepRun`) per spec §"Database schema"
-- `Dockerfile` + `docker-compose.yml` per spec §"Docker Compose"
+Tooling: pnpm install ✓, prisma generate ✓, prisma db push (per test) ✓,
+typecheck ✓, lint ✓, prettier ✓, build ✓.
 
-What's NOT wired (deliberate — empty stubs):
-
-- HTTP fetch / retry / rate-limiting (`src/fetch.ts`)
-- Cheerio selectors (`src/parse-index.ts`, `src/parse-detail.ts`)
-- Prisma upsert + snapshot diffing (`src/persist.ts`)
-- Circuit breaker file logic (`src/circuit.ts`)
-- Cron entrypoint orchestration (`src/index.ts`)
-- 999.md filter param IDs (`src/config.ts` — must be copied from a real browser session, see spec §"Hardcoded filter")
+Sandbox limitation: 999.md is not on the host allowlist (curl returns "Host not
+in allowlist", WebFetch returns 403). Can't fetch fixtures or verify robots.txt
+from inside the sandbox — that's a local-machine task for the human.
 
 ## Next session
 
-1. `pnpm install` and verify `pnpm typecheck` passes against the stubs.
-2. Run `pnpm prisma migrate dev --name init` to generate the initial migration.
-3. Manually visit 999.md, apply filters, copy URL → fill in `src/config.ts` param IDs.
-4. Use `/feature` skill to drive RED→GREEN→REFACTOR for `parse-index.ts` first
-   (smallest scope, no I/O).
+1. Save 1 index page + 2–3 detail pages from 999.md to `src/__tests__/fixtures/`.
+2. Paste the real filter URL → extract `o_<id>_<id>=<value>` params into `src/config.ts`.
+3. TDD `parse-index.ts` against the saved fixture (RED → GREEN → REFACTOR).
+4. TDD `parse-detail.ts` against the saved fixtures, including `rawHtmlHash`
+   normalization (strip nav/footer/ads).
+5. End-to-end smoke run: `RUN_ONCE=1 pnpm dev` against the real 999.md.
+6. `docker compose up --build -d` and watch one tick.

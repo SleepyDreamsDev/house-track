@@ -1,30 +1,44 @@
 // Circuit breaker — sentinel-file based.
 //
-// Source: docs/poc-spec.md §"Politeness budget" + §"Failure handling":
+// Spec: docs/poc-spec.md §"Politeness budget" + §"Failure handling".
 //   3 consecutive 4xx (excluding 404) → 24h pause.
 //   Manual clear by deleting `data/.circuit_open`.
 
-/**
- * TODO(scaffold): implement.
- *
- * Suggested API (subject to change as we wire `src/index.ts`):
- *
- *   isOpen()        : Promise<boolean>   — true if sentinel exists AND its
- *                                          mtime is within the pause window
- *   recordFailure() : Promise<void>      — bumps the in-process counter;
- *                                          when it hits the threshold, writes
- *                                          the sentinel file
- *   recordSuccess() : void               — resets the in-process counter
- *
- * Notes:
- *  - The counter is process-local on purpose. The breaker is meant to stop
- *    THIS sweep's run; the sentinel file is what carries state between cron
- *    ticks.
- *  - The sentinel path comes from `CIRCUIT.sentinelPath` in `src/config.ts`.
- *  - When `isOpen()` returns true, write a SweepRun row with
- *    `status='circuit_open'` and exit (spec step 1 of crawl flow).
- */
+import { promises as fs } from 'node:fs';
+import { dirname } from 'node:path';
+
+export interface CircuitConfig {
+  sentinelPath: string;
+  threshold: number;
+  pauseDurationMs: number;
+}
 
 export class Circuit {
-  // TODO(scaffold)
+  // Process-local on purpose — only counts failures inside the current sweep.
+  // The sentinel file is what carries state across cron ticks.
+  private failureCount = 0;
+
+  constructor(private readonly config: CircuitConfig) {}
+
+  async isOpen(): Promise<boolean> {
+    try {
+      const info = await fs.stat(this.config.sentinelPath);
+      return Date.now() - info.mtimeMs < this.config.pauseDurationMs;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw err;
+    }
+  }
+
+  async recordFailure(): Promise<void> {
+    this.failureCount += 1;
+    if (this.failureCount >= this.config.threshold) {
+      await fs.mkdir(dirname(this.config.sentinelPath), { recursive: true });
+      await fs.writeFile(this.config.sentinelPath, '');
+    }
+  }
+
+  recordSuccess(): void {
+    this.failureCount = 0;
+  }
 }

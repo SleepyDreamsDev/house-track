@@ -28,8 +28,7 @@ export const POLITENESS = {
   jitterMs: 2_000,
   detailDelayMs: 10_000,
   retryBackoffsMs: [10_000, 30_000, 90_000] as const,
-  userAgent:
-    'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
+  userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
   acceptLanguage: 'ro-RO,ru-RU;q=0.9,en;q=0.8',
   accept: 'text/html,application/xhtml+xml',
 } as const;
