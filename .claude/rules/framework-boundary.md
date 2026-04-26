@@ -49,6 +49,39 @@ Add the path to the correct section of `framework-manifest.json` immediately.
 
 ---
 
+## Tooling Protection
+
+Framework files must stay byte-identical for `framework-sync.sh` to work — that means
+project-level **tooling** (auto-formatters, linters, codemods) must not rewrite them
+either. The bug class to prevent: an innocent `pnpm format` reflows whitespace in
+`.claude/skills/feature/SKILL.md`, the file drifts from the upstream, and the next
+`framework-sync.sh pull` shows a confusing diff.
+
+Every project scaffolded from this starter MUST exclude framework directories from
+its formatter and linter ignore files. The canonical list:
+
+```
+.claude/
+docs/
+```
+
+Concretely:
+
+- `.prettierignore` — must include the block above. `setup.sh` scaffolds a
+  default `.prettierignore` (from `core/.prettierignore.template`) when one is
+  not already present. Do not strip the framework-protection block.
+- `.eslintignore` (or the `ignores` block in `eslint.config.js`) — same.
+  Lint plugins should not enforce style rules on `.claude/**/*.md`.
+- Any other auto-fix tooling (codemods, `markdownlint --fix`, stylelint, etc.)
+  — same rule.
+
+If a project has a legitimate reason to format a file inside `.claude/` (for
+example, a hand-maintained `.claude/progress.md`), exclude it explicitly in
+`framework-manifest.json` under `"project"` and ALSO in the formatter's
+allow-list — don't widen the formatter to all of `.claude/`.
+
+---
+
 ## Runtime Variable Resolution
 
 ### In hooks (bash scripts)
