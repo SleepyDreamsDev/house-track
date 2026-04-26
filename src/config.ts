@@ -2,68 +2,59 @@
 //
 // Source: docs/poc-spec.md §"Hardcoded filter (Phase 1)".
 //
-// 999.md URL FACTS — extracted from real (search-indexed) listing URLs:
+// 999.md uses GraphQL at https://999.md/graphql (POST, Content-Type: application/json).
+// Filter IDs were discovered by intercepting browser network requests with Playwright.
 //
-//   Category path:    /ro/list/real-estate/house-and-garden
-//                     ^^^^ NOT "houses-and-villas" — that path 404s.
+// KEY DISCOVERY: The URL param ID space (o_41_1=903) is DIFFERENT from the GraphQL
+// optionId space. Example: URL param 903 = daily rental; GraphQL optionId 776 = "Vând"
+// (for sale). Always verify by reading `offerType.value.translated` on actual results.
 //
-//   Location is path-based:
-//     City wide:       /ro/Chisinau/list/real-estate/house-and-garden
-//     City + suburb:   /ro/Kishiniov/Durleshty/list/real-estate/house-and-garden
-//                      (note 999.md uses both Romanian and Russian transliteration;
-//                      both work, both return the same listings.)
+// Verified GraphQL filter IDs (2026-04-26):
+//   subCategoryId 1406         → house-and-garden subcategory
+//   filterId 41, featureId 1:
+//     optionId 776             → "Vând" (for sale) ✅
+//     optionId 903             → "De închiriat pe zi" (daily rental) — NOT sale
+//   filterId 40, featureId 7:
+//     optionId 12900           → Chișinău municipality ✅
+//   Pagination:                → limit + skip (0-indexed offset)
 //
-//   Filter param keys are 3-segment opaque IDs: o_<group>_<sub>=<value>
-//   or o_<group>_<sub>_<context>=<value>. Values are also opaque numeric ids.
+// Listing URL format:  https://999.md/ro/<id>  (NOT /advert/<id>)
 //
-//     o_41_1=903                 → "vânzare" (sale)        ✅ verified
-//     o_41_1=912                 → monthly rental (don't use)
-//     o_38_249=1641              → 1 level
-//     o_38_249=1643              → 2 levels
-//     o_40_7=12900               → top-level Chișinău location
-//     o_40_8_12900=13917         → Durlești inside Chișinău
-//     o_40_8_12900=13942         → Codru inside Chișinău
-//     applied=1                  → "filters applied" flag
-//     view_type=detail|photo     → presentation only, no effect on results
-//     selected_currency=eur|mdl  → display currency; doesn't filter
-//     ef=40, eo=12900            → location-context echoes; usually safe to omit
-//     page=N                     → 1-indexed pagination
+// STILL UNKNOWN — cannot be discovered without more exploration:
+//   - area filter param key (would cut sweep size ~4-6x)
+//   - price range filter param key
 //
-//   STILL UNKNOWN — cannot be discovered without browser access:
-//     - price filter param key (something like o_60_125_min / _max)
-//     - area filter param key  (something like o_50_*  _min / _max)
-//
-//   The unknowns mean we can't pre-filter on €250k or 200 m² at the URL layer.
-//   Strategy: fetch ALL Chișinău houses for sale, drop the ones over budget /
-//   too large in `parse-index.ts` after parsing the price + area fields.
-//   When you can paste a URL with those filters applied, drop the keys here
-//   and we move pre-filtering back to the URL layer (cuts sweep size 4-6x).
+// Strategy: fetch all Chișinău houses for sale (3302 listings), drop the ones over
+// budget / too large in parse-index.ts after parsing title ("Casă, 140 m², Colonița").
+
+export const GRAPHQL_ENDPOINT = 'https://999.md/graphql';
 
 export const FILTER = {
-  // Chișinău includes Durlești as a sub-locality, so this single base URL
-  // covers both targeted areas.
-  baseUrl: 'https://999.md/ro/Chisinau/list/real-estate/house-and-garden',
+  // Listing URL base — append /<id> for detail pages.
+  listingBaseUrl: 'https://999.md/ro',
 
-  params: {
-    // Sale only ("vânzare"). Verified.
-    o_41_1: '903',
-    // Apply the filters. Without this 999.md sometimes ignores the o_* params.
-    applied: '1',
-    // Force EUR display so price normalization in parse-index has a chance.
-    selected_currency: 'eur',
-    // Echo the location context so 999.md doesn't second-guess our path.
-    ef: '40',
-    eo: '12900',
+  // GraphQL search input for SearchAds operation.
+  searchInput: {
+    subCategoryId: 1406,
+    source: 'AD_SOURCE_DESKTOP' as const,
+    filters: [
+      // Sale listings only ("Vând").
+      { filterId: 41, features: [{ featureId: 1, optionIds: [776] }] },
+      // Chișinău municipality (includes Durlești, Codru, Colonița, etc.).
+      { filterId: 40, features: [{ featureId: 7, optionIds: [12900] }] },
+    ],
   },
 
-  // Client-side filters applied AFTER parse-index, since the URL-level
-  // price/area params are unknown. See module header.
+  // Client-side filters applied AFTER parse-index, since URL-level price/area
+  // params are still unknown. See module header.
   postFilter: {
     maxPriceEur: 250_000,
     maxAreaSqm: 200,
   },
 
-  maxPagesPerSweep: 30, // bumped from 20 — without URL-level filters, sweeps return more
+  // Listings per GraphQL page. 78 matches the browser default; keep it.
+  pageSize: 78,
+  maxPagesPerSweep: 50, // 50 * 78 = 3900 — covers the full 3302 count with headroom
 } as const;
 
 export const POLITENESS = {

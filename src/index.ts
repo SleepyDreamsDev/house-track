@@ -6,7 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import cron from 'node-cron';
 
 import { Circuit } from './circuit.js';
-import { CIRCUIT, FILTER, POLITENESS, SWEEP } from './config.js';
+import { CIRCUIT, FILTER, GRAPHQL_ENDPOINT, POLITENESS, SWEEP } from './config.js';
 import { Fetcher } from './fetch.js';
 import { log } from './log.js';
 import { parseDetail } from './parse-detail.js';
@@ -52,17 +52,10 @@ function buildDeps(): SweepDeps {
   };
 }
 
+// TODO: replace with GraphQL fetchGraphQL() once parse-index.ts is implemented.
+// The sweep interface still speaks URLs; migration happens in the parse-index TDD cycle.
 function buildIndexUrl(page: number): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(FILTER.params)) {
-    if (typeof value === 'boolean') {
-      if (value) params.set(key, '1');
-    } else {
-      params.set(key, String(value));
-    }
-  }
-  params.set('page', String(page));
-  return `${FILTER.baseUrl}?${params.toString()}`;
+  return `${GRAPHQL_ENDPOINT}?page=${page}`;
 }
 
 async function tick(): Promise<void> {
