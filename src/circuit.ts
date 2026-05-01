@@ -33,12 +33,22 @@ export class Circuit {
   async recordFailure(): Promise<void> {
     this.failureCount += 1;
     if (this.failureCount >= this.config.threshold) {
-      await fs.mkdir(dirname(this.config.sentinelPath), { recursive: true });
-      await fs.writeFile(this.config.sentinelPath, '');
+      await this.openSentinel();
     }
+  }
+
+  // Opens the breaker on the very first hit. Use for unambiguous block signals
+  // (403/429) where retrying again would risk an IP-level block.
+  async tripImmediately(): Promise<void> {
+    await this.openSentinel();
   }
 
   recordSuccess(): void {
     this.failureCount = 0;
+  }
+
+  private async openSentinel(): Promise<void> {
+    await fs.mkdir(dirname(this.config.sentinelPath), { recursive: true });
+    await fs.writeFile(this.config.sentinelPath, '');
   }
 }

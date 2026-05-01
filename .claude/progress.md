@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-04-26
 **Branch:** `claude/scaffold-house-track-EW7gc`
-**Last commit:** config: switch to GraphQL endpoint + correct filter IDs
+**Last commit:** _(uncommitted: GraphQL parsers + fetcher + sweep migration)_
 
 ---
 
@@ -27,16 +27,8 @@ is needed for listing data.
 
 **WARNING:** URL param ID space (`o_41_1=903`) ≠ GraphQL optionId space.
 - URL param 903 = daily rental
-- GraphQL optionId 903 = daily rental  
+- GraphQL optionId 903 = daily rental
 - GraphQL optionId 776 = "Vând" (sale) ✅
-
-**Data available from SearchAds per listing:**
-- id, title (contains area+suburb e.g. "Casă, 140 m², Colonița"), price (value + currency),
-  pricePerMeter, images[], offerType, region, city, reseted (refresh date)
-
-**Data available from GetAdvert per listing:**
-- All of the above plus: body (description in ro/ru), street, mapPoint (lat/lon),
-  state (AD_STATE_PUBLIC etc.), isExpired, expire date, owner
 
 **Fixtures saved:**
 - `src/__tests__/fixtures/search-ads-response.json` — 5 Chișinău sale listings + count
@@ -46,58 +38,67 @@ is needed for listing data.
 
 ## Current state
 
-I/O-layer implementation done via TDD. **36/36 tests pass.**
+GraphQL migration done via TDD. **70/70 tests pass.** Typecheck, lint, build all green. `cheerio` removed from deps.
 
 | Module | Status | Tests |
 |---|---|---|
 | `src/circuit.ts` | DONE — sentinel-file breaker, threshold + cooldown | 7 |
-| `src/fetch.ts` | DONE — undici client, 8s±jitter spacing, 5xx retries, 403/429 → CircuitTrippingError | 10 |
+| `src/fetch.ts` | DONE — undici client + `fetchGraphQL(endpoint, op, vars, query)` shares politeness/retry/circuit | 17 |
 | `src/persist.ts` | DONE — Prisma upsert, snapshot diff on rawHtmlHash, sweep round-trip | 10 |
-| `src/sweep.ts` | DONE — orchestrator: pre-flight → paginate → diff → fetch+parse+persist details | 7 |
+| `src/sweep.ts` | DONE — GraphQL-native deps: `fetchSearchPage(pageIdx)` + `fetchAdvert(id)` callbacks; optional `applyPostFilter` | 8 |
 | `src/log.ts` | DONE — pino w/ service binding | 2 |
-| `src/index.ts` | DONE — wires all the above + node-cron (buildIndexUrl is temp stub) | (no test) |
-| `src/config.ts` | UPDATED — GraphQL endpoint, correct optionId 776 (sale), Chisinau filter | — |
-| `src/parse-index.ts` | STUB — needs TDD against search-ads-response.json fixture | — |
-| `src/parse-detail.ts` | STUB — needs TDD against advert-detail-response.json fixture | — |
+| `src/parse-index.ts` | DONE — `parseIndex(json)` + `applyPostFilter(stubs, filter)` | 13 |
+| `src/parse-detail.ts` | DONE — `parseDetail(id, json)`; throws `AdvertNotFoundError` on null advert | 13 |
+| `src/graphql.ts` | NEW — query strings (PLACEHOLDER bodies) + `buildSearchVariables`/`buildAdvertVariables` | — |
+| `src/index.ts` | DONE — wires fetchGraphQL → fetchSearchPage/fetchAdvert; passes `applyPostFilter(_, FILTER.postFilter)` | (no test) |
+| `src/config.ts` | DONE — GraphQL endpoint, filter IDs, postFilter, pageSize | — |
 
-Tooling: pnpm install ✓, prisma generate ✓, typecheck ✓, lint ✓, build ✓.
+**Type changes this session:**
+- `ListingStub` gained `areaSqm: number | null` (parsed from title — needed for postFilter at index time).
+- `rawHtmlHash` field name retained (matches Prisma column) but value semantics changed to JSON-field hash. Migration to rename column is deferred.
+- `lat/lon` deferred — would require Prisma migration; not blocking POC.
 
 ---
 
-## Architecture change needed (parse-index TDD cycle)
+## ⚠️ BLOCKER for live smoke: real GraphQL query bodies
 
-The sweep.ts/fetch.ts interface still speaks HTML URLs. Next TDD cycle must migrate to GraphQL:
+`src/graphql.ts` has BEST-EFFORT-RECONSTRUCTED query strings. They mirror the field shape
+in the fixtures, but were not captured from a real browser session, so 999.md may reject
+them with "Unknown argument" / type mismatches.
 
-1. Add `fetchGraphQL(operationName, variables, query)` method to `Fetcher` (fetch.ts)
-2. Change `SweepDeps`:
-   - `parseIndex: (json: unknown) => ListingStub[]` (was `html: string`)
-   - `parseDetail: (id: string, json: unknown) => ParsedDetail` (was `url, html: string`)
-   - `buildSearchInput: (page: number) => SearchInput` (replaces `buildIndexUrl`)
-3. Update `runSweep` to call `fetchGraphQL` instead of `fetchPage`
-4. Remove `cheerio` dependency (not needed for JSON parsing)
+**Before `RUN_ONCE=1 pnpm dev` will work against live 999.md:**
+1. Open https://999.md/ro/list/real-estate/houses-and-yards in DevTools → Network
+2. Filter to `graphql` requests → find one whose payload `operationName` is `SearchAds`
+3. Copy the `query` string verbatim → replace `SEARCH_ADS_QUERY` in `src/graphql.ts`
+4. Click into a listing → repeat for the `GetAdvert` operation → replace `GET_ADVERT_QUERY`
+5. Verify the `variables` shape in the captured request matches what `buildSearchVariables`/
+   `buildAdvertVariables` produce. Adjust either side if not.
 
-**rawHtmlHash** becomes **rawJsonHash** — hash the price+title+state JSON fields.
+The variable BUILDERS (`buildSearchVariables`, `buildAdvertVariables`) and the `searchInput`
+in `config.ts` are verified — only the raw GraphQL strings need updating.
+
+**Proposed workflow improvement (not yet built):** add a project-local script
+`scripts/capture-graphql.ts` (or `docs/capture-graphql.md` runbook) that drives
+Playwright MCP against 999.md, intercepts the `SearchAds` and `GetAdvert` POSTs,
+and writes the captured `query` strings directly into `src/graphql.ts` (and refreshes
+the JSON fixtures while it's there). Project-scoped — not a generic Claude Code
+skill. Worth building before the next fixture refresh (every time 999.md changes
+its schema, this manual capture step recurs).
 
 ---
 
 ## Next session
 
-1. TDD `parse-index.ts` against `search-ads-response.json` fixture:
-   - Map GraphQL ads[] → ListingStub[]
-   - Parse area from title regex ("Casă, 140 m², Colonița" → 140)
-   - Parse price from feature(id:2).value (handle UNIT_EUR vs UNIT_MDL)
-   - Apply postFilter (maxPriceEur, maxAreaSqm) — filter here or in sweep?
+1. **Capture real GraphQL queries** (see blocker above) and paste into `src/graphql.ts`.
 
-2. TDD `parse-detail.ts` against `advert-detail-response.json` fixture:
-   - Map advert JSON → ParsedDetail
-   - Compute rawJsonHash from stable fields (price+title+state)
-   - Extract description body.value.ro
+2. **End-to-end smoke**: `RUN_ONCE=1 pnpm dev` against real 999.md GraphQL.
+   Expect: pre-flight, ~42 SearchAds pages over ~6 minutes (8s spacing × 42), then
+   N detail fetches for new listings (slower — 8s each). Monitor logs; check SQLite
+   row count.
 
-3. Migrate `sweep.ts` / `fetch.ts` to GraphQL interface (see Architecture change above)
+3. **Docker tick**: `docker compose up --build -d` and watch one cron tick complete.
 
-4. End-to-end smoke: `RUN_ONCE=1 pnpm dev` against real 999.md GraphQL.
-
-5. `docker compose up --build -d` and watch one tick.
-
-6. Check `types.ts` — update ParsedDetail if fields changed (rawHtmlHash → rawJsonHash,
-   add lat/lon, remove HTML-specific fields).
+4. **Optional follow-ups (not POC-blocking)**:
+   - Add `lat/lon` to `Listing` schema + migration; populate from `mapPoint.value`.
+   - Rename `rawHtmlHash` column → `rawContentHash` for clarity.
+   - Parse `rooms` from description text ("3 dormitoare" / "3 спальни").
