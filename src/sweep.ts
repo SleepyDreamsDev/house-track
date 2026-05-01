@@ -2,15 +2,21 @@
 // details for new ids → markSeen / markInactiveOlderThan → finishSweep.
 //
 // Spec: docs/poc-spec.md §"Crawl flow (per sweep)".
+// Now GraphQL-native: the sweep takes opaque `fetchSearchPage(pageIdx)` and
+// `fetchAdvert(id)` callbacks rather than raw URLs, so it doesn't have to know
+// the operation strings or variable shapes.
 
 import type { Circuit } from './circuit.js';
-import { CircuitTrippingError, type Fetcher } from './fetch.js';
+import { CircuitTrippingError } from './fetch.js';
 import type { Logger } from './log.js';
 import type { Persistence, SweepResult } from './persist.js';
+import { AdvertNotFoundError } from './parse-detail.js';
+import type { PostFilter } from './parse-index.js';
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
 
 export interface SweepDeps {
-  fetcher: Pick<Fetcher, 'fetchPage'>;
+  fetchSearchPage: (pageIdx: number) => Promise<unknown>;
+  fetchAdvert: (id: string) => Promise<unknown>;
   persist: Pick<
     Persistence,
     | 'diffAgainstDb'
@@ -21,9 +27,10 @@ export interface SweepDeps {
     | 'finishSweep'
   >;
   circuit: Pick<Circuit, 'isOpen'>;
-  parseIndex: (html: string) => ListingStub[];
-  parseDetail: (url: string, html: string) => ParsedDetail;
-  buildIndexUrl: (page: number) => string;
+  parseIndex: (json: unknown) => ListingStub[];
+  parseDetail: (id: string, json: unknown) => ParsedDetail;
+  applyPostFilter?: (stubs: ListingStub[]) => ListingStub[];
+  postFilter?: PostFilter;
   maxPagesPerSweep: number;
   missingThresholdMs: number;
   log?: Logger;
@@ -41,7 +48,8 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
   const result: SweepResult = emptyResult('ok');
 
   try {
-    const stubs = await collectIndexStubs(deps, result);
+    const allStubs = await collectIndexStubs(deps, result);
+    const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
     const { new: newStubs, seen: seenStubs } = await deps.persist.diffAgainstDb(stubs);
     result.newListings = newStubs.length;
 
@@ -49,7 +57,12 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
 
     await deps.persist.markSeen(seenStubs);
     result.updatedListings = seenStubs.length;
-    await deps.persist.markInactiveOlderThan(deps.missingThresholdMs);
+    // Only age out when this sweep saw a complete index. A partial sweep means
+    // some listings would be missing for a reason unrelated to delisting, so
+    // aging them out would corrupt the active set.
+    if (result.status === 'ok') {
+      await deps.persist.markInactiveOlderThan(deps.missingThresholdMs);
+    }
   } catch (err) {
     if (err instanceof CircuitTrippingError) {
       result.status = 'circuit_open';
@@ -65,16 +78,19 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
 
 async function collectIndexStubs(deps: SweepDeps, result: SweepResult): Promise<ListingStub[]> {
   const all: ListingStub[] = [];
-  for (let page = 1; page <= deps.maxPagesPerSweep; page++) {
-    const url = deps.buildIndexUrl(page);
-    const res = await deps.fetcher.fetchPage(url); // CircuitTrippingError bubbles
+  for (let page = 0; page < deps.maxPagesPerSweep; page++) {
+    const json = await deps.fetchSearchPage(page); // CircuitTrippingError bubbles
     result.pagesFetched += 1;
 
     let stubs: ListingStub[];
     try {
-      stubs = deps.parseIndex(res.body);
+      stubs = deps.parseIndex(json);
     } catch (err) {
-      record(result, { url, status: res.status, msg: `parseIndex: ${String(err)}` });
+      record(result, {
+        url: `<search-page-${page}>`,
+        status: null,
+        msg: `parseIndex: ${String(err)}`,
+      });
       result.status = 'partial';
       break;
     }
@@ -91,9 +107,9 @@ async function fetchAndPersistDetails(
   result: SweepResult,
 ): Promise<void> {
   for (const s of newStubs) {
-    let res;
+    let json: unknown;
     try {
-      res = await deps.fetcher.fetchPage(s.url);
+      json = await deps.fetchAdvert(s.id);
     } catch (err) {
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url: s.url, status: null, msg: String(err) });
@@ -102,13 +118,12 @@ async function fetchAndPersistDetails(
     }
     result.detailsFetched += 1;
 
-    if (res.status === 404) continue; // delisted between index and detail — not an error
-
     let parsed: ParsedDetail;
     try {
-      parsed = deps.parseDetail(s.url, res.body);
+      parsed = deps.parseDetail(s.id, json);
     } catch (err) {
-      record(result, { url: s.url, status: res.status, msg: `parseDetail: ${String(err)}` });
+      if (err instanceof AdvertNotFoundError) continue; // delisted between index and detail — not an error
+      record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}` });
       result.status = 'partial';
       continue;
     }
@@ -116,7 +131,7 @@ async function fetchAndPersistDetails(
     try {
       await deps.persist.persistDetail(parsed);
     } catch (err) {
-      record(result, { url: s.url, status: res.status, msg: `persist: ${String(err)}` });
+      record(result, { url: s.url, status: null, msg: `persist: ${String(err)}` });
       result.status = 'partial';
     }
   }

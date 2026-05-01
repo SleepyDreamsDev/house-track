@@ -102,19 +102,20 @@ describe('Fetcher', () => {
     expect(sleep).toHaveBeenCalledWith(90);
   });
 
-  it('A 403 trips the circuit and aborts the sweep', async () => {
+  it('A 403 immediately opens the breaker (no threshold) and aborts the sweep', async () => {
     mockAgent.get(ORIGIN).intercept({ path: '/locked' }).reply(403, 'no');
-    const recordFailure = vi.spyOn(circuit, 'recordFailure');
+    const tripImmediately = vi.spyOn(circuit, 'tripImmediately');
 
     await expect(makeFetcher().fetchPage(`${ORIGIN}/locked`)).rejects.toBeInstanceOf(
       CircuitTrippingError,
     );
-    expect(recordFailure).toHaveBeenCalledOnce();
+    expect(tripImmediately).toHaveBeenCalledOnce();
+    expect(await circuit.isOpen()).toBe(true);
   });
 
-  it('A 429 trips the circuit and aborts the sweep', async () => {
+  it('A 429 immediately opens the breaker (no threshold) and aborts the sweep', async () => {
     mockAgent.get(ORIGIN).intercept({ path: '/throttled' }).reply(429, 'slow');
-    const recordFailure = vi.spyOn(circuit, 'recordFailure');
+    const tripImmediately = vi.spyOn(circuit, 'tripImmediately');
 
     const err = await makeFetcher()
       .fetchPage(`${ORIGIN}/throttled`)
@@ -122,7 +123,41 @@ describe('Fetcher', () => {
 
     expect(err).toBeInstanceOf(CircuitTrippingError);
     expect((err as CircuitTrippingError).status).toBe(429);
-    expect(recordFailure).toHaveBeenCalledOnce();
+    expect(tripImmediately).toHaveBeenCalledOnce();
+    expect(await circuit.isOpen()).toBe(true);
+  });
+
+  it('A non-404 4xx (400/401/405) records a failure but does not trip immediately', async () => {
+    const pool = mockAgent.get(ORIGIN);
+    pool.intercept({ path: '/bad' }).reply(400, 'bad');
+    pool.intercept({ path: '/auth' }).reply(401, 'auth');
+    pool.intercept({ path: '/method' }).reply(405, 'method');
+    const recordFailure = vi.spyOn(circuit, 'recordFailure');
+    const recordSuccess = vi.spyOn(circuit, 'recordSuccess');
+
+    const fetcher = makeFetcher();
+    const r1 = await fetcher.fetchPage(`${ORIGIN}/bad`);
+    const r2 = await fetcher.fetchPage(`${ORIGIN}/auth`);
+    const r3 = await fetcher.fetchPage(`${ORIGIN}/method`);
+
+    expect(r1.status).toBe(400);
+    expect(r2.status).toBe(401);
+    expect(r3.status).toBe(405);
+    expect(recordFailure).toHaveBeenCalledTimes(3);
+    expect(recordSuccess).not.toHaveBeenCalled();
+    // Threshold is 3, so the 3rd failure should have opened the breaker via the threshold path.
+    expect(await circuit.isOpen()).toBe(true);
+  });
+
+  it('A 404 still counts as success (delisted listings are normal)', async () => {
+    mockAgent.get(ORIGIN).intercept({ path: '/gone' }).reply(404, '');
+    const recordSuccess = vi.spyOn(circuit, 'recordSuccess');
+    const recordFailure = vi.spyOn(circuit, 'recordFailure');
+
+    await makeFetcher().fetchPage(`${ORIGIN}/gone`);
+
+    expect(recordSuccess).toHaveBeenCalledOnce();
+    expect(recordFailure).not.toHaveBeenCalled();
   });
 
   it('Every request carries the polite headers', async () => {
@@ -181,5 +216,106 @@ describe('Fetcher', () => {
     expect(sleep).toHaveBeenCalledWith(10);
     expect(sleep).toHaveBeenCalledWith(30);
     expect(sleep).toHaveBeenCalledWith(90);
+  });
+
+  describe('fetchGraphQL', () => {
+    it('POSTs application/json with the operationName, variables, and query', async () => {
+      let captured: { method?: string; headers?: Record<string, unknown>; body?: unknown } = {};
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, (opts) => {
+          captured = {
+            method: opts.method,
+            headers: opts.headers as Record<string, unknown>,
+            body: opts.body,
+          };
+          return JSON.stringify({ data: { ok: true } });
+        });
+
+      await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'SearchAds', { page: 1 }, 'query Q {}');
+
+      expect(captured.method).toBe('POST');
+      expect(captured.headers?.['content-type']).toMatch(/^application\/json/);
+      const body = JSON.parse(String(captured.body));
+      expect(body).toEqual({
+        operationName: 'SearchAds',
+        variables: { page: 1 },
+        query: 'query Q {}',
+      });
+    });
+
+    it('Returns the parsed JSON body on 200', async () => {
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, JSON.stringify({ data: { searchAds: { ads: [], count: 0 } } }));
+
+      const json = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+
+      expect(json).toEqual({ data: { searchAds: { ads: [], count: 0 } } });
+    });
+
+    it('Retries 5xx with exponential backoff then succeeds', async () => {
+      const pool = mockAgent.get(ORIGIN);
+      pool.intercept({ path: '/graphql', method: 'POST' }).reply(503, 'down');
+      pool.intercept({ path: '/graphql', method: 'POST' }).reply(502, 'down');
+      pool
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, JSON.stringify({ data: 'ok' }));
+
+      const json = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+
+      expect(json).toEqual({ data: 'ok' });
+      expect(sleep).toHaveBeenCalledWith(10);
+      expect(sleep).toHaveBeenCalledWith(30);
+    });
+
+    it('A 429 immediately opens the breaker', async () => {
+      mockAgent.get(ORIGIN).intercept({ path: '/graphql', method: 'POST' }).reply(429, 'slow');
+      const tripImmediately = vi.spyOn(circuit, 'tripImmediately');
+
+      await expect(
+        makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q'),
+      ).rejects.toBeInstanceOf(CircuitTrippingError);
+      expect(tripImmediately).toHaveBeenCalledOnce();
+    });
+
+    it('A 403 trips the circuit', async () => {
+      mockAgent.get(ORIGIN).intercept({ path: '/graphql', method: 'POST' }).reply(403, 'no');
+
+      await expect(
+        makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q'),
+      ).rejects.toBeInstanceOf(CircuitTrippingError);
+    });
+
+    it('Records success on 200', async () => {
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, JSON.stringify({ data: 'ok' }));
+      const recordSuccess = vi.spyOn(circuit, 'recordSuccess');
+
+      await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+
+      expect(recordSuccess).toHaveBeenCalledOnce();
+    });
+
+    it('Inter-request delay applies between a fetchPage and a subsequent fetchGraphQL', async () => {
+      mockAgent.get(ORIGIN).intercept({ path: '/p' }).reply(200, '');
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, JSON.stringify({ data: 'ok' }));
+
+      const fetcher = makeFetcher(() => 0);
+      await fetcher.fetchPage(`${ORIGIN}/p`);
+      await fetcher.fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+
+      const interRequestSleeps = sleep.mock.calls
+        .map((c) => c[0] as number)
+        .filter((ms) => ms >= 5_000);
+      expect(interRequestSleeps).toHaveLength(1);
+    });
   });
 });

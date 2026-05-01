@@ -44,3 +44,8 @@ logs/
 .claude/sessions/
 .claude/.token-usage*
 .claude/runs/
+.claude/plans/.active
+.claude/plans/.checkpoint
+
+# Playwright MCP browser session artefacts (console logs, page snapshots)
+.playwright-mcp/

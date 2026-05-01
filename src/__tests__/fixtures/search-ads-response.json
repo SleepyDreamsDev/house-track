@@ -1,0 +1,397 @@
+{
+  "data": {
+    "searchAds": {
+      "ads": [
+        {
+          "id": "103772337",
+          "title": "Cas\u0103,  105 m\u00b2,  Chi\u0219in\u0103u",
+          "reseted": "26 apr. 2026, 22:38",
+          "price": {
+            "id": 2,
+            "type": "FEATURE_PRICE",
+            "value": {
+              "bargain": false,
+              "down_payment": 0,
+              "measurement": "UNIT_EUR",
+              "mode": "PM_FIXED",
+              "unit": "UNIT_EUR",
+              "value": 108000
+            },
+            "__typename": "FeatureValue"
+          },
+          "pricePerMeter": {
+            "id": 1385,
+            "type": "FEATURE_INT",
+            "value": 1028,
+            "__typename": "FeatureValue"
+          },
+          "images": {
+            "id": 14,
+            "type": "FEATURE_IMAGES",
+            "value": [
+              "5e4fb07cefeaf4a77106ba424637bfde.jpg",
+              "df246851277c2736334279bf9b38f41f.jpg",
+              "3a853260daecb674c21ec6e7cf4afcd6.jpg",
+              "c4711d64e060c19692e90c4a72420359.jpg",
+              "82d107a2d1d2465e95d04a640e479919.jpg",
+              "33adc926c344f3ee6e16b005105d5e0c.jpg",
+              "148d9a5bc0af2f59eb5def0172610730.jpg",
+              "88b215ab84cdfaa1167264621a8b91ce.jpg",
+              "44cc8138360b93b65975e695ed07b4c0.jpg",
+              "742e52dc4f1fcad91c5b403d1315ddc5.jpg"
+            ],
+            "__typename": "FeatureValue"
+          },
+          "offerType": {
+            "id": 1,
+            "type": "FEATURE_OFFER_TYPE",
+            "value": {
+              "abbreviations": {},
+              "translated": "V\u00e2nd",
+              "value": 776
+            },
+            "__typename": "FeatureValue"
+          },
+          "region": {
+            "id": 7,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u mun.",
+              "value": 12900
+            },
+            "__typename": "FeatureValue"
+          },
+          "city": {
+            "id": 8,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u",
+              "value": 13859
+            },
+            "__typename": "FeatureValue"
+          },
+          "__typename": "Advert"
+        },
+        {
+          "id": "103938760",
+          "title": "Cas\u0103,  300 m\u00b2,  St\u0103uceni",
+          "reseted": "26 apr. 2026, 22:31",
+          "price": {
+            "id": 2,
+            "type": "FEATURE_PRICE",
+            "value": {
+              "bargain": false,
+              "down_payment": 0,
+              "measurement": "UNIT_EUR",
+              "mode": "PM_FIXED",
+              "unit": "UNIT_EUR",
+              "value": 550000
+            },
+            "__typename": "FeatureValue"
+          },
+          "pricePerMeter": {
+            "id": 1385,
+            "type": "FEATURE_INT",
+            "value": 1833,
+            "__typename": "FeatureValue"
+          },
+          "images": {
+            "id": 14,
+            "type": "FEATURE_IMAGES",
+            "value": [
+              "5a51cb8dbe9006553674f6a90122510c.jpg",
+              "ba6b38f6db1f2d6f82010c814e3f349e.jpg",
+              "f94b68a066a306b92816479e4ebb127d.jpg",
+              "dc82c6526ea27a94652b506ed0e8948b.jpg",
+              "d0b4f350addc12d4160b97acea776f9a.jpg",
+              "b02f7a63d187907086985cd49657e3a1.jpg",
+              "e7c7e91efc777d203fb6018746e6028f.jpg",
+              "b134b2e9dbb3046b6bffe6b9d5044387.jpg",
+              "e80415dadbc5d97abdf35504457a9a95.jpg",
+              "7de8e55106bbb0b8a8a0fe6e6838e84a.jpg"
+            ],
+            "__typename": "FeatureValue"
+          },
+          "offerType": {
+            "id": 1,
+            "type": "FEATURE_OFFER_TYPE",
+            "value": {
+              "abbreviations": {},
+              "translated": "V\u00e2nd",
+              "value": 776
+            },
+            "__typename": "FeatureValue"
+          },
+          "region": {
+            "id": 7,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u mun.",
+              "value": 12900
+            },
+            "__typename": "FeatureValue"
+          },
+          "city": {
+            "id": 8,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "St\u0103uceni",
+              "value": 12926
+            },
+            "__typename": "FeatureValue"
+          },
+          "__typename": "Advert"
+        },
+        {
+          "id": "101137430",
+          "title": "Chi\u0219in\u0103u Tohatin str. Bogdan Petriceicu Ha\u0219deu",
+          "reseted": "26 apr. 2026, 22:30",
+          "price": {
+            "id": 2,
+            "type": "FEATURE_PRICE",
+            "value": {
+              "bargain": false,
+              "down_payment": 0,
+              "measurement": "UNIT_EUR",
+              "mode": "PM_FIXED",
+              "unit": "UNIT_EUR",
+              "value": 395000
+            },
+            "__typename": "FeatureValue"
+          },
+          "pricePerMeter": {
+            "id": 1385,
+            "type": "FEATURE_INT",
+            "value": 2468,
+            "__typename": "FeatureValue"
+          },
+          "images": {
+            "id": 14,
+            "type": "FEATURE_IMAGES",
+            "value": [
+              "c7735ce34e551252cae02ac0572ded5e.jpg",
+              "b3c434b52565ddde258951ac8256ffcf.jpg",
+              "652320072927c4d79f3c6380b9b93713.jpg",
+              "01c56d069195ab9f3b950cf81e59da45.jpg",
+              "3df22d0ccef11a25fa2870f3404b58d3.jpg",
+              "ac91857a85519c1914fcac39af92305d.jpg",
+              "c9c80fba915b3846c7f1f97876a0f397.jpg",
+              "8f4f04f503a002d4e72ed8e7eff3e60e.jpg",
+              "1122c530b84529c4f8195dd1eb1cb61e.jpg",
+              "46498108b3889cf1c591ff43230d176f.jpg",
+              "ad2359f2738ea5549236f56f92f89928.jpg",
+              "3f22e1af0a152a0b2866980a2c0d5fb7.jpg",
+              "276d6cb89dbd5a80d6f970615943654a.jpg",
+              "ec24f9e23bb2c1cecdf7a662adb4f663.jpg",
+              "af583cee4a9ce0842dbe0fd122f69cc4.jpg",
+              "8856fa2251a493f00e61db4b4107aed7.jpg",
+              "5b52313a82c4a1c4d508f1034fdcb2cb.jpg",
+              "1f791bde4a9565a69abe3bc51a53bbef.jpg",
+              "b4c127ac181dbca4ccd36b32052a97fa.jpg",
+              "6057f127cbd25391e2cc0a4d49326d0f.jpg"
+            ],
+            "__typename": "FeatureValue"
+          },
+          "offerType": {
+            "id": 1,
+            "type": "FEATURE_OFFER_TYPE",
+            "value": {
+              "abbreviations": {},
+              "translated": "V\u00e2nd",
+              "value": 776
+            },
+            "__typename": "FeatureValue"
+          },
+          "region": {
+            "id": 7,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u mun.",
+              "value": 12900
+            },
+            "__typename": "FeatureValue"
+          },
+          "city": {
+            "id": 8,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Tohatin",
+              "value": 13925
+            },
+            "__typename": "FeatureValue"
+          },
+          "__typename": "Advert"
+        },
+        {
+          "id": "101232278",
+          "title": "Cas\u0103,  260 m\u00b2,  Chi\u0219in\u0103u",
+          "reseted": "26 apr. 2026, 22:30",
+          "price": {
+            "id": 2,
+            "type": "FEATURE_PRICE",
+            "value": {
+              "bargain": false,
+              "down_payment": 0,
+              "measurement": "UNIT_EUR",
+              "mode": "PM_FIXED",
+              "unit": "UNIT_EUR",
+              "value": 365000
+            },
+            "__typename": "FeatureValue"
+          },
+          "pricePerMeter": {
+            "id": 1385,
+            "type": "FEATURE_INT",
+            "value": 1403,
+            "__typename": "FeatureValue"
+          },
+          "images": {
+            "id": 14,
+            "type": "FEATURE_IMAGES",
+            "value": [
+              "1fc04239aff19add7b2f11d89a54b0b7.jpg",
+              "17f36674663cb065ed3f16dc4c405e09.jpg",
+              "760754d02608aab70d89b95095ecd545.jpg",
+              "e80de47e9132e323a74fe560c7dd43bb.jpg",
+              "a6eb69ae233e158c8f1680448233877f.jpg",
+              "1b59a20174464d0f283457e6bd3af4c6.jpg",
+              "6662e0368f2380848cfcaf53d7da36a4.jpg",
+              "0550a0a8e9c3018398fce91893142647.jpg",
+              "604253a50caf3b00bb655cb3654f69e4.jpg",
+              "47586f01263fd91f3584da1846e60c95.jpg",
+              "af3ab623d776c49e28e85c47e2b5650c.jpg",
+              "b963ecc1d67ab0ce1909765e8cd9650d.jpg",
+              "492631c0581fd41c3ff217a734e9cee8.jpg",
+              "3a4b65de0264986efac6c24ba4e1ce37.jpg",
+              "63bf93283456cc67de1abc15d7ced960.jpg",
+              "3062d17057604a190b8f0f12405d63c6.jpg",
+              "509a5e598a1f92f93bd0f06abf182db6.jpg",
+              "8731415471de9d50c6948872c1c28eed.jpg"
+            ],
+            "__typename": "FeatureValue"
+          },
+          "offerType": {
+            "id": 1,
+            "type": "FEATURE_OFFER_TYPE",
+            "value": {
+              "abbreviations": {},
+              "translated": "V\u00e2nd",
+              "value": 776
+            },
+            "__typename": "FeatureValue"
+          },
+          "region": {
+            "id": 7,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u mun.",
+              "value": 12900
+            },
+            "__typename": "FeatureValue"
+          },
+          "city": {
+            "id": 8,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u",
+              "value": 13859
+            },
+            "__typename": "FeatureValue"
+          },
+          "__typename": "Advert"
+        },
+        {
+          "id": "101317349",
+          "title": "Chi\u0219in\u0103u Botanica str. Burebista",
+          "reseted": "26 apr. 2026, 22:30",
+          "price": {
+            "id": 2,
+            "type": "FEATURE_PRICE",
+            "value": {
+              "bargain": false,
+              "down_payment": 0,
+              "measurement": "UNIT_EUR",
+              "mode": "PM_FIXED",
+              "unit": "UNIT_EUR",
+              "value": 198000
+            },
+            "__typename": "FeatureValue"
+          },
+          "pricePerMeter": {
+            "id": 1385,
+            "type": "FEATURE_INT",
+            "value": 1466,
+            "__typename": "FeatureValue"
+          },
+          "images": {
+            "id": 14,
+            "type": "FEATURE_IMAGES",
+            "value": [
+              "79f1436eff2d063c685caa4181693b3a.jpg",
+              "dd816cac23b5b3932d0c70211727fa20.jpg",
+              "7e01ec4e90a07601959bcfb07855830f.jpg",
+              "291e8da06b8831c57524542da58a638c.jpg",
+              "c26a4caf96b261c7c43368b3c6aedcfb.jpg",
+              "f9224059793a03db354c08fa240d9fdc.jpg",
+              "2ca51c6232eb4e03ab2e9105ef048701.jpg",
+              "c93e454f8599851350f20077615799f0.jpg",
+              "9e97aaac40b444696c5fc4bb21b7e3a1.jpg",
+              "322315323ba95a5b092e2ad65f0a4344.jpg",
+              "f0d9e198b4b50bf58b61f2e4198b7ab9.jpg",
+              "31bab7a13e01b0e17ce76ccc80c81997.jpg",
+              "7ff67269334e5054e22cc899bc3fb134.jpg",
+              "709580beda108a09812b50246a711984.jpg",
+              "da1b59b70e54866c888aaa7d9105ed9e.jpg",
+              "ca452fb10df9c2243289fed7bc8ae4f1.jpg",
+              "556c1e50cd7cb0003be6469c3a999dd4.jpg",
+              "3ebc4355f31aae8c5759b74c81e13125.jpg",
+              "028080fd2fa1f80d2ef999081fb7fc28.jpg"
+            ],
+            "__typename": "FeatureValue"
+          },
+          "offerType": {
+            "id": 1,
+            "type": "FEATURE_OFFER_TYPE",
+            "value": {
+              "abbreviations": {},
+              "translated": "V\u00e2nd",
+              "value": 776
+            },
+            "__typename": "FeatureValue"
+          },
+          "region": {
+            "id": 7,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u mun.",
+              "value": 12900
+            },
+            "__typename": "FeatureValue"
+          },
+          "city": {
+            "id": 8,
+            "type": "FEATURE_OPTIONS",
+            "value": {
+              "abbreviations": {},
+              "translated": "Chi\u0219in\u0103u",
+              "value": 13859
+            },
+            "__typename": "FeatureValue"
+          },
+          "__typename": "Advert"
+        }
+      ],
+      "count": 3302,
+      "__typename": "AdsResponse"
+    }
+  }
+}

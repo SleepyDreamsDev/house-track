@@ -38,6 +38,12 @@ export class CircuitTrippingError extends Error {
   }
 }
 
+interface RequestOptions {
+  method: 'GET' | 'POST';
+  body?: string;
+  extraHeaders?: Record<string, string>;
+}
+
 export class Fetcher {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly jitter: () => number;
@@ -49,8 +55,27 @@ export class Fetcher {
   }
 
   async fetchPage(url: string): Promise<FetchResult> {
+    return this.run(url, { method: 'GET' });
+  }
+
+  async fetchGraphQL(
+    endpoint: string,
+    operationName: string,
+    variables: Record<string, unknown>,
+    query: string,
+  ): Promise<unknown> {
+    const body = JSON.stringify({ operationName, variables, query });
+    const res = await this.run(endpoint, {
+      method: 'POST',
+      body,
+      extraHeaders: { 'content-type': 'application/json' },
+    });
+    return JSON.parse(res.body);
+  }
+
+  private async run(url: string, opts: RequestOptions): Promise<FetchResult> {
     await this.maybeWaitBetweenRequests();
-    return this.attempt(url, 0);
+    return this.attempt(url, opts, 0);
   }
 
   private async maybeWaitBetweenRequests(): Promise<void> {
@@ -65,22 +90,27 @@ export class Fetcher {
     this.lastRequestAt = Date.now();
   }
 
-  private async attempt(url: string, attemptIdx: number): Promise<FetchResult> {
+  private async attempt(
+    url: string,
+    opts: RequestOptions,
+    attemptIdx: number,
+  ): Promise<FetchResult> {
     let res: FetchResult;
     try {
-      res = await this.doRequest(url);
+      res = await this.doRequest(url, opts);
     } catch (err) {
-      // Network error: retry with the same backoff schedule as 5xx.
       const backoff = this.deps.config.retryBackoffsMs[attemptIdx];
       if (backoff !== undefined) {
         await this.sleep(backoff);
-        return this.attempt(url, attemptIdx + 1);
+        return this.attempt(url, opts, attemptIdx + 1);
       }
       throw err;
     }
 
     if (res.status === 403 || res.status === 429) {
-      await this.deps.circuit.recordFailure();
+      // Unambiguous block signal — open the breaker immediately so the next tick
+      // skips entirely. Risking another hit could escalate to an IP-level block.
+      await this.deps.circuit.tripImmediately();
       throw new CircuitTrippingError(res.status, url);
     }
 
@@ -88,24 +118,33 @@ export class Fetcher {
       const backoff = this.deps.config.retryBackoffsMs[attemptIdx];
       if (backoff !== undefined) {
         await this.sleep(backoff);
-        return this.attempt(url, attemptIdx + 1);
+        return this.attempt(url, opts, attemptIdx + 1);
       }
       throw new Error(`5xx after retries: ${res.status} ${url}`);
+    }
+
+    // Per spec: "3 consecutive 4xx (excluding 404) → pause". 404 is normal
+    // (delisted listings); other 4xx (400/401/405/...) count toward the threshold.
+    if (res.status >= 400 && res.status < 500 && res.status !== 404) {
+      await this.deps.circuit.recordFailure();
+      return res;
     }
 
     this.deps.circuit.recordSuccess();
     return res;
   }
 
-  private async doRequest(url: string): Promise<FetchResult> {
+  private async doRequest(url: string, opts: RequestOptions): Promise<FetchResult> {
     const { config } = this.deps;
     const { statusCode, body } = await request(url, {
-      method: 'GET',
+      method: opts.method,
       headers: {
         'user-agent': config.userAgent,
         'accept-language': config.acceptLanguage,
         accept: config.accept,
+        ...(opts.extraHeaders ?? {}),
       },
+      ...(opts.body !== undefined ? { body: opts.body } : {}),
       ...(this.deps.dispatcher ? { dispatcher: this.deps.dispatcher } : {}),
     });
     const text = await body.text();

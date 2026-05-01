@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Circuit } from '../circuit.js';
-import { CircuitTrippingError, type Fetcher } from '../fetch.js';
+import { CircuitTrippingError } from '../fetch.js';
+import { AdvertNotFoundError } from '../parse-detail.js';
 import type { Persistence } from '../persist.js';
 import { runSweep, type SweepDeps } from '../sweep.js';
-import type { FetchResult, ListingStub, ParsedDetail } from '../types.js';
+import type { ListingStub, ParsedDetail } from '../types.js';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -13,7 +14,8 @@ const stub = (id: string): ListingStub => ({
   url: `https://999.md/ro/${id}`,
   title: `Title ${id}`,
   priceEur: 100_000,
-  priceRaw: '€100000',
+  priceRaw: '100000 EUR',
+  areaSqm: 120,
   postedAt: null,
 });
 
@@ -22,7 +24,7 @@ const detail = (id: string): ParsedDetail => ({
   url: `https://999.md/ro/${id}`,
   title: `Title ${id}`,
   priceEur: 100_000,
-  priceRaw: '€100000',
+  priceRaw: '100000 EUR',
   rooms: 4,
   areaSqm: 120,
   landSqm: 600,
@@ -42,7 +44,8 @@ const detail = (id: string): ParsedDetail => ({
 
 interface MockEnv {
   deps: SweepDeps;
-  fetchPage: ReturnType<typeof vi.fn>;
+  fetchSearchPage: ReturnType<typeof vi.fn>;
+  fetchAdvert: ReturnType<typeof vi.fn>;
   isOpen: ReturnType<typeof vi.fn>;
   diffAgainstDb: ReturnType<typeof vi.fn>;
   markSeen: ReturnType<typeof vi.fn>;
@@ -55,7 +58,8 @@ interface MockEnv {
 }
 
 function makeEnv(): MockEnv {
-  const fetchPage = vi.fn<(url: string) => Promise<FetchResult>>();
+  const fetchSearchPage = vi.fn<(pageIdx: number) => Promise<unknown>>();
+  const fetchAdvert = vi.fn<(id: string) => Promise<unknown>>();
   const isOpen = vi.fn().mockResolvedValue(false);
   const diffAgainstDb = vi
     .fn()
@@ -65,11 +69,12 @@ function makeEnv(): MockEnv {
   const persistDetail = vi.fn().mockResolvedValue(undefined);
   const startSweep = vi.fn().mockResolvedValue({ id: 1 });
   const finishSweep = vi.fn().mockResolvedValue(undefined);
-  const parseIndex = vi.fn<(html: string) => ListingStub[]>();
-  const parseDetail = vi.fn<(url: string, html: string) => ParsedDetail>();
+  const parseIndex = vi.fn<(json: unknown) => ListingStub[]>();
+  const parseDetail = vi.fn<(id: string, json: unknown) => ParsedDetail>();
 
   const deps: SweepDeps = {
-    fetcher: { fetchPage } as unknown as Fetcher,
+    fetchSearchPage,
+    fetchAdvert,
     persist: {
       diffAgainstDb,
       markSeen,
@@ -81,14 +86,14 @@ function makeEnv(): MockEnv {
     circuit: { isOpen } as unknown as Circuit,
     parseIndex,
     parseDetail,
-    buildIndexUrl: (n: number) => `https://test/index?page=${n}`,
     maxPagesPerSweep: 5,
     missingThresholdMs: 3 * HOUR,
   };
 
   return {
     deps,
-    fetchPage,
+    fetchSearchPage,
+    fetchAdvert,
     isOpen,
     diffAgainstDb,
     markSeen,
@@ -108,7 +113,8 @@ describe('runSweep', () => {
 
     await runSweep(env.deps);
 
-    expect(env.fetchPage).not.toHaveBeenCalled();
+    expect(env.fetchSearchPage).not.toHaveBeenCalled();
+    expect(env.fetchAdvert).not.toHaveBeenCalled();
     expect(env.startSweep).toHaveBeenCalledOnce();
     expect(env.finishSweep).toHaveBeenCalledOnce();
     expect(env.finishSweep.mock.calls[0]?.[1]).toMatchObject({ status: 'circuit_open' });
@@ -116,12 +122,11 @@ describe('runSweep', () => {
 
   it('Happy path: 1 page with 2 stubs, both new and persisted', async () => {
     const env = makeEnv();
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx', status: 200, body: '<idx>' });
+    env.fetchSearchPage.mockResolvedValueOnce({ page: 0 });
+    env.fetchSearchPage.mockResolvedValueOnce({ page: 1 });
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
-    env.parseIndex.mockReturnValueOnce([]); // page 2 empty → stop pagination
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx2', status: 200, body: '<empty>' });
-    env.fetchPage.mockResolvedValueOnce({ url: 'detA', status: 200, body: '<a>' });
-    env.fetchPage.mockResolvedValueOnce({ url: 'detB', status: 200, body: '<b>' });
+    env.parseIndex.mockReturnValueOnce([]); // page 1 empty → stop pagination
+    env.fetchAdvert.mockResolvedValueOnce({ id: 'A' }).mockResolvedValueOnce({ id: 'B' });
     env.parseDetail.mockReturnValueOnce(detail('A')).mockReturnValueOnce(detail('B'));
 
     await runSweep(env.deps);
@@ -132,21 +137,22 @@ describe('runSweep', () => {
 
   it('Empty index page stops pagination', async () => {
     const env = makeEnv();
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx', status: 200, body: '<empty>' });
+    env.fetchSearchPage.mockResolvedValueOnce({});
     env.parseIndex.mockReturnValueOnce([]);
 
     await runSweep(env.deps);
 
-    expect(env.fetchPage).toHaveBeenCalledOnce();
+    expect(env.fetchSearchPage).toHaveBeenCalledOnce();
+    expect(env.fetchAdvert).not.toHaveBeenCalled();
   });
 
   it('A CircuitTrippingError mid-sweep aborts and marks status circuit_open', async () => {
     const env = makeEnv();
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx', status: 200, body: '<idx>' });
+    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce({});
     env.parseIndex.mockReturnValueOnce([stub('A')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx2', status: 200, body: '' });
-    env.fetchPage.mockRejectedValueOnce(new CircuitTrippingError(429, 'detA'));
+    env.fetchAdvert.mockRejectedValueOnce(new CircuitTrippingError(429, 'detA'));
 
     await runSweep(env.deps);
 
@@ -155,12 +161,11 @@ describe('runSweep', () => {
 
   it('parseDetail throwing on one listing does not kill the sweep', async () => {
     const env = makeEnv();
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx', status: 200, body: '<idx>' });
+    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce({});
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx2', status: 200, body: '' });
-    env.fetchPage.mockResolvedValueOnce({ url: 'detA', status: 200, body: '<a>' });
-    env.fetchPage.mockResolvedValueOnce({ url: 'detB', status: 200, body: '<b>' });
+    env.fetchAdvert.mockResolvedValueOnce({ id: 'A' }).mockResolvedValueOnce({ id: 'B' });
     env.parseDetail
       .mockImplementationOnce(() => {
         throw new Error('schema drift');
@@ -177,28 +182,45 @@ describe('runSweep', () => {
     expect(result.errors[0]).toMatchObject({ msg: expect.stringContaining('schema drift') });
   });
 
-  it('404 on a detail is not a failure', async () => {
+  it('AdvertNotFoundError on a detail is silent (delisted between index and detail)', async () => {
     const env = makeEnv();
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx', status: 200, body: '<idx>' });
+    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce({});
     env.parseIndex.mockReturnValueOnce([stub('A')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx2', status: 200, body: '' });
-    env.fetchPage.mockResolvedValueOnce({ url: 'detA', status: 404, body: '' });
+    env.fetchAdvert.mockResolvedValueOnce({ data: { advert: null } });
+    env.parseDetail.mockImplementationOnce(() => {
+      throw new AdvertNotFoundError('A');
+    });
 
     await runSweep(env.deps);
 
     expect(env.persistDetail).not.toHaveBeenCalled();
-    expect(env.finishSweep.mock.calls[0]?.[1]).toMatchObject({ status: 'ok' });
-    expect(env.finishSweep.mock.calls[0]?.[1].errors).toHaveLength(0);
+    const result = env.finishSweep.mock.calls[0]?.[1];
+    expect(result.status).toBe('ok');
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('Does NOT age out listings when the sweep is partial (incomplete index → stale data risk)', async () => {
+    const env = makeEnv();
+    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.parseIndex.mockImplementationOnce(() => {
+      throw new Error('schema drift on index');
+    });
+
+    await runSweep(env.deps);
+
+    expect(env.markInactiveOlderThan).not.toHaveBeenCalled();
+    expect(env.finishSweep.mock.calls[0]?.[1]).toMatchObject({ status: 'partial' });
   });
 
   it('Seen ids get markSeen and stale ids get aged out', async () => {
     const env = makeEnv();
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx', status: 200, body: '<idx>' });
+    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce({});
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchPage.mockResolvedValueOnce({ url: 'idx2', status: 200, body: '' });
-    env.fetchPage.mockResolvedValueOnce({ url: 'detB', status: 200, body: '<b>' });
+    env.fetchAdvert.mockResolvedValueOnce({});
     env.parseDetail.mockReturnValueOnce(detail('B'));
     env.diffAgainstDb.mockResolvedValueOnce({ new: [stub('B')], seen: [stub('A')] });
 
@@ -207,5 +229,21 @@ describe('runSweep', () => {
     expect(env.markSeen).toHaveBeenCalledOnce();
     expect(env.markSeen.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['A']);
     expect(env.markInactiveOlderThan).toHaveBeenCalledWith(3 * HOUR);
+  });
+
+  it('applyPostFilter callback runs before diffAgainstDb', async () => {
+    const env = makeEnv();
+    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
+    env.parseIndex.mockReturnValueOnce([]);
+    env.fetchAdvert.mockResolvedValueOnce({});
+    env.parseDetail.mockReturnValueOnce(detail('A'));
+    env.deps.applyPostFilter = (s) => s.filter((x) => x.id === 'A');
+
+    await runSweep(env.deps);
+
+    expect(env.diffAgainstDb).toHaveBeenCalledOnce();
+    expect(env.diffAgainstDb.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['A']);
   });
 });

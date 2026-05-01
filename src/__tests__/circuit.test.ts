@@ -83,6 +83,13 @@ describe('Circuit', () => {
     expect(await circuit.isOpen()).toBe(false);
   });
 
+  it('tripImmediately opens the breaker on the first call (for 403/429)', async () => {
+    const circuit = make();
+    await circuit.tripImmediately();
+    await expect(stat(sentinelPath)).resolves.toBeDefined();
+    expect(await circuit.isOpen()).toBe(true);
+  });
+
   it('recordFailure does not throw if the sentinel directory is missing', async () => {
     const nestedPath = join(dir, 'nested', 'deeper', '.circuit_open');
     const circuit = make({ sentinelPath: nestedPath });

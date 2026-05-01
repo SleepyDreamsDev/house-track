@@ -14,7 +14,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "typecheck": "tsc --noEmit",
+    "capture-session": "tsx scripts/capture-session.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -30,7 +31,6 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "cheerio": "^1.0.0",
     "node-cron": "^3.0.3",
     "pino": "^9.5.0",
     "undici": "^6.21.0"
@@ -47,6 +47,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^15.2.10",
     "pino-pretty": "^11.3.0",
+    "playwright": "^1.49.0",
     "prettier": "^3.4.0",
     "prisma": "^5.22.0",
     "tsx": "^4.19.0",

@@ -1,0 +1,98 @@
+{
+  "data": {
+    "advert": {
+      "id": "104027607",
+      "title": "Cas\u0103,  140 m\u00b2,  Coloni\u021ba",
+      "state": "AD_STATE_PUBLIC",
+      "isExpired": false,
+      "reseted": "26 apr. 2026, 18:34",
+      "expire": "26 mai. 2026, 18:34",
+      "price": {
+        "id": 2,
+        "type": "FEATURE_PRICE",
+        "value": {
+          "bargain": false,
+          "down_payment": 0,
+          "measurement": "UNIT_EUR",
+          "mode": "PM_FIXED",
+          "unit": "UNIT_EUR",
+          "value": 395000
+        },
+        "__typename": "FeatureValue"
+      },
+      "pricePerMeter": {
+        "id": 1385,
+        "type": "FEATURE_INT",
+        "value": 2821,
+        "__typename": "FeatureValue"
+      },
+      "body": {
+        "id": 13,
+        "type": "FEATURE_BODY",
+        "value": {
+          "ro": "Cas\u0103 cu un nivel nefinisat\u0103 (varianta ro\u0219ie) cu subsol finisat \u0219i beci.\nCas\u0103 cu un nivel nefinisat\u0103 (varianta ro\u0219ie) cu subsol finisat \u0219i beci.\nLiving + buc\u0103t\u0103rie \u0219i 3 dormitoare\nBuc\u0103t\u0103rie de var\u0103 cu teras\u0103\nParcare pentru 2 ma\u0219ini\nhttps://www.google.com/maps/place/47%C2%B003'14.3%22N+28%C2%B056'53.9%22E/@47.0521741,28.9364312,2546m/data=!3m1!1e3!4m13!1m8!3m7!1s0x40c97b46f76cf151:0x8e4606df9e7fcea6!2sTineretului,+Coloni%C5%A3a,+Moldova!3b1!8m2!3d47.0470546!4d28.9513589!16s%2Fg%2F12vsj01zv!3m3!8m2!3d47.0539722!4d28.9483056?entry=ttu&g_ep=EgoyMDI2MDQwNi4wIKXMDSoASAFQAw%3D%3D",
+          "ru": "\u0414\u043e\u043c \u0441 \u043e\u0434\u043d\u0438\u043c \u044d\u0442\u0430\u0436\u043e\u043c, \u043d\u0435\u043e\u0442\u0434\u0435\u043b\u0430\u043d\u043d\u044b\u0439 (\u043a\u0440\u0430\u0441\u043d\u044b\u0439 \u0432\u0430\u0440\u0438\u0430\u043d\u0442) \u0441 \u043e\u0442\u0434\u0435\u043b\u0430\u043d\u043d\u044b\u043c \u043f\u043e\u0434\u0432\u0430\u043b\u043e\u043c \u0438 \u043f\u043e\u0433\u0440\u0435\u0431\u043e\u043c.\n\u0414\u043e\u043c \u0441 \u043e\u0434\u043d\u0438\u043c \u044d\u0442\u0430\u0436\u043e\u043c, \u043d\u0435\u043e\u0442\u0434\u0435\u043b\u0430\u043d\u043d\u044b\u0439 (\u043a\u0440\u0430\u0441\u043d\u044b\u0439 \u0432\u0430\u0440\u0438\u0430\u043d\u0442) \u0441 \u043e\u0442\u0434\u0435\u043b\u0430\u043d\u043d\u044b\u043c \u043f\u043e\u0434\u0432\u0430\u043b\u043e\u043c \u0438 \u043f\u043e\u0433\u0440\u0435\u0431\u043e\u043c.\n\u0413\u043e\u0441\u0442\u0438\u043d\u0430\u044f + \u043a\u0443\u0445\u043d\u044f \u0438 3 \u0441\u043f\u0430\u043b\u044c\u043d\u0438\n\u041b\u0435\u0442\u043d\u044f\u044f \u043a\u0443\u0445\u043d\u044f \u0441 \u0442\u0435\u0440\u0440\u0430\u0441\u043e\u0439\n\u041f\u0430\u0440\u043a\u043e\u0432\u043a\u0430 \u043d\u0430 2 \u043c\u0430\u0448\u0438\u043d\u044b\nhttps://www.google.com/maps/place/47%C2%B003'14.3%22N+28%C2%B056'53.9%22E/@47.0521741,28.9364312,2546m/data=!3m1!1e3!4m13!1m8!3m7!1s0x40c97b46f76cf151:0x8e4606df9e7fcea6!2sTineretului,+Coloni%C5%A3a,+Moldova!3b1!8m2!3d47.0470546!4d28.9513589!16s%2Fg%2F12vsj01zv!3m3!8m2!3d47.0539722!4d28.9483056?entry=ttu&g_ep=EgoyMDI2MDQwNi4wIKXMDSoASAFQAw%3D%3D",
+          "translated": "Cas\u0103 cu un nivel nefinisat\u0103 (varianta ro\u0219ie) cu subsol finisat \u0219i beci.\nCas\u0103 cu un nivel nefinisat\u0103 (varianta ro\u0219ie) cu subsol finisat \u0219i beci.\nLiving + buc\u0103t\u0103rie \u0219i 3 dormitoare\nBuc\u0103t\u0103rie de var\u0103 cu teras\u0103\nParcare pentru 2 ma\u0219ini\nhttps://www.google.com/maps/place/47%C2%B003'14.3%22N+28%C2%B056'53.9%22E/@47.0521741,28.9364312,2546m/data=!3m1!1e3!4m13!1m8!3m7!1s0x40c97b46f76cf151:0x8e4606df9e7fcea6!2sTineretului,+Coloni%C5%A3a,+Moldova!3b1!8m2!3d47.0470546!4d28.9513589!16s%2Fg%2F12vsj01zv!3m3!8m2!3d47.0539722!4d28.9483056?entry=ttu&g_ep=EgoyMDI2MDQwNi4wIKXMDSoASAFQAw%3D%3D"
+        },
+        "__typename": "FeatureValue"
+      },
+      "region": {
+        "id": 7,
+        "type": "FEATURE_OPTIONS",
+        "value": {
+          "abbreviations": {},
+          "translated": "Chi\u0219in\u0103u mun.",
+          "value": 12900
+        },
+        "__typename": "FeatureValue"
+      },
+      "city": {
+        "id": 8,
+        "type": "FEATURE_OPTIONS",
+        "value": {
+          "abbreviations": {},
+          "translated": "Coloni\u021ba",
+          "value": 13915
+        },
+        "__typename": "FeatureValue"
+      },
+      "street": {
+        "id": 10,
+        "type": "FEATURE_TEXT",
+        "value": "str. Tohatin",
+        "__typename": "FeatureValue"
+      },
+      "mapPoint": {
+        "id": 3,
+        "type": "FEATURE_MAP_POINT",
+        "value": {
+          "lat": 47.053986,
+          "lon": 28.948309,
+          "zoom": 16
+        },
+        "__typename": "FeatureValue"
+      },
+      "images": {
+        "id": 14,
+        "type": "FEATURE_IMAGES",
+        "value": [
+          "03db25221e0dec3af5bceb71dd0287b9.jpg",
+          "34e3ca27e253a3912cf92362e6c25168.jpg",
+          "b64225c3feb4fe7ce99eececf531aae9.jpg"
+        ],
+        "__typename": "FeatureValue"
+      },
+      "offerType": {
+        "id": 1,
+        "type": "FEATURE_OFFER_TYPE",
+        "value": {
+          "abbreviations": {},
+          "translated": "V\u00e2nd",
+          "value": 776
+        },
+        "__typename": "FeatureValue"
+      },
+      "__typename": "Advert"
+    }
+  }
+}

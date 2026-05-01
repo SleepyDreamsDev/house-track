@@ -6,11 +6,17 @@ import { PrismaClient } from '@prisma/client';
 import cron from 'node-cron';
 
 import { Circuit } from './circuit.js';
-import { CIRCUIT, FILTER, POLITENESS, SWEEP } from './config.js';
+import { CIRCUIT, FILTER, GRAPHQL_ENDPOINT, POLITENESS, SWEEP } from './config.js';
 import { Fetcher } from './fetch.js';
+import {
+  buildAdvertVariables,
+  buildSearchVariables,
+  GET_ADVERT_QUERY,
+  SEARCH_ADS_QUERY,
+} from './graphql.js';
 import { log } from './log.js';
 import { parseDetail } from './parse-detail.js';
-import { parseIndex } from './parse-index.js';
+import { applyPostFilter, parseIndex } from './parse-index.js';
 import { Persistence } from './persist.js';
 import { runSweep, type SweepDeps } from './sweep.js';
 
@@ -19,8 +25,11 @@ const SWEEPS_PER_DAY = 24;
 const MISSING_THRESHOLD_MS =
   SWEEP.missingSweepsBeforeInactive * (24 / SWEEPS_PER_DAY) * 60 * 60 * 1000;
 
+// Module-scoped: PrismaClient holds a connection pool. Re-instantiating per tick
+// leaks handles in a long-running cron process and can keep the event loop alive.
+const prisma = new PrismaClient();
+
 function buildDeps(): SweepDeps {
-  const prisma = new PrismaClient();
   const persist = new Persistence(prisma);
   const circuit = new Circuit({
     sentinelPath: CIRCUIT.sentinelPath,
@@ -40,29 +49,29 @@ function buildDeps(): SweepDeps {
   });
 
   return {
-    fetcher,
+    fetchSearchPage: (pageIdx) =>
+      fetcher.fetchGraphQL(
+        GRAPHQL_ENDPOINT,
+        'SearchAds',
+        buildSearchVariables(pageIdx),
+        SEARCH_ADS_QUERY,
+      ),
+    fetchAdvert: (id) =>
+      fetcher.fetchGraphQL(
+        GRAPHQL_ENDPOINT,
+        'GetAdvert',
+        buildAdvertVariables(id),
+        GET_ADVERT_QUERY,
+      ),
     persist,
     circuit,
     parseIndex,
     parseDetail,
-    buildIndexUrl,
+    applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
     maxPagesPerSweep: FILTER.maxPagesPerSweep,
     missingThresholdMs: MISSING_THRESHOLD_MS,
     log,
   };
-}
-
-function buildIndexUrl(page: number): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(FILTER.params)) {
-    if (typeof value === 'boolean') {
-      if (value) params.set(key, '1');
-    } else {
-      params.set(key, String(value));
-    }
-  }
-  params.set('page', String(page));
-  return `${FILTER.baseUrl}?${params.toString()}`;
 }
 
 async function tick(): Promise<void> {

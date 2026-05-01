@@ -1,26 +1,60 @@
 // Hardcoded filter (Phase 1). YAML loader comes later.
 //
-// IMPORTANT: 999.md URL params use opaque `o_<id>_<id>=<value>` form and
-// shift across category trees. Do NOT guess — open 999.md in a browser, apply
-// filters by hand (Vând / Casă / Chișinău+Durlești / 0–250000 EUR / 0–200 m²),
-// and copy the resulting query-string keys into `params` below.
-//
 // Source: docs/poc-spec.md §"Hardcoded filter (Phase 1)".
+//
+// 999.md uses GraphQL at https://999.md/graphql (POST, Content-Type: application/json).
+// Filter IDs were discovered by intercepting browser network requests with Playwright.
+//
+// KEY DISCOVERY: The URL param ID space (o_41_1=903) is DIFFERENT from the GraphQL
+// optionId space. Example: URL param 903 = daily rental; GraphQL optionId 776 = "Vând"
+// (for sale). Always verify by reading `offerType.value.translated` on actual results.
+//
+// Verified GraphQL filter IDs (2026-04-26):
+//   subCategoryId 1406         → house-and-garden subcategory
+//   filterId 41, featureId 1:
+//     optionId 776             → "Vând" (for sale) ✅
+//     optionId 903             → "De închiriat pe zi" (daily rental) — NOT sale
+//   filterId 40, featureId 7:
+//     optionId 12900           → Chișinău municipality ✅
+//   Pagination:                → limit + skip (0-indexed offset)
+//
+// Listing URL format:  https://999.md/ro/<id>  (NOT /advert/<id>)
+//
+// STILL UNKNOWN — cannot be discovered without more exploration:
+//   - area filter param key (would cut sweep size ~4-6x)
+//   - price range filter param key
+//
+// Strategy: fetch all Chișinău houses for sale (3302 listings), drop the ones over
+// budget / too large in parse-index.ts after parsing title ("Casă, 140 m², Colonița").
+
+export const GRAPHQL_ENDPOINT = 'https://999.md/graphql';
 
 export const FILTER = {
-  baseUrl: 'https://999.md/ro/list/real-estate/houses-and-villas',
+  // Listing URL base — append /<id> for detail pages.
+  listingBaseUrl: 'https://999.md/ro',
 
-  // TODO(scaffold): replace these placeholder param names with the real
-  // `o_<id>_<id>` keys copied from a real browser session.
-  params: {
-    deal_type: 'sale', // VERIFY: e.g. o_30_237=775
-    location_chisinau: true, // VERIFY: location_id for Chișinău
-    location_durlesti: true, // VERIFY: location_id for Durlești (may be a sub-filter under Chișinău)
-    price_eur_max: 250_000, // VERIFY: price param + EUR currency code
-    area_sqm_max: 200, // VERIFY
+  // GraphQL search input for SearchAds operation.
+  searchInput: {
+    subCategoryId: 1406,
+    source: 'AD_SOURCE_DESKTOP' as const,
+    filters: [
+      // Sale listings only ("Vând").
+      { filterId: 41, features: [{ featureId: 1, optionIds: [776] }] },
+      // Chișinău municipality (includes Durlești, Codru, Colonița, etc.).
+      { filterId: 40, features: [{ featureId: 7, optionIds: [12900] }] },
+    ],
   },
 
-  maxPagesPerSweep: 20, // safety cap; the index typically has ~10 pages
+  // Client-side filters applied AFTER parse-index, since URL-level price/area
+  // params are still unknown. See module header.
+  postFilter: {
+    maxPriceEur: 250_000,
+    maxAreaSqm: 200,
+  },
+
+  // Listings per GraphQL page. 78 matches the browser default; keep it.
+  pageSize: 78,
+  maxPagesPerSweep: 50, // 50 * 78 = 3900 — covers the full 3302 count with headroom
 } as const;
 
 export const POLITENESS = {

@@ -44,6 +44,7 @@ const stub = (id: string, overrides: Partial<ListingStub> = {}): ListingStub => 
   title: `Title ${id}`,
   priceEur: 100_000,
   priceRaw: '€100000',
+  areaSqm: 120,
   postedAt: null,
   ...overrides,
 });

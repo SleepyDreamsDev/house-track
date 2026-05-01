@@ -8,6 +8,7 @@ export interface ListingStub {
   title: string;
   priceEur: number | null;
   priceRaw: string | null;
+  areaSqm: number | null;
   postedAt: Date | null;
 }
 
