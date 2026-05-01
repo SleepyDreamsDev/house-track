@@ -56,7 +56,7 @@ sequenced. Single localhost-only stack: `crawler` + `postgres` + `grafana`
 + `web`. Sliced for incremental shipping per slice = its own session +
 commit.
 
-- [ ] **Slice 1 — Postgres migration + testcontainers.** Plan: [`postgres-migration.md`](./postgres-migration.md). SQLite → pg, fresh `0_init`, per-Vitest-process testcontainer, all 146 existing tests green. _Run via `/feature`._
+- [x] **Slice 1 — Postgres migration + testcontainers.** Plan: [`postgres-migration.md`](./postgres-migration.md). SQLite → pg, fresh `0_init`, per-Vitest-process testcontainer, 147/147 tests green. PR [#6](https://github.com/SleepyDreamsDev/house-track/pull/6).
 - [ ] **Slice 2 — `Setting` + `Source` tables + `getSetting`.** New tables, `src/settings.ts`, refactor `sweep.ts`/`fetch.ts`/`circuit.ts` to read overrides; `src/config.ts` stays as defaults. _Run via `/feature`._
 - [ ] **Slice 3 — Hono API layer + `web` service.** `src/web/server.ts` + routes (sweeps/listings/filters/settings/sources/circuit) reusing `src/mcp/queries.ts`. _Run via `/feature-parallel` with 4–6._
 - [ ] **Slice 4 — Vite SPA scaffold + 4 pages.** `web/` Vite + react-router + TanStack Query/Table + shadcn primitives. Functional but unstyled. _Run via `/feature-parallel` with 3, 5, 6._
