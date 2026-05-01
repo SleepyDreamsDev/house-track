@@ -89,3 +89,12 @@ Tests: <N> passing
 Notes (out-of-scope changes needed):
 - <NOTE items, or "none">
 ```
+
+## Output discipline
+
+- Output: diff + one-line summary per file. No prose, no alternatives,
+  no next-step suggestions, no "I noticed..." asides.
+- Tools: Read, Write, Edit, Bash, Grep, Glob. No WebFetch / WebSearch.
+  Stay inside assigned worktree/domain.
+- Stop after the assigned scope. Out-of-scope observations go in the
+  NOTE block — never as inline prose.

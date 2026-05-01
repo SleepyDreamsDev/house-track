@@ -10,6 +10,8 @@
     ".claude/hooks/block-commit-on-main.sh",
     ".claude/hooks/block-dangerous.sh",
     ".claude/hooks/block-edit-outside-worktree.sh",
+    ".claude/hooks/caveman-autotrigger.sh",
+    ".claude/hooks/claudemd-size-check.sh",
     ".claude/hooks/feature-parallel-session-start.sh",
     ".claude/hooks/feature-parallel-stop.sh",
     ".claude/hooks/format-on-write.sh",
@@ -29,12 +31,14 @@
     ".claude/rules/plugin-gate.md",
     ".claude/rules/session-reporting.md",
     ".claude/rules/tdd-workflow.md",
+    ".claude/rules/token-discipline.md",
     ".claude/plans/README.md"
   ],
   "project": [
     ".claude/framework.json",
     ".claude/framework-manifest.json",
     ".claude/progress.md",
+    ".claude/progress-archive.md",
     ".claude/plans/backlog.md"
   ]
 }

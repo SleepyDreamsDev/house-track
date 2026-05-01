@@ -24,12 +24,11 @@ PHASE=$([ -f "$CHECKPOINT" ] && cat "$CHECKPOINT" || echo "unknown")
 LOG_DIR="$PROJECT_DIR/.claude/logs"
 mkdir -p "$LOG_DIR"
 
+# Cache breakpoint minimum (Opus is the strict superset; below this no cache
+# entry is written and any "cache hit %" reading is meaningless).
+CACHE_BREAKPOINT=2048
+
 # ── Parse transcript ──────────────────────────────────────────────────────────
-# The JSONL has one JSON object per line.  We slurp all lines into an array
-# with -s, then extract:
-#   • token totals (input / output / cache_read / cache_creation)
-#   • per-model breakdown — separates Opus (planning subagent) from Sonnet
-#   • agent_dispatches — number of Agent tool calls spawned (each = subagent)
 STATS=$(jq -sc '
   ( [.[] | select(.type == "assistant" and .message.usage != null)] ) as $turns |
   {
@@ -54,6 +53,15 @@ STATS=$(jq -sc '
         ( .message.content? // [] ) | .[] |
         select( type == "object" and .type == "tool_use" and .name == "Agent" )
       ] | length
+    ),
+
+    cache_breaks: (
+      [ $turns | to_entries[] |
+        select(.key >= 3
+          and (.value.message.usage.cache_creation_input_tokens // 0) > 1000)
+        | { turn: (.key + 1),
+            created: (.value.message.usage.cache_creation_input_tokens // 0) }
+      ]
     )
   }
 ' "$TRANSCRIPT") || {
@@ -71,10 +79,31 @@ jq -nc \
   >> "$LOG_DIR/token-usage.jsonl"
 
 # ── Human-readable status line ────────────────────────────────────────────────
-IN=$(echo "$STATS"    | jq '.total_input')
-OUT=$(echo "$STATS"   | jq '.total_output')
-CACHE=$(echo "$STATS" | jq '.cache_read')
-AGENTS=$(echo "$STATS" | jq '.agent_dispatches')
-CACHE_PCT=$(echo "$STATS" | jq 'if .total_input > 0 then (.cache_read / .total_input * 100 | round) else 0 end')
+IN=$(echo       "$STATS" | jq '.total_input')
+OUT=$(echo      "$STATS" | jq '.total_output')
+CACHE_R=$(echo  "$STATS" | jq '.cache_read')
+CACHE_C=$(echo  "$STATS" | jq '.cache_creation')
+AGENTS=$(echo   "$STATS" | jq '.agent_dispatches')
+TOTAL_CACHE=$((CACHE_R + CACHE_C))
 
-echo "Tokens → in: ${IN}  out: ${OUT}  cache_hit: ${CACHE_PCT}% (${CACHE} tokens saved)  agents: ${AGENTS}  phase: ${PHASE}"
+CACHE_PCT=$(echo "$STATS" | jq '
+  if (.cache_read + .cache_creation) > 0
+    then (.cache_read / (.cache_read + .cache_creation) * 100 | round)
+    else 0
+  end')
+
+echo "Tokens → in: ${IN}  out: ${OUT}  cache_read: ${CACHE_R}  cache_creation: ${CACHE_C}  cache_hit: ${CACHE_PCT}%  agents: ${AGENTS}  phase: ${PHASE}"
+
+# ── Warnings (only when above the cache breakpoint minimum) ───────────────────
+if [ "$TOTAL_CACHE" -gt "$CACHE_BREAKPOINT" ]; then
+  if [ "$CACHE_PCT" -lt 70 ]; then
+    echo "⚠ cache hit ratio ${CACHE_PCT}% < 70% — likely cause: edited static context (CLAUDE.md/progress.md), tool-set churn, or model switch."
+  fi
+
+  # Per-turn cache-break detector
+  BREAKS=$(echo "$STATS" | jq -r '.cache_breaks | length')
+  if [ "$BREAKS" -gt 0 ]; then
+    echo "$STATS" | jq -r '.cache_breaks[] |
+      "⚠ cache break at turn \(.turn) (created \(.created) new cache tokens). Likely cause: edited CLAUDE.md/progress.md, switched model, or tool set changed."'
+  fi
+fi
