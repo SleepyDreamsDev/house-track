@@ -48,7 +48,23 @@
       listings, filterValuesEnrichedAt populated, ~30 backfill rows per
       tick, no 403/429.
 
-## Priority 2 — Acceptance criteria validation
+## Priority 2 — Operator UI + Postgres + Grafana (newly tracked 2026-05-02)
+
+Parent plan: [`operator-ui-postgres-grafana.md`](./operator-ui-postgres-grafana.md).
+Delivers `docs/poc-spec.md` Phase 4 (operator UI) earlier than originally
+sequenced. Single localhost-only stack: `crawler` + `postgres` + `grafana`
++ `web`. Sliced for incremental shipping per slice = its own session +
+commit.
+
+- [x] **Slice 1 — Postgres migration + testcontainers.** Plan: [`postgres-migration.md`](./postgres-migration.md). SQLite → pg, fresh `0_init`, per-Vitest-process testcontainer, 147/147 tests green. PR [#6](https://github.com/SleepyDreamsDev/house-track/pull/6).
+- [ ] **Slice 2 — `Setting` + `Source` tables + `getSetting`.** New tables, `src/settings.ts`, refactor `sweep.ts`/`fetch.ts`/`circuit.ts` to read overrides; `src/config.ts` stays as defaults. _Run via `/feature`._
+- [ ] **Slice 3 — Hono API layer + `web` service.** `src/web/server.ts` + routes (sweeps/listings/filters/settings/sources/circuit) reusing `src/mcp/queries.ts`. _Run via `/feature-parallel` with 4–6._
+- [ ] **Slice 4 — Vite SPA scaffold + 4 pages.** `web/` Vite + react-router + TanStack Query/Table + shadcn primitives. Functional but unstyled. _Run via `/feature-parallel` with 3, 5, 6._
+- [ ] **Slice 5 — `frontend-design` visual pass.** Apply `frontend-design` skill to the 4 pages per parent plan §"Visual pass". _Run via `/feature-parallel` with 3, 4, 6._
+- [ ] **Slice 6 — Grafana provisioning + iframe.** `grafana/provisioning/*`, dashboard JSON, Dashboard-page iframe. _Run via `/feature-parallel` with 3, 4, 5._
+- [ ] **Slice 7 — Docs.** `docs/operator-ui.md`, poc-spec append, `CLAUDE.md` Stack/Quick-Start update. _Run via `/feature` or plain edits._
+
+## Priority 3 — Acceptance criteria validation
 
 - [ ] 7 consecutive days of hourly sweeps, ≥ 95% `status=ok`.
 - [ ] ≥ 200 unique listings captured.
@@ -56,7 +72,7 @@
 - [ ] Zero 403/429 across the week.
 - [ ] At least one observed price change captured as a snapshot.
 
-## Priority 3 — Later (post-POC backlog from spec §"High-level backlog")
+## Priority 4 — Later (post-POC backlog from spec §"High-level backlog")
 
 - [ ] Phase 2: LLM scoring with Haiku 4.5 + prompt-cached rubric.
 - [ ] Phase 3: Telegram bot delivery.

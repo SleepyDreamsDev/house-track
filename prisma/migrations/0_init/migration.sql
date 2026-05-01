@@ -1,65 +1,71 @@
 -- CreateTable
 CREATE TABLE "Listing" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "url" TEXT NOT NULL,
-    "firstSeenAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "lastSeenAt" DATETIME NOT NULL,
-    "lastFetchedAt" DATETIME NOT NULL,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "lastFetchedAt" TIMESTAMP(3) NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    "filterValuesEnrichedAt" DATETIME,
+    "filterValuesEnrichedAt" TIMESTAMP(3),
     "title" TEXT NOT NULL,
     "priceEur" INTEGER,
     "priceRaw" TEXT,
     "rooms" INTEGER,
-    "areaSqm" REAL,
-    "landSqm" REAL,
+    "areaSqm" DOUBLE PRECISION,
+    "landSqm" DOUBLE PRECISION,
     "district" TEXT,
     "street" TEXT,
     "floors" INTEGER,
     "yearBuilt" INTEGER,
     "heatingType" TEXT,
     "description" TEXT,
-    "features" TEXT,
-    "imageUrls" TEXT,
+    "features" JSONB,
+    "imageUrls" JSONB,
     "sellerType" TEXT,
-    "postedAt" DATETIME,
-    "bumpedAt" DATETIME
+    "postedAt" TIMESTAMP(3),
+    "bumpedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Listing_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ListingFilterValue" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "listingId" TEXT NOT NULL,
     "filterId" INTEGER NOT NULL DEFAULT 0,
     "featureId" INTEGER NOT NULL,
     "optionId" INTEGER,
     "textValue" TEXT,
-    "numericValue" REAL,
-    CONSTRAINT "ListingFilterValue_listingId_fkey" FOREIGN KEY ("listingId") REFERENCES "Listing" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "numericValue" DOUBLE PRECISION,
+
+    CONSTRAINT "ListingFilterValue_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ListingSnapshot" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "listingId" TEXT NOT NULL,
-    "capturedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "capturedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "priceEur" INTEGER,
     "description" TEXT,
     "rawHtmlHash" TEXT NOT NULL,
-    CONSTRAINT "ListingSnapshot_listingId_fkey" FOREIGN KEY ("listingId") REFERENCES "Listing" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+
+    CONSTRAINT "ListingSnapshot_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "SweepRun" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "finishedAt" DATETIME,
+    "id" SERIAL NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finishedAt" TIMESTAMP(3),
     "status" TEXT NOT NULL,
     "pagesFetched" INTEGER NOT NULL DEFAULT 0,
     "detailsFetched" INTEGER NOT NULL DEFAULT 0,
     "newListings" INTEGER NOT NULL DEFAULT 0,
     "updatedListings" INTEGER NOT NULL DEFAULT 0,
-    "errors" TEXT
+    "errors" JSONB,
+
+    CONSTRAINT "SweepRun_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -82,3 +88,9 @@ CREATE INDEX "ListingFilterValue_featureId_optionId_idx" ON "ListingFilterValue"
 
 -- CreateIndex
 CREATE INDEX "ListingSnapshot_listingId_capturedAt_idx" ON "ListingSnapshot"("listingId", "capturedAt");
+
+-- AddForeignKey
+ALTER TABLE "ListingFilterValue" ADD CONSTRAINT "ListingFilterValue_listingId_fkey" FOREIGN KEY ("listingId") REFERENCES "Listing"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ListingSnapshot" ADD CONSTRAINT "ListingSnapshot_listingId_fkey" FOREIGN KEY ("listingId") REFERENCES "Listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

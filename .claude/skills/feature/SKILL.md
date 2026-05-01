@@ -443,7 +443,29 @@ Run these checks — make parallel Bash tool calls:
 
 If any fail, fix and re-run only the failing check.
 
-### Step 2: Reviewer gate (always — mode depends on change type)
+### Step 1.5: Codex Tier 1 review (skip for CSS/presentation-only)
+
+Skip this step if the change qualifies as CSS/presentation-only (criteria in Step 2).
+
+Run Codex against the working tree as a first-pass adversarial review:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" review --wait --scope working-tree
+```
+
+If `CLAUDE_PLUGIN_ROOT` is unset (Codex plugin disabled or unavailable), skip silently and proceed to Step 2 — the reviewer agent's description acknowledges this fallback.
+
+Triage Codex output:
+
+| Severity                     | Action                                  |
+| ---------------------------- | --------------------------------------- |
+| Bug / security / correctness | Fix before proceeding to Step 2         |
+| Style / suggestion           | Note in commit body, fix if trivial     |
+| Approach / design challenge  | Decide explicitly: accept or pushback   |
+
+After fixes (if any), re-run Step 1 validation, then proceed to Step 2.
+
+### Step 2: Reviewer gate (Tier 2 — mode depends on change type)
 
 Classify the changes to choose the reviewer mode:
 

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+coverage/
+.next/
+*.lock
+*.log
+.git/
+data/*.db
+data/*.db-journal
+data/*.db-shm
+data/*.db-wal
+.playwright-mcp/

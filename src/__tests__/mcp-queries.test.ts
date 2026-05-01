@@ -1,30 +1,18 @@
-import { execSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getListing, listFilters, searchListings } from '../mcp/queries.js';
 
-let dir: string;
 let prisma: PrismaClient;
 
-beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'mcp-q-'));
-  const dbPath = join(dir, 'test.db');
-  const url = `file:${dbPath}`;
-  execSync('pnpm prisma db push --skip-generate --accept-data-loss', {
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: 'pipe',
-  });
+beforeAll(() => {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL not set — vitest setup must run first');
   prisma = new PrismaClient({ datasources: { db: { url } } });
-}, 60_000);
+});
 
 afterAll(async () => {
   await prisma.$disconnect();
-  await rm(dir, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
@@ -278,7 +266,7 @@ describe('getListing', () => {
     expect(await getListing(prisma, 'NONEXISTENT')).toBeNull();
   });
 
-  it('Parses imageUrls JSON column into a string array', async () => {
+  it('Returns imageUrls as a string array from the JSONB column', async () => {
     const now = new Date();
     await prisma.listing.create({
       data: {
@@ -287,12 +275,30 @@ describe('getListing', () => {
         title: 'X',
         lastSeenAt: now,
         lastFetchedAt: now,
-        imageUrls: JSON.stringify(['a.jpg', 'b.jpg']),
+        imageUrls: ['a.jpg', 'b.jpg'],
       },
     });
 
     const r = await getListing(prisma, 'IMG');
 
     expect(r?.imageUrls).toEqual(['a.jpg', 'b.jpg']);
+  });
+
+  it('Returns empty array when imageUrls column contains a non-array value', async () => {
+    const now = new Date();
+    await prisma.listing.create({
+      data: {
+        id: 'BAD_IMG',
+        url: 'https://999.md/ro/BAD_IMG',
+        title: 'X',
+        lastSeenAt: now,
+        lastFetchedAt: now,
+        imageUrls: { not: 'an array' },
+      },
+    });
+
+    const r = await getListing(prisma, 'BAD_IMG');
+
+    expect(r?.imageUrls).toEqual([]);
   });
 });

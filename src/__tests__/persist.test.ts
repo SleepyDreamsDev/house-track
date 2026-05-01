@@ -1,8 +1,3 @@
-import { execSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,25 +6,18 @@ import type { FilterValueTriple, ListingStub, ParsedDetail } from '../types.js';
 
 const HOUR = 60 * 60 * 1000;
 
-let dir: string;
 let prisma: PrismaClient;
 let persist: Persistence;
 
-beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'persist-'));
-  const dbPath = join(dir, 'test.db');
-  const url = `file:${dbPath}`;
-  execSync('pnpm prisma db push --skip-generate --accept-data-loss', {
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: 'pipe',
-  });
+beforeAll(() => {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL not set — vitest setup must run first');
   prisma = new PrismaClient({ datasources: { db: { url } } });
   persist = new Persistence(prisma);
-}, 60_000);
+});
 
 afterAll(async () => {
   await prisma.$disconnect();
-  await rm(dir, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
@@ -139,7 +127,7 @@ describe('Persistence', () => {
     expect(row.title).toBe('Title NEW');
     expect(row.priceEur).toBe(100_000);
     expect(row.areaSqm).toBe(120);
-    expect(row.features).toBe(JSON.stringify(['garage', 'garden']));
+    expect(row.features).toEqual(['garage', 'garden']);
 
     const snaps = await prisma.listingSnapshot.findMany({ where: { listingId: 'NEW' } });
     expect(snaps).toHaveLength(1);
@@ -361,8 +349,6 @@ describe('Persistence', () => {
     });
 
     const row = await prisma.sweepRun.findUniqueOrThrow({ where: { id } });
-    expect(row.errors).toBe(
-      JSON.stringify([{ url: 'https://999.md/x', status: 500, msg: 'boom' }]),
-    );
+    expect(row.errors).toEqual([{ url: 'https://999.md/x', status: 500, msg: 'boom' }]);
   });
 });

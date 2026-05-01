@@ -31,18 +31,15 @@ RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate \
 
 WORKDIR /app
 ENV NODE_ENV=production \
-    TZ=Europe/Chisinau \
-    DATABASE_URL=file:/data/crawler.db
+    TZ=Europe/Chisinau
 
 COPY --from=deps  /app/node_modules ./node_modules
 COPY --from=deps  /app/prisma       ./prisma
 COPY --from=build /app/dist         ./dist
-COPY package.json ./
-
-# /data is provided by the named volume in docker-compose.yml
-RUN mkdir -p /data
-VOLUME ["/data"]
+COPY package.json pnpm-lock.yaml* ./
 
 USER node
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "dist/index.js"]
+# Apply outstanding migrations before booting the cron loop. Idempotent:
+# `migrate deploy` no-ops when the DB is already at the latest migration.
+CMD ["sh", "-c", "pnpm prisma migrate deploy && node dist/index.js"]

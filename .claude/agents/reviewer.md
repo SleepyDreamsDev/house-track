@@ -55,3 +55,10 @@ Report your findings in this format:
 ### Quality Notes
 - observations about code quality, consistency, patterns
 ```
+
+## Output discipline
+
+- Findings format strictly: `severity | file:line | one-sentence issue |
+  one-sentence fix`. Nothing else per finding.
+- Tools: Read, Grep, Glob, Bash (read-only typecheck/test). No Write/Edit.
+- Stop after review; don't fix issues yourself. The lead applies fixes.
