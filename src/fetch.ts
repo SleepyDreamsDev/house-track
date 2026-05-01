@@ -18,6 +18,12 @@ export interface FetcherConfig {
   userAgent: string;
   acceptLanguage: string;
   accept: string;
+  /** Accept header for JSON/POST requests. Falls back to `accept` if absent. */
+  acceptJson?: string;
+  /** Origin header sent on GraphQL POSTs (same-origin XHR mimicry). */
+  origin?: string;
+  /** Referer header sent on GraphQL POSTs. */
+  referer?: string;
 }
 
 export interface FetcherDeps {
@@ -42,6 +48,10 @@ interface RequestOptions {
   method: 'GET' | 'POST';
   body?: string;
   extraHeaders?: Record<string, string>;
+  /** Override `baseDelayMs` for the inter-request wait before this call. */
+  delayMs?: number;
+  /** Reject 200-OK responses whose content-type starts with this value (HTML interstitial). */
+  rejectContentTypePrefix?: string;
 }
 
 export class Fetcher {
@@ -58,33 +68,60 @@ export class Fetcher {
     return this.run(url, { method: 'GET' });
   }
 
+  /**
+   * POSTs a GraphQL operation with same-origin-XHR-shaped headers (Origin,
+   * Referer, Sec-Fetch-*) and an Accept that matches what 999.md's own client
+   * sends. If `delayMs` is set, the inter-request wait before this call uses
+   * it instead of `baseDelayMs` (used to slow detail fetches relative to
+   * index pages).
+   *
+   * If 999.md returns an HTML body on this endpoint (a CAPTCHA or block
+   * interstitial), we trip the breaker and throw rather than letting
+   * `JSON.parse` corrupt the call site with a parser error.
+   */
   async fetchGraphQL(
     endpoint: string,
     operationName: string,
     variables: Record<string, unknown>,
     query: string,
+    options: { delayMs?: number } = {},
   ): Promise<unknown> {
     const body = JSON.stringify({ operationName, variables, query });
-    const res = await this.run(endpoint, {
+    const { config } = this.deps;
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      accept: config.acceptJson ?? config.accept,
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-origin',
+    };
+    if (config.origin) headers['origin'] = config.origin;
+    if (config.referer) headers['referer'] = config.referer;
+
+    const opts: RequestOptions = {
       method: 'POST',
       body,
-      extraHeaders: { 'content-type': 'application/json' },
-    });
+      extraHeaders: headers,
+      rejectContentTypePrefix: 'text/html',
+    };
+    if (options.delayMs !== undefined) opts.delayMs = options.delayMs;
+    const res = await this.run(endpoint, opts);
     return JSON.parse(res.body);
   }
 
   private async run(url: string, opts: RequestOptions): Promise<FetchResult> {
-    await this.maybeWaitBetweenRequests();
+    await this.maybeWaitBetweenRequests(opts.delayMs);
     return this.attempt(url, opts, 0);
   }
 
-  private async maybeWaitBetweenRequests(): Promise<void> {
+  private async maybeWaitBetweenRequests(overrideMs?: number): Promise<void> {
     if (this.lastRequestAt === 0) {
       this.lastRequestAt = Date.now();
       return;
     }
     const elapsed = Date.now() - this.lastRequestAt;
-    const target = this.deps.config.baseDelayMs + this.jitter();
+    const base = overrideMs ?? this.deps.config.baseDelayMs;
+    const target = base + this.jitter();
     const wait = Math.max(0, target - elapsed);
     if (wait > 0) await this.sleep(wait);
     this.lastRequestAt = Date.now();
@@ -96,8 +133,9 @@ export class Fetcher {
     attemptIdx: number,
   ): Promise<FetchResult> {
     let res: FetchResult;
+    let contentType: string | undefined;
     try {
-      res = await this.doRequest(url, opts);
+      ({ res, contentType } = await this.doRequest(url, opts));
     } catch (err) {
       const backoff = this.deps.config.retryBackoffsMs[attemptIdx];
       if (backoff !== undefined) {
@@ -130,13 +168,27 @@ export class Fetcher {
       return res;
     }
 
+    // 2xx body that violates the expected content-type (e.g. HTML CAPTCHA on a
+    // GraphQL endpoint) is a soft block — trip the breaker before the caller
+    // can JSON.parse a CAPTCHA page and crash on its own.
+    if (
+      opts.rejectContentTypePrefix &&
+      contentType?.toLowerCase().startsWith(opts.rejectContentTypePrefix.toLowerCase())
+    ) {
+      await this.deps.circuit.tripImmediately();
+      throw new CircuitTrippingError(res.status, url);
+    }
+
     this.deps.circuit.recordSuccess();
     return res;
   }
 
-  private async doRequest(url: string, opts: RequestOptions): Promise<FetchResult> {
+  private async doRequest(
+    url: string,
+    opts: RequestOptions,
+  ): Promise<{ res: FetchResult; contentType: string | undefined }> {
     const { config } = this.deps;
-    const { statusCode, body } = await request(url, {
+    const { statusCode, headers, body } = await request(url, {
       method: opts.method,
       headers: {
         'user-agent': config.userAgent,
@@ -148,7 +200,9 @@ export class Fetcher {
       ...(this.deps.dispatcher ? { dispatcher: this.deps.dispatcher } : {}),
     });
     const text = await body.text();
-    return { url, status: statusCode, body: text };
+    const ct = headers['content-type'];
+    const contentType = Array.isArray(ct) ? ct[0] : ct;
+    return { res: { url, status: statusCode, body: text }, contentType };
   }
 }
 

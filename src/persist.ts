@@ -76,30 +76,68 @@ export class Persistence {
       sellerType: detail.sellerType,
       postedAt: detail.postedAt,
       bumpedAt: detail.bumpedAt,
+      filterValuesEnrichedAt: now,
     };
 
-    await this.prisma.listing.upsert({
-      where: { id: detail.id },
-      create: { id: detail.id, ...writable, lastSeenAt: now, lastFetchedAt: now },
-      update: { ...writable, lastSeenAt: now, lastFetchedAt: now, active: true },
-    });
-
-    const latest = await this.prisma.listingSnapshot.findFirst({
-      where: { listingId: detail.id },
-      orderBy: { capturedAt: 'desc' },
-      select: { rawHtmlHash: true },
-    });
-
-    if (latest?.rawHtmlHash !== detail.rawHtmlHash) {
-      await this.prisma.listingSnapshot.create({
-        data: {
-          listingId: detail.id,
-          priceEur: detail.priceEur,
-          description: detail.description,
-          rawHtmlHash: detail.rawHtmlHash,
-        },
+    // Listing upsert + filter-value replace + snapshot decision must be atomic
+    // so a crash mid-write can never leave a half-enriched listing.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.listing.upsert({
+        where: { id: detail.id },
+        create: { id: detail.id, ...writable, lastSeenAt: now, lastFetchedAt: now },
+        update: { ...writable, lastSeenAt: now, lastFetchedAt: now, active: true },
       });
-    }
+
+      // Replace, don't merge — otherwise a removed feature on 999.md would
+      // linger in our DB forever. Cheap on SQLite for the row counts we have
+      // (typically <30 triples per listing).
+      await tx.listingFilterValue.deleteMany({ where: { listingId: detail.id } });
+      if (detail.filterValues.length > 0) {
+        await tx.listingFilterValue.createMany({
+          data: detail.filterValues.map((t) => ({
+            listingId: detail.id,
+            filterId: t.filterId,
+            featureId: t.featureId,
+            optionId: t.optionId,
+            textValue: t.textValue,
+            numericValue: t.numericValue,
+          })),
+        });
+      }
+
+      const latest = await tx.listingSnapshot.findFirst({
+        where: { listingId: detail.id },
+        orderBy: { capturedAt: 'desc' },
+        select: { rawHtmlHash: true },
+      });
+
+      if (latest?.rawHtmlHash !== detail.rawHtmlHash) {
+        await tx.listingSnapshot.create({
+          data: {
+            listingId: detail.id,
+            priceEur: detail.priceEur,
+            description: detail.description,
+            rawHtmlHash: detail.rawHtmlHash,
+          },
+        });
+      }
+    });
+  }
+
+  /**
+   * Returns up to `limit` listing ids that have never had a successful detail
+   * fetch (filterValuesEnrichedAt IS NULL), oldest by lastFetchedAt first.
+   * Used by the sweep's trickle backfill — see SWEEP.backfillPerSweep.
+   */
+  async findUnenrichedListings(limit: number): Promise<string[]> {
+    if (limit <= 0) return [];
+    const rows = await this.prisma.listing.findMany({
+      where: { filterValuesEnrichedAt: null, active: true },
+      orderBy: { lastFetchedAt: 'asc' },
+      select: { id: true },
+      take: limit,
+    });
+    return rows.map((r) => r.id);
   }
 
   async startSweep(): Promise<{ id: number }> {

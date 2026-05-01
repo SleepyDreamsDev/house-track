@@ -14,6 +14,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "mcp": "tsx src/mcp/server.ts",
+    "mcp:start": "node dist/mcp/server.js",
     "capture-session": "tsx scripts/capture-session.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
@@ -30,10 +32,12 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "^5.22.0",
     "node-cron": "^3.0.3",
     "pino": "^9.5.0",
-    "undici": "^6.21.0"
+    "undici": "^6.21.0",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
@@ -49,6 +53,7 @@
     "pino-pretty": "^11.3.0",
     "playwright": "^1.49.0",
     "prettier": "^3.4.0",
+    "prettier-plugin-prisma": "^5.0.0",
     "prisma": "^5.22.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

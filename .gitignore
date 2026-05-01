@@ -16,6 +16,7 @@ coverage/
 /prisma/dev.db-journal
 /prisma/*.db
 /prisma/*.db-journal
+/prisma/data/
 
 # Local crawler data (Docker uses a named volume; this is for ad-hoc local runs)
 data/*

@@ -2,103 +2,131 @@
 
 > Auto-injected at session start. Update this file at the end of each session.
 
-**Last updated:** 2026-04-26
+**Last updated:** 2026-05-01
 **Branch:** `claude/scaffold-house-track-EW7gc`
-**Last commit:** _(uncommitted: GraphQL parsers + fetcher + sweep migration)_
+**Last commit:** _(uncommitted: queryable DB + MCP server + politeness fixes)_
 
 ---
 
-## MAJOR DISCOVERY: 999.md uses GraphQL, not HTML
+## This session: queryable DB + local MCP server (146/146 tests green)
 
-999.md is a Next.js App Router site. Listings are loaded via a GraphQL API at
-`https://999.md/graphql` (POST, Content-Type: application/json). No HTML parsing
-is needed for listing data.
+Plan: [.claude/plans/queryable-db-mcp-server.md](plans/queryable-db-mcp-server.md)
+Spec: [specs/queryable-db.feature](../specs/queryable-db.feature) (16 scenarios)
 
-**Two operations needed:**
-1. `SearchAds` — paginated index (all listings matching filters)
-2. `GetAdvert` (using `advert(input: {id})` query) — full detail for one listing
+Three things shipped together via `/feature` TDD:
 
-**Verified filter IDs (2026-04-26):**
-- `subCategoryId: 1406` → house-and-garden
-- `filterId 41, featureId 1, optionId 776` → "Vând" (for sale) — NOT 903 (daily rental)
-- `filterId 40, featureId 7, optionId 12900` → Chișinău municipality
-- Listing URL format: `https://999.md/ro/<id>` (NOT `/advert/<id>`)
-- Total Chișinău houses for sale: ~3,302
+### 1. Schema enrichment — `ListingFilterValue`
 
-**WARNING:** URL param ID space (`o_41_1=903`) ≠ GraphQL optionId space.
-- URL param 903 = daily rental
-- GraphQL optionId 903 = daily rental
-- GraphQL optionId 776 = "Vând" (sale) ✅
+- New relational table `(filterId, featureId, optionId, textValue, numericValue)`
+  with indexes on `(filterId, featureId, optionId)`, `(featureId, optionId)`, `(listingId)`.
+- Listing gets `filterValuesEnrichedAt DateTime?` (null on legacy rows + index-only listings).
+- Migration `20260501162110_add_listing_filter_value` checked in.
+- `filterId` defaults to 0 (unknown). The 999.md taxonomy query for the
+  authoritative `(filterId → featureId)` mapping is still uncaptured —
+  queries match on `(featureId, optionId)` until that lands.
 
-**Fixtures saved:**
-- `src/__tests__/fixtures/search-ads-response.json` — 5 Chișinău sale listings + count
-- `src/__tests__/fixtures/advert-detail-response.json` — full detail for id 104027607
+### 2. Crawler enrichment
 
----
+- `parseDetail` now extracts a `filterValues: FilterValueTriple[]` array by walking
+  the advert's top-level `FEATURE_*`-typed entries. Handles FEATURE_OPTIONS,
+  FEATURE_OFFER_TYPE, FEATURE_TEXT, FEATURE_INT, FEATURE_PRICE; skips FEATURE_BODY
+  / FEATURE_IMAGES / FEATURE_MAP_POINT (already stored elsewhere).
+- `persistDetail` writes triples atomically with the listing upsert (single
+  `$transaction`); deletes-then-inserts so removed features on 999.md don't
+  linger. Sets `filterValuesEnrichedAt = now()`.
+- `runSweep` adds a backfill step **after** new-listing detail fetches:
+  `findUnenrichedListings(SWEEP.backfillPerSweep=30)` → fetch+parse+persist
+  each, sharing the same 8s±2s gap. 30/sweep × 24/day → ~5 days for full ~3,300
+  backfill. Set `backfillPerSweep=0` to disable.
+- Backfill failures don't kill the sweep (status flips to `partial`); a
+  `CircuitTrippingError` mid-backfill aborts cleanly with `circuit_open`.
 
-## Current state
+### 3. Politeness profile fixes (bundled — minimal blast radius)
 
-GraphQL migration done via TDD. **70/70 tests pass.** Typecheck, lint, build all green. `cheerio` removed from deps.
+- GraphQL POSTs send `Accept: application/json, text/plain, */*` (was the
+  HTML `Accept` even on POST).
+- All GraphQL POSTs now carry `Origin: https://999.md`,
+  `Referer: https://999.md/ro/list/real-estate/houses-and-yards`,
+  `Sec-Fetch-{Dest=empty,Mode=cors,Site=same-origin}` — same-origin XHR shape.
+- HTML interstitial detection: a 200-OK response with `content-type: text/html`
+  on a GraphQL endpoint trips the breaker before `JSON.parse` runs (CAPTCHA
+  page would silently crash today).
+- `fetchGraphQL` accepts `{ delayMs }` override; `fetchAdvert` calls now use
+  `POLITENESS.detailDelayMs = 10_000` (was sharing the index's 8s gap).
+  Index pages still use 8s±2s.
+
+### 4. Local MCP server — `house-track` (stdio, spawned by Claude Desktop)
+
+- `src/mcp/server.ts` — `@modelcontextprotocol/sdk` McpServer over StdioTransport.
+  Three tools: `list_filters()`, `search_listings(...)`, `get_listing(id)`.
+  Inputs validated by zod. `limit` capped at 500.
+- `src/mcp/queries.ts` — Prisma query helpers separated from the MCP transport
+  so they're unit-testable without spinning up stdio JSON-RPC. 18 tests cover
+  range filters, multi-filter AND/OR semantics, sort, limit, sample ids,
+  observed-universe aggregation.
+- `docs/mcp-setup.md` — Claude Desktop config snippet.
+- Build target: `dist/mcp/server.js`. `pnpm mcp` for tsx-watched dev.
 
 | Module | Status | Tests |
 |---|---|---|
-| `src/circuit.ts` | DONE — sentinel-file breaker, threshold + cooldown | 7 |
-| `src/fetch.ts` | DONE — undici client + `fetchGraphQL(endpoint, op, vars, query)` shares politeness/retry/circuit | 17 |
-| `src/persist.ts` | DONE — Prisma upsert, snapshot diff on rawHtmlHash, sweep round-trip | 10 |
-| `src/sweep.ts` | DONE — GraphQL-native deps: `fetchSearchPage(pageIdx)` + `fetchAdvert(id)` callbacks; optional `applyPostFilter` | 8 |
-| `src/log.ts` | DONE — pino w/ service binding | 2 |
-| `src/parse-index.ts` | DONE — `parseIndex(json)` + `applyPostFilter(stubs, filter)` | 13 |
-| `src/parse-detail.ts` | DONE — `parseDetail(id, json)`; throws `AdvertNotFoundError` on null advert | 13 |
-| `src/graphql.ts` | NEW — query strings (PLACEHOLDER bodies) + `buildSearchVariables`/`buildAdvertVariables` | — |
-| `src/index.ts` | DONE — wires fetchGraphQL → fetchSearchPage/fetchAdvert; passes `applyPostFilter(_, FILTER.postFilter)` | (no test) |
-| `src/config.ts` | DONE — GraphQL endpoint, filter IDs, postFilter, pageSize | — |
+| `src/circuit.ts` | unchanged | 8 |
+| `src/fetch.ts` | EXTENDED — politeness fixes + delayMs override + HTML interstitial | 25 |
+| `src/persist.ts` | EXTENDED — `$transaction` writes filter values; `findUnenrichedListings` | 16 |
+| `src/sweep.ts` | EXTENDED — backfill step + `backfillPerSweep` dep | 14 |
+| `src/parse-detail.ts` | EXTENDED — `extractFilterValues` walk | 19 |
+| `src/parse-index.ts` | unchanged | 13 |
+| `src/log.ts` | unchanged | 2 |
+| `src/mcp/queries.ts` | NEW — list_filters / search_listings / get_listing | 18 |
+| `src/mcp/server.ts` | NEW — McpServer + StdioServerTransport | (transport only) |
+| `prisma/schema.prisma` | EXTENDED — `ListingFilterValue` + `filterValuesEnrichedAt` | — |
+| `src/types.ts` | EXTENDED — `FilterValueTriple`, `ParsedDetail.filterValues` | — |
+| `src/config.ts` | EXTENDED — `acceptJson`/`origin`/`referer`, `SWEEP.backfillPerSweep=30` | — |
 
-**Type changes this session:**
-- `ListingStub` gained `areaSqm: number | null` (parsed from title — needed for postFilter at index time).
-- `rawHtmlHash` field name retained (matches Prisma column) but value semantics changed to JSON-field hash. Migration to rename column is deferred.
-- `lat/lon` deferred — would require Prisma migration; not blocking POC.
+**Security review:** 0 critical, 0 high, 1 medium (auto-fixed: defensive
+`parseImageUrls` try/catch in `getListing`), 2 low (notes only).
 
 ---
 
-## ⚠️ BLOCKER for live smoke: real GraphQL query bodies
+## Still blocking live smoke
 
-`src/graphql.ts` has BEST-EFFORT-RECONSTRUCTED query strings. They mirror the field shape
-in the fixtures, but were not captured from a real browser session, so 999.md may reject
-them with "Unknown argument" / type mismatches.
+`src/graphql.ts` carries query strings the prior session marked as captured,
+but the captured `GET_ADVERT_QUERY` selection set is **minimal** (id, state,
+title, posted, reseted, expire, isExpired, owner, autoRepublish, moderation,
+package, subCategory) and does NOT request the price/body/region/city/
+street/mapPoint/images/offerType fields the fixture and `parseDetail`
+depend on. Either the capture grabbed a different/lighter operation than
+the page actually uses, or 999.md has multiple `GetAdvert` variants.
 
-**Before `RUN_ONCE=1 pnpm dev` will work against live 999.md:**
-1. Open https://999.md/ro/list/real-estate/houses-and-yards in DevTools → Network
-2. Filter to `graphql` requests → find one whose payload `operationName` is `SearchAds`
-3. Copy the `query` string verbatim → replace `SEARCH_ADS_QUERY` in `src/graphql.ts`
-4. Click into a listing → repeat for the `GetAdvert` operation → replace `GET_ADVERT_QUERY`
-5. Verify the `variables` shape in the captured request matches what `buildSearchVariables`/
-   `buildAdvertVariables` produce. Adjust either side if not.
+**Before `RUN_ONCE=1 pnpm dev` will populate filter values from live 999.md:**
+re-capture `GetAdvert` from a real browser session and paste a selection set
+that matches the fixture shape. The parser tolerates missing fields, but
+without them the per-listing filter triples will be empty.
 
-The variable BUILDERS (`buildSearchVariables`, `buildAdvertVariables`) and the `searchInput`
-in `config.ts` are verified — only the raw GraphQL strings need updating.
-
-**Proposed workflow improvement (not yet built):** add a project-local script
-`scripts/capture-graphql.ts` (or `docs/capture-graphql.md` runbook) that drives
-Playwright MCP against 999.md, intercepts the `SearchAds` and `GetAdvert` POSTs,
-and writes the captured `query` strings directly into `src/graphql.ts` (and refreshes
-the JSON fixtures while it's there). Project-scoped — not a generic Claude Code
-skill. Worth building before the next fixture refresh (every time 999.md changes
-its schema, this manual capture step recurs).
+The MCP server itself works against any populated DB — even a sparsely
+backfilled one — so this blocker is for *backfill quality*, not MCP usability.
 
 ---
 
 ## Next session
 
-1. **Capture real GraphQL queries** (see blocker above) and paste into `src/graphql.ts`.
+1. **Re-capture `GetAdvert` with the full feature selection set** (price, body,
+   region, city, street, offerType, plus any `feature(id: N)` calls the page
+   actually requests). Paste into `src/graphql.ts`. Refresh fixtures.
 
-2. **End-to-end smoke**: `RUN_ONCE=1 pnpm dev` against real 999.md GraphQL.
-   Expect: pre-flight, ~42 SearchAds pages over ~6 minutes (8s spacing × 42), then
-   N detail fetches for new listings (slower — 8s each). Monitor logs; check SQLite
-   row count.
+2. **Wire Claude Desktop** per `docs/mcp-setup.md`: `pnpm build`, edit
+   `claude_desktop_config.json`, restart Desktop, smoke-test all three tools.
 
-3. **Docker tick**: `docker compose up --build -d` and watch one cron tick complete.
+3. **End-to-end smoke**: `RUN_ONCE=1 pnpm dev` against real 999.md.
+   Verify with `pnpm prisma studio`:
+   - `ListingFilterValue` rows for new listings
+   - `filterValuesEnrichedAt` populated
+   - Backfill picked up ~30 oldest non-enriched listings
+   - No 403/429 (politeness profile holds)
 
-4. **Optional follow-ups (not POC-blocking)**:
-   - Add `lat/lon` to `Listing` schema + migration; populate from `mapPoint.value`.
-   - Rename `rawHtmlHash` column → `rawContentHash` for clarity.
-   - Parse `rooms` from description text ("3 dormitoare" / "3 спальни").
+4. **Optional follow-ups (deferred):**
+   - Capture 999.md's filter taxonomy query → populate authoritative
+     `filterId` (replace 0 placeholder); enables labeled `list_filters`.
+   - Add `lat/lon` columns + migration; populate from `mapPoint.value`.
+   - Rename `rawHtmlHash` column → `rawContentHash`.
+   - Parse `rooms` from description text.
+   - Cron jitter / overnight skip; HTML warm-up navigation; cookie jar.

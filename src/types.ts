@@ -12,6 +12,17 @@ export interface ListingStub {
   postedAt: Date | null;
 }
 
+// One filter triple observed on a listing detail. Mirrors ListingFilterValue
+// in Prisma. filterId is 0 until 999.md's taxonomy query is captured —
+// queries match on (featureId, optionId) for now.
+export interface FilterValueTriple {
+  filterId: number;
+  featureId: number;
+  optionId: number | null;
+  textValue: string | null;
+  numericValue: number | null;
+}
+
 export interface ParsedDetail {
   id: string;
   url: string;
@@ -33,6 +44,7 @@ export interface ParsedDetail {
   postedAt: Date | null;
   bumpedAt: Date | null;
   rawHtmlHash: string;
+  filterValues: FilterValueTriple[];
 }
 
 export interface FetchResult {

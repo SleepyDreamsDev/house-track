@@ -65,6 +65,14 @@ export const POLITENESS = {
   userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
   acceptLanguage: 'ro-RO,ru-RU;q=0.9,en;q=0.8',
   accept: 'text/html,application/xhtml+xml',
+  // Sent on POST (GraphQL) requests. Real Firefox sends */* but axios-style
+  // libraries narrow it to JSON; "application/json, text/plain, */*" matches
+  // what 999.md's web app emits on its own GraphQL requests.
+  acceptJson: 'application/json, text/plain, */*',
+  // Sent on every GraphQL request to look like a same-origin XHR from the
+  // listings page rather than a direct API probe.
+  origin: 'https://999.md',
+  referer: 'https://999.md/ro/list/real-estate/houses-and-yards',
 } as const;
 
 export const CIRCUIT = {
@@ -78,4 +86,9 @@ export const SWEEP = {
   // How many consecutive sweeps a listing must be missing from the index
   // before we mark it inactive. See spec §"Crawl flow (per sweep)" step 5.
   missingSweepsBeforeInactive: 3,
+  // Per-tick cap on backfill of legacy listings with NULL filterValuesEnrichedAt.
+  // 30/sweep × 24/day = 720/day → ~5 days to fully backfill ~3,300 listings.
+  // 0 disables backfill. Each backfill request shares the same 8s±2s gap so
+  // the request shape is indistinguishable from a sweep with extra new listings.
+  backfillPerSweep: 30,
 } as const;

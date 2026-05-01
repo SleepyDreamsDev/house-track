@@ -7,7 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { Persistence } from '../persist.js';
-import type { ListingStub, ParsedDetail } from '../types.js';
+import type { FilterValueTriple, ListingStub, ParsedDetail } from '../types.js';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -34,8 +34,18 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await prisma.listingSnapshot.deleteMany();
+  await prisma.listingFilterValue.deleteMany();
   await prisma.listing.deleteMany();
   await prisma.sweepRun.deleteMany();
+});
+
+const triple = (overrides: Partial<FilterValueTriple> = {}): FilterValueTriple => ({
+  filterId: 0,
+  featureId: 1,
+  optionId: 776,
+  textValue: null,
+  numericValue: null,
+  ...overrides,
 });
 
 const stub = (id: string, overrides: Partial<ListingStub> = {}): ListingStub => ({
@@ -70,6 +80,7 @@ const detail = (id: string, overrides: Partial<ParsedDetail> = {}): ParsedDetail
   postedAt: new Date('2026-04-01T00:00:00Z'),
   bumpedAt: null,
   rawHtmlHash: 'abc123',
+  filterValues: [],
   ...overrides,
 });
 
@@ -199,6 +210,142 @@ describe('Persistence', () => {
     expect(row.newListings).toBe(3);
     expect(row.updatedListings).toBe(2);
     expect(row.errors).toBeNull();
+  });
+
+  it('persistDetail writes ListingFilterValue rows and sets filterValuesEnrichedAt', async () => {
+    const before = Date.now();
+
+    await persist.persistDetail(
+      detail('FV', {
+        filterValues: [
+          triple({ featureId: 1, optionId: 776 }),
+          triple({ featureId: 7, optionId: 12900 }),
+          triple({ featureId: 10, optionId: null, textValue: 'str. Test' }),
+        ],
+      }),
+    );
+
+    const fvs = await prisma.listingFilterValue.findMany({
+      where: { listingId: 'FV' },
+      orderBy: { featureId: 'asc' },
+    });
+    expect(fvs).toHaveLength(3);
+    expect(fvs[0]).toMatchObject({ featureId: 1, optionId: 776 });
+    expect(fvs[1]).toMatchObject({ featureId: 7, optionId: 12900 });
+    expect(fvs[2]).toMatchObject({ featureId: 10, optionId: null, textValue: 'str. Test' });
+
+    const row = await prisma.listing.findUniqueOrThrow({ where: { id: 'FV' } });
+    expect(row.filterValuesEnrichedAt).not.toBeNull();
+    expect(row.filterValuesEnrichedAt!.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('persistDetail replaces filter values on re-fetch (no duplicates accumulate)', async () => {
+    await persist.persistDetail(
+      detail('REPLACE', {
+        filterValues: [
+          triple({ featureId: 1, optionId: 776 }),
+          triple({ featureId: 7, optionId: 1 }),
+        ],
+      }),
+    );
+    await persist.persistDetail(
+      detail('REPLACE', {
+        rawHtmlHash: 'h2',
+        filterValues: [
+          triple({ featureId: 1, optionId: 776 }),
+          triple({ featureId: 7, optionId: 2 }),
+          triple({ featureId: 99, optionId: 999 }),
+        ],
+      }),
+    );
+
+    const fvs = await prisma.listingFilterValue.findMany({ where: { listingId: 'REPLACE' } });
+    expect(fvs).toHaveLength(3);
+    const featureIds = fvs.map((f) => f.featureId).sort((a, b) => a - b);
+    expect(featureIds).toEqual([1, 7, 99]);
+  });
+
+  it('persistDetail with empty filterValues still sets filterValuesEnrichedAt', async () => {
+    await persist.persistDetail(detail('EMPTY', { filterValues: [] }));
+
+    const row = await prisma.listing.findUniqueOrThrow({ where: { id: 'EMPTY' } });
+    expect(row.filterValuesEnrichedAt).not.toBeNull();
+    const fvs = await prisma.listingFilterValue.findMany({ where: { listingId: 'EMPTY' } });
+    expect(fvs).toHaveLength(0);
+  });
+
+  it('findUnenrichedListings returns oldest-first ids of NULL filterValuesEnrichedAt rows', async () => {
+    const old = new Date(Date.now() - 5 * HOUR);
+    const mid = new Date(Date.now() - 2 * HOUR);
+    const fresh = new Date();
+    await prisma.listing.createMany({
+      data: [
+        {
+          id: 'OLD',
+          url: 'https://999.md/ro/OLD',
+          title: 'O',
+          lastSeenAt: fresh,
+          lastFetchedAt: old,
+          active: true,
+          filterValuesEnrichedAt: null,
+        },
+        {
+          id: 'MID',
+          url: 'https://999.md/ro/MID',
+          title: 'M',
+          lastSeenAt: fresh,
+          lastFetchedAt: mid,
+          active: true,
+          filterValuesEnrichedAt: null,
+        },
+        {
+          id: 'DONE',
+          url: 'https://999.md/ro/DONE',
+          title: 'D',
+          lastSeenAt: fresh,
+          lastFetchedAt: old,
+          active: true,
+          filterValuesEnrichedAt: fresh,
+        },
+        {
+          id: 'INACTIVE',
+          url: 'https://999.md/ro/INACTIVE',
+          title: 'I',
+          lastSeenAt: fresh,
+          lastFetchedAt: old,
+          active: false,
+          filterValuesEnrichedAt: null,
+        },
+      ],
+    });
+
+    const ids = await persist.findUnenrichedListings(10);
+
+    expect(ids).toEqual(['OLD', 'MID']); // oldest lastFetchedAt first; DONE/INACTIVE filtered out
+  });
+
+  it('findUnenrichedListings caps results at the passed limit', async () => {
+    for (let i = 0; i < 5; i++) {
+      await prisma.listing.create({
+        data: {
+          id: `L${i}`,
+          url: `https://999.md/ro/L${i}`,
+          title: `L${i}`,
+          lastSeenAt: new Date(),
+          lastFetchedAt: new Date(Date.now() - i * 1000),
+          active: true,
+          filterValuesEnrichedAt: null,
+        },
+      });
+    }
+
+    const ids = await persist.findUnenrichedListings(3);
+    expect(ids).toHaveLength(3);
+  });
+
+  it('findUnenrichedListings returns empty when limit is 0', async () => {
+    const ids = await persist.findUnenrichedListings(0);
+    expect(ids).toEqual([]);
   });
 
   it('finishSweep serializes errors as JSON when present', async () => {
