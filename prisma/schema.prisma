@@ -2,7 +2,7 @@
 // Source of truth: docs/poc-spec.md §"Database schema (Prisma)".
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -36,8 +36,8 @@ model Listing {
   yearBuilt   Int?
   heatingType String? // raw text
   description String? // full body text
-  features    String? // JSON array of feature tags
-  imageUrls   String? // JSON array of CDN URLs (NOT downloaded)
+  features    Json? // JSON array of feature tags
+  imageUrls   Json? // JSON array of CDN URLs (NOT downloaded)
   sellerType  String? // private / agency (heuristic)
   postedAt    DateTime?
   bumpedAt    DateTime?
@@ -90,5 +90,5 @@ model SweepRun {
   detailsFetched  Int       @default(0)
   newListings     Int       @default(0)
   updatedListings Int       @default(0)
-  errors          String? // JSON array of {url, status, msg}
+  errors          Json? // JSON array of {url, status, msg}
 }

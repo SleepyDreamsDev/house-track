@@ -9,6 +9,9 @@ export default defineConfig({
     ],
     environment: 'node',
     passWithNoTests: true,
+    globalSetup: ['./vitest.global-setup.ts'],
+    setupFiles: ['./vitest.setup.ts'],
+    pool: 'forks',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

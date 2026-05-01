@@ -2,7 +2,7 @@
 //
 // Spec: docs/poc-spec.md §"Crawl flow (per sweep)" steps 5, 8, 9.
 
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
 
@@ -71,8 +71,8 @@ export class Persistence {
       yearBuilt: detail.yearBuilt,
       heatingType: detail.heatingType,
       description: detail.description,
-      features: JSON.stringify(detail.features),
-      imageUrls: JSON.stringify(detail.imageUrls),
+      features: detail.features,
+      imageUrls: detail.imageUrls,
       sellerType: detail.sellerType,
       postedAt: detail.postedAt,
       bumpedAt: detail.bumpedAt,
@@ -157,7 +157,10 @@ export class Persistence {
         detailsFetched: result.detailsFetched,
         newListings: result.newListings,
         updatedListings: result.updatedListings,
-        errors: result.errors.length > 0 ? JSON.stringify(result.errors) : null,
+        errors:
+          result.errors.length > 0
+            ? (result.errors as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
       },
     });
   }

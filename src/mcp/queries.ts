@@ -202,7 +202,7 @@ export async function getListing(
     yearBuilt: row.yearBuilt,
     heatingType: row.heatingType,
     description: row.description,
-    imageUrls: parseImageUrls(row.imageUrls),
+    imageUrls: coerceStringArray(row.imageUrls),
     active: row.active,
     firstSeenAt: row.firstSeenAt.toISOString(),
     lastSeenAt: row.lastSeenAt.toISOString(),
@@ -218,17 +218,12 @@ export async function getListing(
   };
 }
 
-// Defense-in-depth: a row with malformed `imageUrls` JSON should not break
-// `get_listing` for that row. The crawler always writes valid JSON.stringify;
-// this fallback only matters if a future writer or hand-edit introduces drift.
-function parseImageUrls(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const v = JSON.parse(raw);
-    return Array.isArray(v) ? (v as string[]) : [];
-  } catch {
-    return [];
-  }
+// Defense-in-depth: even though the JSONB column is shape-typed by Prisma as
+// JsonValue, a hand-edited row could contain a non-array. Narrow to string[]
+// so callers don't need to handle the union.
+function coerceStringArray(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v): v is string => typeof v === 'string');
 }
 
 function rangeWhere(min: number | undefined, max: number | undefined): Record<string, number> {
