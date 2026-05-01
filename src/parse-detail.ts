@@ -10,7 +10,7 @@
 import { createHash } from 'node:crypto';
 
 import { FILTER } from './config.js';
-import type { ParsedDetail } from './types.js';
+import type { FilterValueTriple, ParsedDetail } from './types.js';
 
 interface RawAdvert {
   id?: string;
@@ -22,7 +22,13 @@ interface RawAdvert {
   city?: { value?: { translated?: string } };
   street?: { value?: string };
   images?: { value?: string[] };
+  [key: string]: unknown;
 }
+
+// Feature types that don't map to a single (featureId, optionId|number|text)
+// triple — body text, image arrays, and map points are stored elsewhere
+// (description, imageUrls, deferred lat/lon respectively).
+const NON_FILTER_FEATURE_TYPES = new Set(['FEATURE_BODY', 'FEATURE_IMAGES', 'FEATURE_MAP_POINT']);
 
 interface AdvertResponse {
   data?: { advert?: RawAdvert | null };
@@ -84,7 +90,72 @@ export function parseDetail(id: string, json: unknown): ParsedDetail {
     postedAt: null,
     bumpedAt: parseRoDate(advert.reseted),
     rawHtmlHash: hashStableFields(advert),
+    filterValues: extractFilterValues(advert),
   };
+}
+
+// Walks the advert's top-level keys and collects every value that looks
+// like a 999.md FeatureValue ({id, type: "FEATURE_*", value}). The shape of
+// `value` determines which column the triple lands in:
+//   - FEATURE_OPTIONS / FEATURE_OFFER_TYPE: value.value is the option id
+//   - FEATURE_TEXT: value is a string
+//   - FEATURE_INT: value is a number
+//   - FEATURE_PRICE: value.value is the price amount (numericValue)
+// Anything else (BODY/IMAGES/MAP_POINT) is skipped.
+function extractFilterValues(advert: RawAdvert): FilterValueTriple[] {
+  const out: FilterValueTriple[] = [];
+  for (const key of Object.keys(advert)) {
+    const entry = advert[key];
+    if (!isFeatureEntry(entry)) continue;
+    if (NON_FILTER_FEATURE_TYPES.has(entry.type)) continue;
+    const triple = toTriple(entry);
+    if (triple) out.push(triple);
+  }
+  return out;
+}
+
+interface FeatureEntry {
+  id: number;
+  type: string;
+  value: unknown;
+}
+
+function isFeatureEntry(v: unknown): v is FeatureEntry {
+  if (!v || typeof v !== 'object') return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    typeof obj['id'] === 'number' &&
+    typeof obj['type'] === 'string' &&
+    obj['type'].startsWith('FEATURE_') &&
+    'value' in obj
+  );
+}
+
+function toTriple(entry: FeatureEntry): FilterValueTriple | null {
+  const base = {
+    filterId: 0,
+    featureId: entry.id,
+    optionId: null,
+    textValue: null,
+    numericValue: null,
+  };
+  const v = entry.value;
+
+  // FEATURE_OPTIONS / FEATURE_OFFER_TYPE: { value: number, translated, ... }
+  if (v && typeof v === 'object' && 'value' in v) {
+    const inner = (v as { value: unknown }).value;
+    if (typeof inner === 'number') {
+      // FEATURE_PRICE wraps the number under .value too — keep prices as
+      // numericValue so range queries (price < X) work directly.
+      if (entry.type === 'FEATURE_PRICE') return { ...base, numericValue: inner };
+      return { ...base, optionId: inner };
+    }
+  }
+
+  if (typeof v === 'string') return { ...base, textValue: v };
+  if (typeof v === 'number') return { ...base, numericValue: v };
+
+  return null;
 }
 
 function normalizePrice(price: RawAdvert['price']): {

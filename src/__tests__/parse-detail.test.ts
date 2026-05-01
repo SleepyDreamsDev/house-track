@@ -136,4 +136,99 @@ describe('parseDetail', () => {
   it('Throws AdvertNotFoundError when advert is null (delisted between index and detail)', () => {
     expect(() => parseDetail(ID, { data: { advert: null } })).toThrow(AdvertNotFoundError);
   });
+
+  describe('filterValues extraction', () => {
+    it('Extracts FEATURE_OPTIONS triples (offerType, region, city)', async () => {
+      const json = await loadAdvert();
+
+      const d = parseDetail(ID, json);
+
+      // offerType: id=1, value.value=776 (Vând)
+      expect(d.filterValues).toContainEqual({
+        filterId: 0,
+        featureId: 1,
+        optionId: 776,
+        textValue: null,
+        numericValue: null,
+      });
+      // region: id=7, value.value=12900 (Chișinău mun.)
+      expect(d.filterValues).toContainEqual({
+        filterId: 0,
+        featureId: 7,
+        optionId: 12900,
+        textValue: null,
+        numericValue: null,
+      });
+      // city: id=8, value.value=13915 (Colonița)
+      expect(d.filterValues).toContainEqual({
+        filterId: 0,
+        featureId: 8,
+        optionId: 13915,
+        textValue: null,
+        numericValue: null,
+      });
+    });
+
+    it('Extracts FEATURE_TEXT entries as textValue (street)', async () => {
+      const json = await loadAdvert();
+
+      const d = parseDetail(ID, json);
+
+      expect(d.filterValues).toContainEqual({
+        filterId: 0,
+        featureId: 10,
+        optionId: null,
+        textValue: 'str. Tohatin',
+        numericValue: null,
+      });
+    });
+
+    it('Extracts FEATURE_INT entries as numericValue (pricePerMeter)', async () => {
+      const json = await loadAdvert();
+
+      const d = parseDetail(ID, json);
+
+      expect(d.filterValues).toContainEqual({
+        filterId: 0,
+        featureId: 1385,
+        optionId: null,
+        textValue: null,
+        numericValue: 2821,
+      });
+    });
+
+    it('Extracts FEATURE_PRICE as numericValue (the EUR amount)', async () => {
+      const json = await loadAdvert();
+
+      const d = parseDetail(ID, json);
+
+      // price: id=2, value.value=395000
+      expect(d.filterValues).toContainEqual({
+        filterId: 0,
+        featureId: 2,
+        optionId: null,
+        textValue: null,
+        numericValue: 395_000,
+      });
+    });
+
+    it('Skips FEATURE_BODY, FEATURE_IMAGES, FEATURE_MAP_POINT', async () => {
+      const json = await loadAdvert();
+
+      const d = parseDetail(ID, json);
+
+      const featureIds = d.filterValues.map((t) => t.featureId);
+      expect(featureIds).not.toContain(13); // body
+      expect(featureIds).not.toContain(14); // images
+      expect(featureIds).not.toContain(3); // mapPoint
+    });
+
+    it('Returns an empty array when the advert has no recognizable feature entries', () => {
+      const minimal = { data: { advert: { id: ID, title: 'x', state: 'AD_STATE_PUBLIC' } } };
+
+      const d = parseDetail(ID, minimal);
+
+      expect(d.filterValues).toEqual([]);
+    });
+  });
 });

@@ -25,6 +25,7 @@ export interface SweepDeps {
     | 'persistDetail'
     | 'startSweep'
     | 'finishSweep'
+    | 'findUnenrichedListings'
   >;
   circuit: Pick<Circuit, 'isOpen'>;
   parseIndex: (json: unknown) => ListingStub[];
@@ -33,6 +34,8 @@ export interface SweepDeps {
   postFilter?: PostFilter;
   maxPagesPerSweep: number;
   missingThresholdMs: number;
+  /** Cap on per-sweep backfill of listings with NULL filterValuesEnrichedAt. 0 disables. */
+  backfillPerSweep?: number;
   log?: Logger;
 }
 
@@ -54,6 +57,7 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
     result.newListings = newStubs.length;
 
     await fetchAndPersistDetails(deps, newStubs, result);
+    await backfillUnenriched(deps, result);
 
     await deps.persist.markSeen(seenStubs);
     result.updatedListings = seenStubs.length;
@@ -132,6 +136,46 @@ async function fetchAndPersistDetails(
       await deps.persist.persistDetail(parsed);
     } catch (err) {
       record(result, { url: s.url, status: null, msg: `persist: ${String(err)}` });
+      result.status = 'partial';
+    }
+  }
+}
+
+// Re-fetches up to `deps.backfillPerSweep` listings whose filterValuesEnrichedAt
+// is NULL (legacy rows from before the schema enrichment landed). Each call goes
+// through the same fetch+parse+persist path as a new-listing detail, so it
+// respects the politeness budget and adds nothing new to the request shape.
+async function backfillUnenriched(deps: SweepDeps, result: SweepResult): Promise<void> {
+  const limit = deps.backfillPerSweep ?? 0;
+  if (limit <= 0) return;
+  const ids = await deps.persist.findUnenrichedListings(limit);
+  for (const id of ids) {
+    const url = `<backfill:${id}>`;
+    let json: unknown;
+    try {
+      json = await deps.fetchAdvert(id);
+    } catch (err) {
+      if (err instanceof CircuitTrippingError) throw err;
+      record(result, { url, status: null, msg: String(err) });
+      result.status = 'partial';
+      continue;
+    }
+    result.detailsFetched += 1;
+
+    let parsed: ParsedDetail;
+    try {
+      parsed = deps.parseDetail(id, json);
+    } catch (err) {
+      if (err instanceof AdvertNotFoundError) continue;
+      record(result, { url, status: null, msg: `parseDetail: ${String(err)}` });
+      result.status = 'partial';
+      continue;
+    }
+
+    try {
+      await deps.persist.persistDetail(parsed);
+    } catch (err) {
+      record(result, { url, status: null, msg: `persist: ${String(err)}` });
       result.status = 'partial';
     }
   }

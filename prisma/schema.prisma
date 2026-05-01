@@ -18,6 +18,11 @@ model Listing {
   lastFetchedAt DateTime
   active        Boolean  @default(true) // false when no longer in index sweeps
 
+  // Set when persistDetail has captured the typed filter-value triples below.
+  // Null on legacy rows + on listings that have only ever been seen in the index.
+  // The sweep's backfill step picks the oldest NULL rows each tick.
+  filterValuesEnrichedAt DateTime?
+
   // Core fields (parsed)
   title       String
   priceEur    Int? // null if not parseable
@@ -38,10 +43,30 @@ model Listing {
   bumpedAt    DateTime?
 
   // Versioning: track price/desc changes over time
-  snapshots ListingSnapshot[]
+  snapshots    ListingSnapshot[]
+  filterValues ListingFilterValue[]
 
   @@index([active, lastSeenAt])
   @@index([priceEur])
+}
+
+// One row per filter triple observed on a listing's detail response.
+// filterId groups features in 999.md's taxonomy; until we have a captured
+// taxonomy query, parseDetail stores 0 (unknown) and queries match on
+// (featureId, optionId).
+model ListingFilterValue {
+  id           Int     @id @default(autoincrement())
+  listingId    String
+  filterId     Int     @default(0)
+  featureId    Int
+  optionId     Int?
+  textValue    String?
+  numericValue Float?
+  listing      Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([filterId, featureId, optionId])
+  @@index([listingId])
+  @@index([featureId, optionId])
 }
 
 model ListingSnapshot {

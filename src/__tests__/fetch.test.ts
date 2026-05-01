@@ -16,6 +16,9 @@ const CONFIG: FetcherConfig = {
   userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
   acceptLanguage: 'ro-RO,ru-RU;q=0.9,en;q=0.8',
   accept: 'text/html,application/xhtml+xml',
+  acceptJson: 'application/json, text/plain, */*',
+  origin: 'https://999.md',
+  referer: 'https://999.md/ro/list/real-estate/houses-and-yards',
 };
 
 const HOUR = 60 * 60 * 1000;
@@ -316,6 +319,107 @@ describe('Fetcher', () => {
         .map((c) => c[0] as number)
         .filter((ms) => ms >= 5_000);
       expect(interRequestSleeps).toHaveLength(1);
+    });
+
+    it('GraphQL POSTs send Accept: application/json (not the HTML Accept header)', async () => {
+      let captured: Record<string, unknown> = {};
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, (opts) => {
+          captured = opts.headers as Record<string, unknown>;
+          return JSON.stringify({ data: {} });
+        });
+
+      await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+
+      expect(captured['accept']).toBe('application/json, text/plain, */*');
+    });
+
+    it('GraphQL requests carry Origin, Referer, and Sec-Fetch-* headers', async () => {
+      let captured: Record<string, unknown> = {};
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, (opts) => {
+          captured = opts.headers as Record<string, unknown>;
+          return JSON.stringify({ data: {} });
+        });
+
+      await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+
+      expect(captured['origin']).toBe('https://999.md');
+      expect(captured['referer']).toBe('https://999.md/ro/list/real-estate/houses-and-yards');
+      expect(captured['sec-fetch-dest']).toBe('empty');
+      expect(captured['sec-fetch-mode']).toBe('cors');
+      expect(captured['sec-fetch-site']).toBe('same-origin');
+    });
+
+    it('GET fetchPage still sends the configured HTML Accept header (not JSON)', async () => {
+      let captured: Record<string, unknown> = {};
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/page' })
+        .reply(200, (opts) => {
+          captured = opts.headers as Record<string, unknown>;
+          return '';
+        });
+
+      await makeFetcher().fetchPage(`${ORIGIN}/page`);
+
+      expect(captured['accept']).toBe('text/html,application/xhtml+xml');
+    });
+
+    it('An HTML interstitial on a GraphQL POST trips the breaker without JSON.parse', async () => {
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, '<html><body>captcha</body></html>', {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        });
+      const tripImmediately = vi.spyOn(circuit, 'tripImmediately');
+
+      const err = await makeFetcher()
+        .fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q')
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(CircuitTrippingError);
+      expect(tripImmediately).toHaveBeenCalledOnce();
+      expect(await circuit.isOpen()).toBe(true);
+    });
+
+    it('A JSON content-type body is parsed normally (no false positive)', async () => {
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, JSON.stringify({ data: 'ok' }), {
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+        });
+
+      const json = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+      expect(json).toEqual({ data: 'ok' });
+    });
+
+    it('delayMs override extends the inter-request wait beyond baseDelayMs', async () => {
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, JSON.stringify({ data: 'a' }));
+      mockAgent
+        .get(ORIGIN)
+        .intercept({ path: '/graphql', method: 'POST' })
+        .reply(200, JSON.stringify({ data: 'b' }));
+
+      const fetcher = makeFetcher(() => 0);
+      await fetcher.fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+      await fetcher.fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q', { delayMs: 10_000 });
+
+      // The inter-request wait before the second call should be ≥ 10_000 (override),
+      // not the base 8_000.
+      const sleeps = sleep.mock.calls.map((c) => c[0] as number).filter((ms) => ms >= 5_000);
+      expect(sleeps).toHaveLength(1);
+      expect(sleeps[0]).toBeGreaterThan(9_000);
+      expect(sleeps[0]).toBeLessThanOrEqual(10_000);
     });
   });
 });

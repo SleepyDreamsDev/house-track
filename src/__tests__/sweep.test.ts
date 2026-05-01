@@ -40,6 +40,7 @@ const detail = (id: string): ParsedDetail => ({
   postedAt: null,
   bumpedAt: null,
   rawHtmlHash: `hash-${id}`,
+  filterValues: [],
 });
 
 interface MockEnv {
@@ -53,6 +54,7 @@ interface MockEnv {
   persistDetail: ReturnType<typeof vi.fn>;
   startSweep: ReturnType<typeof vi.fn>;
   finishSweep: ReturnType<typeof vi.fn>;
+  findUnenrichedListings: ReturnType<typeof vi.fn>;
   parseIndex: ReturnType<typeof vi.fn>;
   parseDetail: ReturnType<typeof vi.fn>;
 }
@@ -69,6 +71,7 @@ function makeEnv(): MockEnv {
   const persistDetail = vi.fn().mockResolvedValue(undefined);
   const startSweep = vi.fn().mockResolvedValue({ id: 1 });
   const finishSweep = vi.fn().mockResolvedValue(undefined);
+  const findUnenrichedListings = vi.fn().mockResolvedValue([]);
   const parseIndex = vi.fn<(json: unknown) => ListingStub[]>();
   const parseDetail = vi.fn<(id: string, json: unknown) => ParsedDetail>();
 
@@ -82,6 +85,7 @@ function makeEnv(): MockEnv {
       persistDetail,
       startSweep,
       finishSweep,
+      findUnenrichedListings,
     } as unknown as Persistence,
     circuit: { isOpen } as unknown as Circuit,
     parseIndex,
@@ -101,6 +105,7 @@ function makeEnv(): MockEnv {
     persistDetail,
     startSweep,
     finishSweep,
+    findUnenrichedListings,
     parseIndex,
     parseDetail,
   };
@@ -229,6 +234,84 @@ describe('runSweep', () => {
     expect(env.markSeen).toHaveBeenCalledOnce();
     expect(env.markSeen.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['A']);
     expect(env.markInactiveOlderThan).toHaveBeenCalledWith(3 * HOUR);
+  });
+
+  describe('backfillPerSweep', () => {
+    it('Re-fetches up to N listings with NULL filterValuesEnrichedAt after new-detail fetches', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+      env.findUnenrichedListings.mockResolvedValueOnce(['B1', 'B2', 'B3']);
+      env.fetchAdvert.mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockResolvedValueOnce({});
+      env.parseDetail
+        .mockReturnValueOnce(detail('B1'))
+        .mockReturnValueOnce(detail('B2'))
+        .mockReturnValueOnce(detail('B3'));
+      env.deps.backfillPerSweep = 30;
+
+      await runSweep(env.deps);
+
+      expect(env.findUnenrichedListings).toHaveBeenCalledWith(30);
+      expect(env.fetchAdvert).toHaveBeenCalledTimes(3);
+      expect(env.persistDetail).toHaveBeenCalledTimes(3);
+      const ids = env.persistDetail.mock.calls.map((c) => (c[0] as ParsedDetail).id);
+      expect(ids).toEqual(['B1', 'B2', 'B3']);
+    });
+
+    it('backfillPerSweep=0 disables backfill entirely', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+      env.deps.backfillPerSweep = 0;
+
+      await runSweep(env.deps);
+
+      expect(env.findUnenrichedListings).not.toHaveBeenCalled();
+      expect(env.fetchAdvert).not.toHaveBeenCalled();
+    });
+
+    it('Undefined backfillPerSweep means no backfill', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+
+      await runSweep(env.deps);
+
+      expect(env.findUnenrichedListings).not.toHaveBeenCalled();
+    });
+
+    it('A backfill fetch failure does not abort the sweep but flips status to partial', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+      env.findUnenrichedListings.mockResolvedValueOnce(['B1', 'B2', 'B3']);
+      env.fetchAdvert
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(new Error('socket hang up'))
+        .mockResolvedValueOnce({});
+      env.parseDetail.mockReturnValueOnce(detail('B1')).mockReturnValueOnce(detail('B3'));
+      env.deps.backfillPerSweep = 30;
+
+      await runSweep(env.deps);
+
+      expect(env.persistDetail).toHaveBeenCalledTimes(2);
+      const result = env.finishSweep.mock.calls[0]?.[1];
+      expect(result.status).toBe('partial');
+      expect(result.errors[0].url).toContain('backfill');
+    });
+
+    it('A backfill CircuitTrippingError aborts the sweep and marks circuit_open', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+      env.findUnenrichedListings.mockResolvedValueOnce(['B1']);
+      env.fetchAdvert.mockRejectedValueOnce(new CircuitTrippingError(429, 'B1'));
+      env.deps.backfillPerSweep = 30;
+
+      await runSweep(env.deps);
+
+      expect(env.finishSweep.mock.calls[0]?.[1]).toMatchObject({ status: 'circuit_open' });
+    });
   });
 
   it('applyPostFilter callback runs before diffAgainstDb', async () => {

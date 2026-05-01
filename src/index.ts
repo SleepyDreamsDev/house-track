@@ -45,6 +45,9 @@ function buildDeps(): SweepDeps {
       userAgent: POLITENESS.userAgent,
       acceptLanguage: POLITENESS.acceptLanguage,
       accept: POLITENESS.accept,
+      acceptJson: POLITENESS.acceptJson,
+      origin: POLITENESS.origin,
+      referer: POLITENESS.referer,
     },
   });
 
@@ -62,6 +65,7 @@ function buildDeps(): SweepDeps {
         'GetAdvert',
         buildAdvertVariables(id),
         GET_ADVERT_QUERY,
+        { delayMs: POLITENESS.detailDelayMs },
       ),
     persist,
     circuit,
@@ -70,6 +74,7 @@ function buildDeps(): SweepDeps {
     applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
     maxPagesPerSweep: FILTER.maxPagesPerSweep,
     missingThresholdMs: MISSING_THRESHOLD_MS,
+    backfillPerSweep: SWEEP.backfillPerSweep,
     log,
   };
 }
