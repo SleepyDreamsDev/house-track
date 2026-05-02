@@ -62,7 +62,7 @@ commit.
 - [x] **Slice 4 — Vite SPA scaffold + 4 pages.** `web/` Vite + react-router + TanStack Query/Table + shadcn primitives. Functional but unstyled. _Run via `/feature-parallel` with 3, 5, 6._
 - [x] **Slice 5 — `frontend-design` visual pass.** Apply `frontend-design` skill to the 4 pages per parent plan §"Visual pass". _Run via `/feature-parallel` with 3, 4, 6._
 - [x] **Slice 6 — Grafana provisioning + iframe.** `grafana/provisioning/*`, dashboard JSON, Dashboard-page iframe. _Run via `/feature-parallel` with 3, 4, 5._
-- [ ] **Slice 7 — Docs.** `docs/operator-ui.md`, poc-spec append, `CLAUDE.md` Stack/Quick-Start update. _Run via `/feature` or plain edits._
+- [x] **Slice 7 — Docs.** `docs/operator-ui.md`, poc-spec append, `CLAUDE.md` Stack/Quick-Start update. _Run via `/feature` or plain edits._
 
 ## Priority 3 — Acceptance criteria validation
 
