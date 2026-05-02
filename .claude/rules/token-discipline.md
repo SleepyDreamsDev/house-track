@@ -105,10 +105,29 @@ advisory — explicit user request for verbose output overrides for that turn.
 - `token-logger.sh` (Stop): warns when `cache_read / (cache_read +
   cache_creation) < 0.7` AND the session crossed the breakpoint minimum.
 - `token-logger.sh` per-turn cache-break detector: flags any post-turn-3
-  turn that creates >1000 new cache tokens. Likely cause: edited static
-  context, model switch, or tool-set change.
+  turn that creates ≥10,000 new cache tokens (consecutive duplicates
+  deduped). Likely cause: edited static context, model switch, tool-set
+  change, or a single large tool result. Below 10k is mostly natural prefix
+  extension from tool results + system reminders, which Claude Code
+  re-snapshots every turn by design.
 - `claudemd-size-check.sh` (SessionStart): warns when root `CLAUDE.md`
   exceeds 120 lines / 4 KB. Prevents silent drift back to bloat.
+
+## Task-reminder noise (silence by keeping list fresh)
+
+The built-in `<system-reminder>` "task tools haven't been used recently"
+fires when a TaskList exists but several turns pass without TaskCreate /
+TaskUpdate / TaskGet activity. Each firing inflates the dynamic suffix.
+
+Two ways to keep it quiet:
+
+- **For short tasks (≤ 2 steps)**: don't create a task list. The reminder
+  only fires when a list exists.
+- **For long tasks**: call `TaskUpdate` at every phase boundary (RED → GREEN
+  → REFACTOR → SHIP). The reminder cooldown is reset on any task tool use.
+
+There is no project-level setting to disable the reminder without also
+disabling the task tools (`todoFeatureEnabled: false` kills both).
 
 ## Out-of-scope (don't bake in)
 

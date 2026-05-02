@@ -55,13 +55,30 @@ STATS=$(jq -sc '
       ] | length
     ),
 
+    # Real cache "breaks" (prefix invalidations) typically create 10k+ new
+    # tokens in a single turn — edits to CLAUDE.md/progress.md, tool-set
+    # churn, or model switches. Below 10k is mostly natural prefix extension
+    # from tool results + system reminders, which Claude Code re-snapshots
+    # every turn by design. Threshold tuned from the 2026-05-02 session.
+    # Also dedupe consecutive identical creations: when the same tool result
+    # gets re-snapshotted on the next turn, the same `cache_creation` value
+    # repeats — only the first turn in a run is a distinct event.
     cache_breaks: (
-      [ $turns | to_entries[] |
-        select(.key >= 3
-          and (.value.message.usage.cache_creation_input_tokens // 0) > 1000)
-        | { turn: (.key + 1),
-            created: (.value.message.usage.cache_creation_input_tokens // 0) }
-      ]
+      ($turns | to_entries
+        | map({
+            turn:    (.key + 1),
+            idx:     .key,
+            created: (.value.message.usage.cache_creation_input_tokens // 0)
+          })
+        | map(select(.idx >= 3 and .created >= 10000))
+        | . as $hits
+        | [ range(0; $hits | length) as $i |
+            $hits[$i] | . + { keep: ($i == 0
+              or $hits[$i].created != $hits[$i - 1].created
+              or $hits[$i].turn   != $hits[$i - 1].turn + 1) }
+          ]
+        | map(select(.keep) | { turn, created })
+      )
     )
   }
 ' "$TRANSCRIPT") || {
