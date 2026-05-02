@@ -45,6 +45,8 @@ logs/
 .claude/sessions/
 .claude/.token-usage*
 .claude/runs/
+.claude/run-backlog/
+.claude/ralph-loop.local.md
 .claude/plans/.active
 .claude/plans/.checkpoint
 
