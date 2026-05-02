@@ -46,7 +46,7 @@ export const Sweeps: React.FC = () => {
   });
 
   const handleResetCircuit = () => {
-    if (confirm('Reset circuit breaker?')) {
+    if (confirm('Reset circuit breaker? This will clear the sentinel file.')) {
       circuitMutation.mutate();
     }
   };
@@ -54,31 +54,31 @@ export const Sweeps: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Sweeps</h1>
+        <h1 className="text-xl font-bold text-neutral-900">Sweeps</h1>
         <Button
           variant="destructive"
           onClick={handleResetCircuit}
           disabled={circuitMutation.isPending}
         >
-          Reset Circuit Breaker
+          {circuitMutation.isPending ? 'Resetting...' : 'Reset Circuit Breaker'}
         </Button>
       </div>
 
       <Card>
         {isLoading ? (
-          <p className="text-gray-500">Loading...</p>
+          <p className="text-sm text-neutral-400">Loading...</p>
         ) : error ? (
-          <p className="text-red-600">Error loading sweeps</p>
+          <p className="text-sm text-error">Error loading sweeps</p>
         ) : (
           <Table>
             <TableHead>
               <TableRow>
                 <TableHeader>Started</TableHeader>
                 <TableHeader>Status</TableHeader>
-                <TableHeader>Duration</TableHeader>
-                <TableHeader>Pages</TableHeader>
-                <TableHeader>New Listings</TableHeader>
-                <TableHeader>Errors</TableHeader>
+                <TableHeader className="text-right">Duration</TableHeader>
+                <TableHeader className="text-right">Pages</TableHeader>
+                <TableHeader className="text-right">New</TableHeader>
+                <TableHeader className="text-right">Errors</TableHeader>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -88,7 +88,9 @@ export const Sweeps: React.FC = () => {
                     onClick={() => setExpandedId(expandedId === sweep.id ? null : sweep.id)}
                     className="cursor-pointer"
                   >
-                    <TableCell>{new Date(sweep.startedAt).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-neutral-900">
+                      {new Date(sweep.startedAt).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -102,9 +104,15 @@ export const Sweeps: React.FC = () => {
                         {sweep.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>{sweep.durationMs}ms</TableCell>
-                    <TableCell>{sweep.pagesFetched}</TableCell>
-                    <TableCell>{sweep.newListings}</TableCell>
+                    <TableCell className="text-right font-mono text-neutral-600">
+                      {sweep.durationMs}ms
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-neutral-600">
+                      {sweep.pagesFetched}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-neutral-600">
+                      {sweep.newListings}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={sweep.errorCount > 0 ? 'error' : 'success'}>
                         {sweep.errorCount}
@@ -113,12 +121,12 @@ export const Sweeps: React.FC = () => {
                   </TableRow>
                   {expandedId === sweep.id && sweep.errorCount > 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="bg-gray-50 p-4">
-                        <details>
-                          <summary className="cursor-pointer font-medium">
+                      <TableCell colSpan={6} className="bg-neutral-50 p-4">
+                        <details className="group">
+                          <summary className="cursor-pointer font-medium text-sm text-neutral-900 group-open:mb-3">
                             Errors ({sweep.errorCount})
                           </summary>
-                          <pre className="mt-2 whitespace-pre-wrap text-xs">
+                          <pre className="whitespace-pre-wrap text-xs bg-white border border-neutral-200 rounded-sm p-3 text-neutral-600 font-mono overflow-auto max-h-48">
                             {JSON.stringify({ errors: [] }, null, 2)}
                           </pre>
                         </details>

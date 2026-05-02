@@ -45,55 +45,57 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
+      <h1 className="text-xl font-bold text-neutral-900">Dashboard</h1>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
-          <h2 className="mb-4 text-lg font-semibold">Last Sweep</h2>
+          <h2 className="mb-4 text-lg font-semibold text-neutral-900">Last Sweep</h2>
           {sweepLoading ? (
-            <p className="text-gray-500">Loading...</p>
+            <p className="text-sm text-neutral-400">Loading...</p>
           ) : sweepError ? (
-            <p className="text-red-600">Error loading sweep</p>
+            <p className="text-sm text-error">Error loading sweep</p>
           ) : latestSweep ? (
-            <div className="space-y-2">
-              <div>
-                <span className="text-gray-600">Status:</span>
-                <span className="ml-2">
-                  <Badge variant={sweepColor}>{sweepStatus}</Badge>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-600">Status</span>
+                <Badge variant={sweepColor}>{sweepStatus}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-600">Started</span>
+                <span className="text-sm text-neutral-900">
+                  {new Date(latestSweep.startedAt).toLocaleString()}
                 </span>
               </div>
-              <div>
-                <span className="text-gray-600">Started:</span>
-                <span className="ml-2">{new Date(latestSweep.startedAt).toLocaleString()}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Duration:</span>
-                <span className="ml-2">{latestSweep.durationMs}ms</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-600">Duration</span>
+                <span className="text-sm font-mono text-neutral-900">
+                  {latestSweep.durationMs}ms
+                </span>
               </div>
             </div>
           ) : (
-            <p className="text-gray-500">No sweeps available</p>
+            <p className="text-sm text-neutral-400">No sweeps available</p>
           )}
         </Card>
 
         <Card>
-          <h2 className="mb-4 text-lg font-semibold">Circuit State</h2>
+          <h2 className="mb-4 text-lg font-semibold text-neutral-900">Circuit State</h2>
           {circuitLoading ? (
-            <p className="text-gray-500">Loading...</p>
+            <p className="text-sm text-neutral-400">Loading...</p>
           ) : circuitError ? (
-            <p className="text-red-600">Error loading circuit state</p>
+            <p className="text-sm text-error">Error loading circuit state</p>
           ) : (
-            <div className="space-y-2">
-              <div>
-                <span className="text-gray-600">Status:</span>
-                <span className="ml-2">
-                  <Badge variant={circuitColor}>{circuitOpen ? 'OPEN' : 'CLOSED'}</Badge>
-                </span>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-600">Status</span>
+                <Badge variant={circuitColor}>{circuitOpen ? 'OPEN' : 'CLOSED'}</Badge>
               </div>
               {circuitOpen && circuit?.openedAt && (
-                <div>
-                  <span className="text-gray-600">Opened:</span>
-                  <span className="ml-2">{new Date(circuit.openedAt).toLocaleString()}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-neutral-600">Opened</span>
+                  <span className="text-sm text-neutral-900">
+                    {new Date(circuit.openedAt).toLocaleString()}
+                  </span>
                 </div>
               )}
             </div>
@@ -102,7 +104,8 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <Card>
-        <h2 className="mb-4 text-lg font-semibold">Grafana Dashboard</h2>
+        <h2 className="mb-4 text-lg font-semibold text-neutral-900">Grafana Dashboard</h2>
+        <p className="mb-4 text-sm text-neutral-600">View analytics and key metrics</p>
         <Button
           onClick={() => {
             window.open('http://127.0.0.1:3001/d/house-track/overview?kiosk&theme=dark', '_blank');

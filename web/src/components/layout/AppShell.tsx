@@ -13,16 +13,18 @@ export const AppShell: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <aside className="w-64 border-r border-gray-200 bg-white p-6">
-        <h1 className="mb-8 text-xl font-bold">House Track</h1>
-        <nav className="space-y-2">
+    <div className="flex h-screen bg-neutral-50">
+      <aside className="w-64 border-r border-neutral-200 bg-white p-6 flex flex-col">
+        <h1 className="mb-8 text-xl font-bold text-neutral-900">House Track</h1>
+        <nav className="space-y-1 flex-1">
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`block rounded px-3 py-2 text-sm font-medium transition-colors ${
-                isActive(item.path) ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+              className={`block rounded-sm px-3 py-2 text-sm font-medium transition-colors ${
+                isActive(item.path)
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:bg-neutral-100 active:bg-neutral-200'
               }`}
             >
               {item.label}
