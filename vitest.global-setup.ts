@@ -24,7 +24,11 @@ export default async function setup(): Promise<() => Promise<void>> {
   await admin.query(`CREATE DATABASE ${TEMPLATE_DB}`);
   await admin.end();
 
-  await execa('pnpm', ['prisma', 'db', 'push', '--skip-generate', '--accept-data-loss'], {
+  // Use `migrate deploy` (not `db push`) so tests fail fast when schema.prisma
+  // has a model that no migration creates — this is the same surface the
+  // Docker runtime stage uses, and `db push` would silently sync schema from
+  // the model file regardless of whether a migration exists.
+  await execa('pnpm', ['prisma', 'migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: `${baseUrl}/${TEMPLATE_DB}` },
     stdio: 'pipe',
   });

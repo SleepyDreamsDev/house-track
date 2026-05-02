@@ -24,22 +24,22 @@ RUN pnpm build
 
 # ---------- runtime ----------
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
-ARG PNPM_VERSION
-RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate \
- && apt-get update && apt-get install -y --no-install-recommends tini ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends tini ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 ENV NODE_ENV=production \
     TZ=Europe/Chisinau
 
-COPY --from=deps  /app/node_modules ./node_modules
-COPY --from=deps  /app/prisma       ./prisma
-COPY --from=build /app/dist         ./dist
-COPY package.json pnpm-lock.yaml* ./
+COPY --from=deps  --chown=node:node /app/node_modules ./node_modules
+COPY --from=deps  --chown=node:node /app/prisma       ./prisma
+COPY --from=build --chown=node:node /app/dist         ./dist
+COPY --chown=node:node package.json pnpm-lock.yaml* ./
 
 USER node
 ENTRYPOINT ["/usr/bin/tini", "--"]
 # Apply outstanding migrations before booting the cron loop. Idempotent:
 # `migrate deploy` no-ops when the DB is already at the latest migration.
-CMD ["sh", "-c", "pnpm prisma migrate deploy && node dist/index.js"]
+# Invoke prisma directly from node_modules to avoid re-triggering corepack
+# (pnpm) at runtime — the engines and binary are baked into the image.
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/index.js"]

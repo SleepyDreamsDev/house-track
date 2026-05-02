@@ -7,7 +7,12 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // `native` covers local dev (macOS/Linux). The two `*-openssl-3.0.x` targets
+  // cover the Docker runtime image (node:22-bookworm-slim ships OpenSSL 3.0)
+  // on both arm64 and amd64 hosts — without them the runtime image fails with
+  // `could not locate the Query Engine for runtime "..."`.
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 model Listing {
