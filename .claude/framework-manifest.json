@@ -41,6 +41,7 @@
     ".claude/progress-archive.md",
     ".claude/plans/backlog.md",
     ".claude/skills/run-backlog/SKILL.md",
-    ".claude/agents/feature-runner.md"
+    ".claude/agents/feature-runner.md",
+    ".claude/hooks/codex-review-collect.sh"
   ]
 }
