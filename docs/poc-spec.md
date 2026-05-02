@@ -170,7 +170,7 @@ export const FILTER = {
 | Circuit breaker | 3 consecutive 4xx (excl. 404) → 24h pause |
 | User-Agent | Realistic Firefox/Chrome on Linux, e.g. `Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0` |
 | Headers | `Accept-Language: ro-RO,ru-RU;q=0.9,en;q=0.8`, `Accept: text/html,application/xhtml+xml`, no cookies |
-| robots.txt | Manually verify before first run: `curl -A "Mozilla/5.0..." https://999.md/robots.txt` |
+| robots.txt | Re-run `pnpm verify-robots` (verified 2026-05-02 — `/graphql` not disallowed for `User-agent: *`; `/ro/<id>` is reference-only, not crawled). |
 
 ## Failure handling
 
