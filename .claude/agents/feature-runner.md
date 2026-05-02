@@ -97,6 +97,24 @@ You MUST NOT do any of these. Each is a documented overnight failure mode:
 5. Validate the result against the orchestrator's safety checks
    (these duplicate the orchestrator's post-flight; failing here lets you
    produce a richer `fail_summary`):
+   - **Anti-fabrication self-check (MANDATORY).** Before populating any
+     "success" field in your JSON contract, you MUST verify each of the
+     following with a real tool call and observe the actual output. Do
+     NOT infer or assume any of these from /feature's banner text — that
+     text can be cached/stale and weak models tend to fabricate
+     completion summaries. Required checks:
+     1. Local branch exists: `git rev-parse --verify <branch>`. Capture
+        the actual sha; that becomes `commit`. If this errors, return
+        `status="fail"`, `fail_phase="ship"`,
+        `fail_summary="branch does not exist locally"`.
+     2. Remote branch exists: `git ls-remote origin refs/heads/<branch>`
+        returns one line. If empty, return
+        `status="fail"`, `fail_phase="ship"`,
+        `fail_summary="branch was not pushed"`.
+     3. PR is real: `gh pr view <num> --json number,state,headRefName`
+        returns valid JSON with matching `headRefName`. If not, return
+        `status="fail"`, `fail_phase="ship"`,
+        `fail_summary="PR <num> not reachable or wrong head"`.
    - HEAD sha on `<branch>` ≠ `COMMIT_PRE` (else `fail_phase="ship"`,
      "subagent did no work")
    - PR exists and `gh pr view <num> --json mergeable,mergeStateStatus`
@@ -105,6 +123,15 @@ You MUST NOT do any of these. Each is a documented overnight failure mode:
      Anything else → `fail_phase="ship"`.
    - If `REHEARSAL=true`, skip the PR check entirely; expect a local
      branch only and verify the local commit advanced.
+
+   **Honest-fail policy:** if you hit a turn limit mid-flow OR notice
+   you've produced a JSON contract without actually running tool calls
+   to verify the work, return `status="fail"`,
+   `fail_phase="<phase you reached>"`, `fail_summary` describing the
+   yield. Do NOT fabricate a success contract to terminate the turn —
+   the orchestrator will retry honestly-failed slices, but
+   fabricated-success slices poison subsequent waves (slice N+1 forks
+   from a "main" that doesn't have slice N's work).
 
 ## Return contract
 

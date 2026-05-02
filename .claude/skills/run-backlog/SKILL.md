@@ -108,6 +108,10 @@ not write state files on failure.
    ME=$$
    echo $ME > .claude/run-backlog/.watchdog.pid
    trap 'rm -f .claude/run-backlog/.watchdog.pid .claude/run-backlog/.claude.pid' EXIT
+   STALL=5400  # was 1800; live runs showed /feature legitimately takes
+               # 60-90min for heavier slices (Vite SPA scaffold, Hono API
+               # with full route coverage). 1800s false-positives during
+               # normal operation. 5400s = 90min ceiling.
    while sleep 60; do
      # Self-evict if a newer watchdog took over (handles double-bootstrap
      # or SIGKILLed predecessors whose trap never ran).
@@ -116,7 +120,7 @@ not write state files on failure.
      kill -0 $CLAUDE_PID 2>/dev/null || exit
      [ -f .claude/run-backlog/state.json ] || continue
      AGE=$(( $(date +%s) - $(stat -f %m .claude/run-backlog/state.json) ))
-     [ $AGE -gt 1800 ] && { kill -TERM $CLAUDE_PID; exit; }
+     [ $AGE -gt $STALL ] && { kill -TERM $CLAUDE_PID; exit; }
    done
    ```
    After spawn, verify the pidfile exists and `kill -0` succeeds. If
@@ -146,11 +150,12 @@ CLAUDE_PID=$!
 echo $CLAUDE_PID > .claude/run-backlog/.claude.pid
 ( ME=$BASHPID
   echo $ME > .claude/run-backlog/.watchdog.pid
+  STALL=5400  # 90min — see PHASE 0a step 6 for rationale
   while sleep 60; do
     [ "$(cat .claude/run-backlog/.watchdog.pid 2>/dev/null)" = "$ME" ] || exit
     [ -f .claude/run-backlog/state.json ] || continue
     AGE=$(( $(date +%s) - $(stat -f %m .claude/run-backlog/state.json) ))
-    [ $AGE -gt 1800 ] && { kill -TERM $CLAUDE_PID; exit; }
+    [ $AGE -gt $STALL ] && { kill -TERM $CLAUDE_PID; exit; }
   done
 ) & WATCHDOG_PID=$!
 trap 'kill $WATCHDOG_PID $CAFFEINATE_PID 2>/dev/null;
@@ -256,27 +261,58 @@ parallel waves; sequential for max_parallel=1):
                  BASE_BRANCH/COMMIT_PRE/RUN_ID/REHEARSAL>)
 Wait for ALL returns.
 
+Mid-yield auto-resume (R-fabrication): if a slice returns without a
+parseable JSON contract block (e.g. trailing `agentId: ... use
+SendMessage to continue` hint), this is a turn-budget mid-yield, NOT a
+fail. SendMessage(to=agentId, message="Complete /feature and emit JSON
+contract per spec; if blocked, return status=fail honestly") and
+TaskOutput(block=true, timeout=600000). Count this as one retry attempt;
+treat the slice as fail and halt only after retries_per_slice exhausted.
+
 Wave post-flight (per slice, then per wave):
-- Parse each slice's JSON contract. If missing/malformed → status=fail,
-  fail_phase="handover" (defensive parsing table in plan).
+- Parse each slice's JSON contract. If still missing/malformed after
+  auto-resume → status=fail, fail_phase="handover".
 - Override status=success → fail when: commit==commit_pre (R7), or
   pr_number==null in non-rehearsal (R10), or scope_violations non-empty,
   or output contains literal "<promise>" string.
-- Per-slice gh pr view <num> --json mergeable,mergeStateStatus must
-  report MERGEABLE; mergeStateStatus in {CLEAN, BLOCKED} OK (R5).
-- For each successful slice, lex order: git checkout <wave_base>;
-  git merge --no-ff <slice_branch>. On conflict: git merge --abort;
-  mark all wave members as merge_conflict; HALT (R21).
-- Run TYPECHECK_CMD + TEST_CMD_ALL on merged tip. Red → HALT (R21).
-  Green → merged tip = next wave's base.
+- **Anti-fabrication check (R-new):** verify the claimed branch exists
+  on origin (`git ls-remote origin refs/heads/<branch>`) AND the claimed
+  PR is reachable (`gh pr view <num> --json number,state`). If either
+  fails → override to status=fail, fail_phase="ship", fail_summary
+  references "fabricated completion (no real branch/PR)". This catches
+  weak-model agents that hallucinate JSON contracts after minimal work.
+- Verify gh pr view <num> --json mergeable,mergeStateStatus reports
+  MERGEABLE; mergeStateStatus in {CLEAN, BLOCKED} OK (R5).
+- AUTO-MERGE the PR (replaces the prior local-merge step):
+  Try `gh pr merge <num> --squash --delete-branch`. If that errors with
+  "merge commit cannot be created" or CI is pending, fall back to
+  `gh pr merge <num> --squash --delete-branch --auto` and poll
+  `gh pr view <num> --json mergedAt` every 30s for up to 5 min.
+  If still not merged → HALT R21 (CI flake or required check unset).
+  Otherwise: `git checkout <wave_base> && git pull --ff-only` so the
+  next wave forks from the merged state.
+- Run TYPECHECK_CMD + TEST_CMD_ALL on updated wave_base. Red → HALT R21.
+  Green → continue.
+
+Why auto-merge replaced local-merge: local `git merge --no-ff` produces
+a merge commit that fails commitlint via husky (commit-msg hook expects
+Conventional Commits, but the default merge message isn't conventional).
+Bypassing with --no-verify would fight the project rules. Local-merging
+also pollutes downstream slice PRs with prior slice diffs when chained.
+Squash-merging the remote PR sidesteps both issues and gives a clean
+linear history on main.
 
 Record:
 - Append per-slice entries to state.results (drop kaizen_summary — keep
   state.json small; raw kaizen lives in the per-slice log).
 - Write .claude/run-backlog/<RUN_ID>/<slug>.md per slice; include the
   verbatim kaizen_summary block from feature-runner's JSON.
-- For each success: tick [x] in backlog.md by description_sha lookup
-  (R6: log WARN and skip tick if sha not found).
+- For each success: tick [x] in backlog.md AFTER auto-merge + pull
+  completes (R-new: ticking before merge means the slice's PR carries
+  the un-ticked snapshot, and squash-merge then reverts the tick on
+  main). Tick by description_sha lookup; commit + push as a separate
+  `chore(backlog): tick slice <N> after orchestrator merge` commit
+  directly to main (R6: log WARN and skip tick if sha not found).
 - Kaizen: /feature's "Auto-implemented" items already committed inside
   the slice — no work. NEVER auto-apply "Workflow delta" mid-run (cache
   hygiene + framework-file edit ban). Append each delta line, deduped,
@@ -331,6 +367,15 @@ any session.
 
 ## Out of scope (v1)
 
-`/feature-parallel` under the orchestrator (R13). Auto-merging PRs to
-main (human merges in the morning). Cross-feature replanning (a failed
-slice halts; loop never rewrites downstream plans).
+`/feature-parallel` under the orchestrator (R13). Cross-feature
+replanning (a failed slice halts; loop never rewrites downstream plans).
+
+## In scope as of 2026-05-02 run (was previously out of scope)
+
+- **Auto-merging PRs.** v1 originally deferred merges to the human in
+  the morning. Live unattended runs proved this incompatible with
+  multi-slice dependency chains: Slice N+1 forks from main, so Slice N
+  must land on main before Slice N+1 dispatches. Local-merge alternative
+  fights commitlint and pollutes downstream PR diffs. The orchestrator
+  now auto-merges each slice's PR after validation (squash + delete-
+  branch), then pulls main, then runs the post-merge typecheck/test.
