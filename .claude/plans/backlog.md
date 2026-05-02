@@ -1,22 +1,8 @@
 # house-track — Backlog
 
-## Priority 1 — Current Sprint (POC, per `docs/poc-spec.md`)
+## Priority 1 — POC crawler completion
 
-- [x] Implement `src/circuit.ts` — sentinel file `data/.circuit_open`; threshold + 24h cooldown. _8 tests._
-- [x] Implement `src/fetch.ts` — undici client, 8s±2s jitter, retries (10s/30s/90s on 5xx + network err), 403/429 → CircuitTrippingError. Politeness profile fixes (Origin/Referer/Sec-Fetch-*; HTML interstitial → breaker; per-call delayMs override). _25 tests._
-- [x] Implement `src/persist.ts` — Prisma upsert + snapshot insert when hash changes; markSeen / markInactiveOlderThan / sweep bookkeeping; `$transaction`-atomic ListingFilterValue write; `findUnenrichedListings` for backfill. _16 tests._
-- [x] Implement `src/sweep.ts` — orchestrator + trickle-backfill of unenriched listings (`SWEEP.backfillPerSweep`). _14 tests._
-- [x] Implement `src/index.ts` — node-cron hourly entrypoint, wires real deps.
-- [x] Add minimal `src/log.ts` smoke test. _2 tests._
-- [x] Replace placeholder filter params in `src/config.ts` with real 999.md IDs (verified GraphQL filter IDs 2026-04-26).
-- [x] Save 1 index page + advert detail page from 999.md to `src/__tests__/fixtures/`.
-- [x] Implement `src/parse-index.ts` — JSON parser (GraphQL, not HTML). _13 tests._
-- [x] Implement `src/parse-detail.ts` — JSON parser + `extractFilterValues` walk over FEATURE_* entries. _19 tests._
-- [x] Schema enrichment: `ListingFilterValue` table with facet indexes; `Listing.filterValuesEnrichedAt` for backfill scheduling.
-- [x] Local MCP server (`src/mcp/server.ts`) over stdio with three read-only tools: `list_filters`, `search_listings`, `get_listing`. _18 query tests._
-- [x] First migration via `pnpm prisma migrate dev --name init` (and `add_listing_filter_value`).
-- [ ] Verify `https://999.md/robots.txt` allows the planned crawl (spec §"Politeness budget").
-- [ ] Local Docker compose smoke test against the named volume.
+_All items done — see Done section._
 
 ## Priority 1.5 — Backfill quality (newly tracked 2026-05-01)
 
@@ -48,22 +34,6 @@
       listings, filterValuesEnrichedAt populated, ~30 backfill rows per
       tick, no 403/429.
 
-## Priority 2 — Operator UI + Postgres + Grafana (newly tracked 2026-05-02)
-
-Parent plan: [`operator-ui-postgres-grafana.md`](./operator-ui-postgres-grafana.md).
-Delivers `docs/poc-spec.md` Phase 4 (operator UI) earlier than originally
-sequenced. Single localhost-only stack: `crawler` + `postgres` + `grafana`
-+ `web`. Sliced for incremental shipping per slice = its own session +
-commit.
-
-- [x] **Slice 1 — Postgres migration + testcontainers.** Plan: [`postgres-migration.md`](./postgres-migration.md). SQLite → pg, fresh `0_init`, per-Vitest-process testcontainer, 147/147 tests green. PR [#6](https://github.com/SleepyDreamsDev/house-track/pull/6).
-- [x] **Slice 2 — `Setting` + `Source` tables + `getSetting`.** New tables, `src/settings.ts`, refactor `sweep.ts`/`fetch.ts`/`circuit.ts` to read overrides; `src/config.ts` stays as defaults. _Run via `/feature`._
-- [x] **Slice 3 — Hono API layer + `web` service.** `src/web/server.ts` + routes (sweeps/listings/filters/settings/sources/circuit) reusing `src/mcp/queries.ts`. _Run via `/feature-parallel` with 4–6._
-- [x] **Slice 4 — Vite SPA scaffold + 4 pages.** `web/` Vite + react-router + TanStack Query/Table + shadcn primitives. Functional but unstyled. _Run via `/feature-parallel` with 3, 5, 6._
-- [x] **Slice 5 — `frontend-design` visual pass.** Apply `frontend-design` skill to the 4 pages per parent plan §"Visual pass". _Run via `/feature-parallel` with 3, 4, 6._
-- [x] **Slice 6 — Grafana provisioning + iframe.** `grafana/provisioning/*`, dashboard JSON, Dashboard-page iframe. _Run via `/feature-parallel` with 3, 4, 5._
-- [x] **Slice 7 — Docs.** `docs/operator-ui.md`, poc-spec append, `CLAUDE.md` Stack/Quick-Start update. _Run via `/feature` or plain edits._
-
 ## Priority 3 — Acceptance criteria validation
 
 - [ ] 7 consecutive days of hourly sweeps, ≥ 95% `status=ok`.
@@ -85,4 +55,32 @@ commit.
 
 ## Done
 
-<!-- Completed items are moved here with [x] and a brief note -->
+### POC crawler core (Priority 1)
+
+- [x] `src/circuit.ts` — sentinel `data/.circuit_open`, threshold + 24h cooldown (8 tests).
+- [x] `src/fetch.ts` — undici client, 8s±2s jitter, retries, 403/429 → CircuitTrippingError, politeness profile (25 tests).
+- [x] `src/persist.ts` — Prisma upsert + snapshot on hash change, sweep bookkeeping, atomic `ListingFilterValue` write, `findUnenrichedListings` (16 tests).
+- [x] `src/sweep.ts` — orchestrator + trickle-backfill via `SWEEP.backfillPerSweep` (14 tests).
+- [x] `src/index.ts` — node-cron hourly entrypoint wired to real deps.
+- [x] `src/log.ts` smoke test (2 tests).
+- [x] Real 999.md filter param IDs in `src/config.ts` (verified GraphQL filter IDs 2026-04-26).
+- [x] Index + advert detail fixtures in `src/__tests__/fixtures/`.
+- [x] `src/parse-index.ts` — GraphQL JSON parser (13 tests).
+- [x] `src/parse-detail.ts` — JSON parser + `extractFilterValues` over `FEATURE_*` entries (19 tests).
+- [x] Schema enrichment — `ListingFilterValue` table with facet indexes, `Listing.filterValuesEnrichedAt`.
+- [x] `src/mcp/server.ts` — local stdio MCP with `list_filters`, `search_listings`, `get_listing` (18 tests).
+- [x] First Prisma migrations (`init`, `add_listing_filter_value`).
+- [x] **Verify `999.md/robots.txt`** — `pnpm verify-robots` (live + 9 unit tests). `User-agent: *` does not disallow `/graphql`, `/ro/list/...`, or `/ro/<id>` (verified 2026-05-02).
+- [x] **Local Docker compose smoke test** — `POSTGRES_PASSWORD=changeme docker compose up -d --build`. Surfaced and fixed three real bugs: (1) Dockerfile runtime stage missing `--chown=node:node` on COPY (caused Prisma engine write failures under `USER node`); (2) Slice 2 added `Setting`/`Source` to schema but never created a migration — now in `20260502192036_add_setting_source`; (3) Prisma client only generated for `linux-arm64-openssl-1.1.x`, but Bookworm-slim ships OpenSSL 3.0 — added `linux-arm64-openssl-3.0.x` and `debian-openssl-3.0.x` to `binaryTargets`. Post-fix: 6 app tables present, 2 migrations applied, crawler boots cron, Grafana `/api/health` 200.
+
+### Operator UI + Postgres + Grafana (Priority 2)
+
+Parent plan: [`operator-ui-postgres-grafana.md`](./operator-ui-postgres-grafana.md). All 7 slices shipped.
+
+- [x] **Slice 1** — Postgres migration + per-process testcontainers, 147/147 green ([PR #6](https://github.com/SleepyDreamsDev/house-track/pull/6)). Plan: [`postgres-migration.md`](./postgres-migration.md).
+- [x] **Slice 2** — `Setting` + `Source` tables, `src/settings.ts`, runtime override wiring in `sweep`/`fetch`/`circuit`.
+- [x] **Slice 3** — Hono API layer + `web` service (sweeps/listings/filters/settings/sources/circuit) reusing `src/mcp/queries.ts`.
+- [x] **Slice 4** — Vite SPA scaffold: react-router + TanStack Query/Table + shadcn primitives, 4 pages.
+- [x] **Slice 5** — `frontend-design` visual pass over the 4 pages.
+- [x] **Slice 6** — Grafana provisioning + Dashboard-page iframe.
+- [x] **Slice 7** — Docs: `docs/operator-ui.md`, poc-spec append, CLAUDE.md Stack/Quick-Start update.
