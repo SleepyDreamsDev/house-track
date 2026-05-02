@@ -18,6 +18,7 @@ import { log } from './log.js';
 import { parseDetail } from './parse-detail.js';
 import { applyPostFilter, parseIndex } from './parse-index.js';
 import { Persistence } from './persist.js';
+import { getSetting } from './settings.js';
 import { runSweep, type SweepDeps } from './sweep.js';
 
 const SCHEDULE = process.env['CRON_SCHEDULE'] ?? '0 * * * *'; // top of every hour
@@ -29,18 +30,26 @@ const MISSING_THRESHOLD_MS =
 // leaks handles in a long-running cron process and can keep the event loop alive.
 const prisma = new PrismaClient();
 
-function buildDeps(): SweepDeps {
+async function buildDeps(): Promise<SweepDeps> {
   const persist = new Persistence(prisma);
   const circuit = new Circuit({
     sentinelPath: CIRCUIT.sentinelPath,
     threshold: CIRCUIT.consecutiveFailureThreshold,
     pauseDurationMs: CIRCUIT.pauseDurationMs,
   });
+
+  // Read runtime-mutable settings; fall back to defaults from config.ts
+  const baseDelayMs = await getSetting('politeness.baseDelayMs', POLITENESS.baseDelayMs);
+  const jitterMs = await getSetting('politeness.jitterMs', POLITENESS.jitterMs);
+  const detailDelayMs = await getSetting('politeness.detailDelayMs', POLITENESS.detailDelayMs);
+  const maxPagesPerSweep = await getSetting('sweep.maxPagesPerSweep', FILTER.maxPagesPerSweep);
+  const backfillPerSweep = await getSetting('sweep.backfillPerSweep', SWEEP.backfillPerSweep);
+
   const fetcher = new Fetcher({
     circuit,
     config: {
-      baseDelayMs: POLITENESS.baseDelayMs,
-      jitterMs: POLITENESS.jitterMs,
+      baseDelayMs,
+      jitterMs,
       retryBackoffsMs: POLITENESS.retryBackoffsMs,
       userAgent: POLITENESS.userAgent,
       acceptLanguage: POLITENESS.acceptLanguage,
@@ -65,22 +74,22 @@ function buildDeps(): SweepDeps {
         'GetAdvert',
         buildAdvertVariables(id),
         GET_ADVERT_QUERY,
-        { delayMs: POLITENESS.detailDelayMs },
+        { delayMs: detailDelayMs },
       ),
     persist,
     circuit,
     parseIndex,
     parseDetail,
     applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
-    maxPagesPerSweep: FILTER.maxPagesPerSweep,
+    maxPagesPerSweep,
     missingThresholdMs: MISSING_THRESHOLD_MS,
-    backfillPerSweep: SWEEP.backfillPerSweep,
+    backfillPerSweep,
     log,
   };
 }
 
 async function tick(): Promise<void> {
-  const deps = buildDeps();
+  const deps = await buildDeps();
   try {
     await runSweep(deps);
   } catch (err) {

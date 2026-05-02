@@ -7,7 +7,7 @@ description: >
   combined RED+GREEN dispatch. Use when the user says "implement", "build",
   "add feature", or runs /feature.
 command: /feature
-argument-hint: "[--careful] <feature description>"
+argument-hint: "[--careful] [--no-ship] [--rehearsal] <feature description>"
 allowed-tools: Read, Glob, Grep, Write, Edit, MultiEdit, Bash, TodoWrite, Agent, Skill
 ---
 
@@ -43,6 +43,32 @@ When `FAST_MODE = true` (the default):
 
 If `$ARGUMENTS` contains `--careful`, remove it from arguments before using as
 the feature description.
+
+### Step 0.1: Ship-mode flags (for unattended invocations)
+
+Two optional flags control PHASE 5 (SHIP) side-effects. Both are designed
+for orchestrators like `/run-backlog` that need to control merge timing,
+batch-tick a backlog, or rehearse a slice without remote side-effects.
+
+- **`--no-ship`** — run all phases through PR creation, then STOP.
+  Specifically: Step 4 still commits and pushes, Step 4.5 still creates
+  the PR and polls Copilot, but **does NOT auto-merge**. Step 5 (backlog
+  update) is skipped — the caller owns backlog state. Step 6 summary
+  still emits and reports `PR: <url> (open, awaiting external merge)`.
+  **Step 7.5 still runs detection** (emits the SYNC/ASK/SKIP banner) but
+  skips the interactive "Ask user" + apply/branch/commit/push actions.
+  The caller harvests the banner from the transcript and aggregates
+  framework-sync candidates into its own end-of-run report.
+
+- **`--rehearsal`** — implies `--no-ship`. Additionally skips the
+  remote-side-effect steps: Step 4 commits locally but does NOT push;
+  Step 4.5 is skipped entirely (no PR, no Copilot poll, no merge);
+  Step 5 is skipped. Step 6 summary reports
+  `Branch: feature/<slug> (local-only)`, `PR: none (rehearsal)`. Useful
+  for dry-running the full TDD cycle on a throwaway branch.
+
+If `$ARGUMENTS` contains either flag, remove it from arguments before
+using as the feature description (same handling as `--careful`).
 
 ### Step 0.5: Model guardrail (non-blocking)
 
@@ -536,6 +562,7 @@ Otherwise, skip this step.
 
 ```bash
 git commit -m "<message>"
+# If --rehearsal was passed, SKIP the next line (branch stays local-only).
 git push -u origin HEAD
 rm -f .claude/plans/.active .claude/plans/.checkpoint
 ```
@@ -543,6 +570,9 @@ rm -f .claude/plans/.active .claude/plans/.checkpoint
 Clearing both files signals this feature is complete — the next `/feature` run starts fresh.
 
 ### Step 4.5: Copilot review gate
+
+**If `--rehearsal`**: skip this entire step. No PR is created, no Copilot
+poll, no merge. Jump to Step 6.
 
 After pushing, create the PR and wait for Copilot to post its review:
 
@@ -575,11 +605,19 @@ Triage rules:
 
 If fixes needed: apply, commit `fix(<scope>): address Copilot review`, re-run tests, then merge.
 
+**If `--no-ship`** (or `--rehearsal`, which implies it): SKIP the merge.
+The PR stays open for the caller (or a human reviewer) to merge later.
+Continue to Step 6.
+
 ```bash
 gh pr merge <N> --squash --delete-branch
 ```
 
 ### Step 5: Update backlog (if backlog exists)
+
+**If `--no-ship`** (or `--rehearsal`): SKIP this step. The caller owns
+backlog state — ticking from inside `/feature` would race with the
+caller's own bookkeeping.
 
 If `.claude/plans/backlog.md` exists:
 
@@ -601,6 +639,7 @@ Output using this bordered format:
   Tests: N passing
   Branch: feature/<slug>
   Commit: <short hash> <message>
+  PR: <one of: <url> (merged) | <url> (open, awaiting merge) | none (rehearsal)>
 
   Domain(s): <detected domains>
   Agent(s) dispatched: <list> + reviewer
@@ -666,6 +705,14 @@ Rules:
 ---
 
 ### Step 7.5: Starter sync check (conditional)
+
+**`--no-ship` / `--rehearsal` mode**: still run **detection** (Procedure
+steps 1–4 below: scan modified files, classify SYNC/ASK/SKIP, emit the
+banner). **Skip** Procedure steps 5–7 (the interactive "Ask user" and
+the apply/branch/commit/push actions) — those would deadlock an
+unattended caller. The banner is captured in the caller's transcript
+(via the orchestrator's `raw_log_path`); the caller is responsible for
+aggregating sync candidates into its own end-of-run report.
 
 **Trigger:** Run after Step 7 (Kaizen) if any Fix/Quality improvements were auto-implemented **or** any framework files were modified during this feature.
 
