@@ -15,7 +15,7 @@ export const TableHead = React.forwardRef<HTMLTableSectionElement, TableHeadProp
   ({ className, ...props }, ref) => (
     <thead
       ref={ref}
-      className={`border-b border-gray-300 bg-gray-50 ${className || ''}`}
+      className={`border-b border-neutral-200 bg-neutral-100 ${className || ''}`}
       {...props}
     />
   ),
@@ -35,7 +35,7 @@ export const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
   ({ className, ...props }, ref) => (
     <tr
       ref={ref}
-      className={`border-b border-gray-200 hover:bg-gray-50 ${className || ''}`}
+      className={`border-b border-neutral-200 hover:bg-neutral-50 transition-colors ${className || ''}`}
       {...props}
     />
   ),
@@ -46,7 +46,7 @@ export interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElem
 
 export const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
   ({ className, ...props }, ref) => (
-    <td ref={ref} className={`px-4 py-3 ${className || ''}`} {...props} />
+    <td ref={ref} className={`px-4 py-3 text-sm text-neutral-600 ${className || ''}`} {...props} />
   ),
 );
 TableCell.displayName = 'TableCell';
@@ -57,7 +57,7 @@ export const TableHeader = React.forwardRef<HTMLTableCellElement, TableHeaderPro
   ({ className, ...props }, ref) => (
     <th
       ref={ref}
-      className={`px-4 py-3 text-left font-semibold text-gray-700 ${className || ''}`}
+      className={`px-4 py-3 text-left text-xs font-semibold text-neutral-900 ${className || ''}`}
       {...props}
     />
   ),

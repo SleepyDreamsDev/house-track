@@ -49,18 +49,26 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Settings</h1>
+      <h1 className="text-xl font-bold text-neutral-900">Settings</h1>
 
       <Card>
-        <h2 className="mb-4 text-lg font-semibold">Crawler Tuning</h2>
+        <h2 className="mb-4 text-lg font-semibold text-neutral-900">Crawler Tuning</h2>
         <div className="space-y-4">
           {settings?.map((setting) => (
-            <div key={setting.key} className="border-b pb-4 last:border-b-0">
-              <label className="block text-sm font-medium">{setting.key}</label>
-              <p className="text-xs text-gray-500">Default: {JSON.stringify(setting.default)}</p>
+            <div key={setting.key} className="border-b border-neutral-200 pb-4 last:border-b-0">
+              <label className="block text-sm font-medium text-neutral-900 mb-1">
+                {setting.key}
+              </label>
+              <p className="text-xs text-neutral-400 mb-2">
+                Default: {JSON.stringify(setting.default)}
+              </p>
               {editingKey === setting.key ? (
-                <div className="mt-2 flex gap-2">
-                  <Input value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+                <div className="flex gap-2">
+                  <Input
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="flex-1"
+                  />
                   <Button
                     size="sm"
                     onClick={() =>
@@ -78,8 +86,10 @@ export const Settings: React.FC = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="mt-2 flex items-center justify-between">
-                  <span>{JSON.stringify(setting.value)}</span>
+                <div className="flex items-center justify-between">
+                  <code className="text-sm text-neutral-600 bg-neutral-100 px-2 py-1 rounded-sm">
+                    {JSON.stringify(setting.value)}
+                  </code>
                   <Button
                     size="sm"
                     variant="secondary"
@@ -98,17 +108,23 @@ export const Settings: React.FC = () => {
       </Card>
 
       <Card>
-        <h2 className="mb-4 text-lg font-semibold">Sources</h2>
+        <h2 className="mb-4 text-lg font-semibold text-neutral-900">Sources</h2>
         <div className="space-y-4">
           {sources?.map((source) => (
-            <div key={source.id} className="border-b pb-4 last:border-b-0">
+            <div key={source.id} className="border-b border-neutral-200 pb-4 last:border-b-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-medium">{source.name}</h3>
-                  <p className="text-xs text-gray-500">{source.baseUrl}</p>
+                  <h3 className="text-sm font-medium text-neutral-900">{source.name}</h3>
+                  <p className="text-xs text-neutral-400 mt-1">{source.baseUrl}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{source.enabled ? 'Enabled' : 'Disabled'}</span>
+                <div className="text-right">
+                  <p className="text-xs font-medium text-neutral-600">
+                    {source.enabled ? (
+                      <span className="text-success">Enabled</span>
+                    ) : (
+                      <span className="text-neutral-400">Disabled</span>
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -117,8 +133,8 @@ export const Settings: React.FC = () => {
       </Card>
 
       <Card>
-        <h2 className="mb-4 text-lg font-semibold">Global Filter</h2>
-        <p className="text-sm text-gray-600">Configure search filters for listings</p>
+        <h2 className="mb-4 text-lg font-semibold text-neutral-900">Global Filter</h2>
+        <p className="text-sm text-neutral-600">Configure search filters for listings</p>
       </Card>
     </div>
   );

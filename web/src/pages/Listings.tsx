@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/Table.js';
 import { Card } from '@/components/ui/Card.js';
 import { Input } from '@/components/ui/Input.js';
+import { Button } from '@/components/ui/Button.js';
 import { apiCall } from '@/lib/api.js';
 
 interface Listing {
@@ -37,14 +38,20 @@ export const Listings: React.FC = () => {
     },
   });
 
+  const totalPages = Math.ceil((data?.total || 0) / 20);
+  const canGoNext = !data || page < totalPages - 1;
+  const canGoPrev = page > 0;
+
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Listings</h1>
+      <h1 className="text-xl font-bold text-neutral-900">Listings</h1>
 
       <Card>
-        <div className="mb-4 space-y-4">
+        <div className="mb-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium">Max Price (EUR)</label>
+            <label className="block text-sm font-medium text-neutral-900 mb-2">
+              Max Price (EUR)
+            </label>
             <Input
               type="number"
               value={maxPrice ?? ''}
@@ -58,52 +65,60 @@ export const Listings: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <p className="text-gray-500">Loading...</p>
+          <p className="text-sm text-neutral-400">Loading...</p>
         ) : error ? (
-          <p className="text-red-600">Error loading listings</p>
+          <p className="text-sm text-error">Error loading listings</p>
         ) : (
           <>
             <Table>
               <TableHead>
                 <TableRow>
                   <TableHeader>Title</TableHeader>
-                  <TableHeader>Price</TableHeader>
-                  <TableHeader>Area</TableHeader>
-                  <TableHeader>Rooms</TableHeader>
+                  <TableHeader className="text-right">Price (EUR)</TableHeader>
+                  <TableHeader className="text-right">Area (m²)</TableHeader>
+                  <TableHeader className="text-right">Rooms</TableHeader>
                   <TableHeader>District</TableHeader>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data?.listings.map((listing) => (
                   <TableRow key={listing.id}>
-                    <TableCell className="font-medium">{listing.title}</TableCell>
-                    <TableCell>{listing.priceEur.toLocaleString()} EUR</TableCell>
-                    <TableCell>{listing.areaSqm} m²</TableCell>
-                    <TableCell>{listing.rooms ?? '-'}</TableCell>
-                    <TableCell>{listing.district}</TableCell>
+                    <TableCell className="font-medium text-neutral-900">{listing.title}</TableCell>
+                    <TableCell className="text-right font-mono text-neutral-600">
+                      {listing.priceEur.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-neutral-600">
+                      {listing.areaSqm}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-neutral-600">
+                      {listing.rooms ?? '-'}
+                    </TableCell>
+                    <TableCell className="text-neutral-600">{listing.district}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
 
-            <div className="mt-4 flex justify-between">
-              <button
+            <div className="mt-6 flex items-center justify-between">
+              <Button
+                size="sm"
+                variant="secondary"
                 onClick={() => setPage(Math.max(0, page - 1))}
-                disabled={page === 0}
-                className="rounded bg-gray-200 px-4 py-2 disabled:opacity-50"
+                disabled={!canGoPrev}
               >
                 Previous
-              </button>
-              <span className="text-gray-600">
-                Page {page + 1} of {Math.ceil((data?.total || 0) / 20)}
+              </Button>
+              <span className="text-sm text-neutral-600">
+                Page {page + 1} of {Math.max(1, totalPages)}
               </span>
-              <button
+              <Button
+                size="sm"
+                variant="secondary"
                 onClick={() => setPage(page + 1)}
-                disabled={!data || page >= Math.ceil(data.total / 20) - 1}
-                className="rounded bg-gray-200 px-4 py-2 disabled:opacity-50"
+                disabled={!canGoNext}
               >
                 Next
-              </button>
+              </Button>
             </div>
           </>
         )}
