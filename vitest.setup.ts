@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll } from 'vitest';
 
+import { disconnectPrisma } from './src/db.js';
 import { TEMPLATE_DB } from './vitest.global-setup.js';
 
 let dbName: string | undefined;
@@ -24,6 +25,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await disconnectPrisma();
+
   const baseUrl = process.env.PG_BASE_URL;
   if (!baseUrl || !dbName) return;
 

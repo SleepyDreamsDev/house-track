@@ -92,3 +92,24 @@ model SweepRun {
   updatedListings Int       @default(0)
   errors          Json? // JSON array of {url, status, msg}
 }
+
+model Source {
+  id                      Int      @id @default(autoincrement())
+  slug                    String   @unique // e.g., "999md"
+  name                    String   @default("") // human-readable name
+  baseUrl                 String // base URL for the source
+  adapterKey              String // adapter implementation key (currently only "999md" works)
+  enabled                 Boolean  @default(true)
+  politenessOverridesJson Json? // { baseDelayMs?, jitterMs?, detailDelayMs? }
+  filterOverridesJson     Json? // { searchInput?, postFilter? }
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model Setting {
+  key       String   @id // e.g., "politeness.baseDelayMs"
+  valueJson Json // store any JSON value
+  updatedAt DateTime @updatedAt
+}
