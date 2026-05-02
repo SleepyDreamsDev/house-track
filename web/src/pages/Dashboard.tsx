@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
 import { apiCall } from '@/lib/api.js';
+import { GRAFANA_URL, GRAFANA_DASHBOARD_URL } from '@/lib/grafana.js';
 
 interface LatestSweep {
   id: string;
@@ -106,13 +107,24 @@ export const Dashboard: React.FC = () => {
       <Card>
         <h2 className="mb-4 text-lg font-semibold text-neutral-900">Grafana Dashboard</h2>
         <p className="mb-4 text-sm text-neutral-600">View analytics and key metrics</p>
-        <Button
-          onClick={() => {
-            window.open('http://127.0.0.1:3001/d/house-track/overview?kiosk&theme=dark', '_blank');
-          }}
-        >
-          Open in Grafana
-        </Button>
+        <div className="mb-4">
+          <Button
+            onClick={() => {
+              window.open(GRAFANA_URL, '_blank');
+            }}
+          >
+            Open in Grafana
+          </Button>
+        </div>
+        <iframe
+          src={GRAFANA_DASHBOARD_URL}
+          width="100%"
+          height={400}
+          frameBorder={0}
+          title="Grafana Dashboard - Operator Overview"
+          allowFullScreen
+          style={{ borderRadius: '4px' }}
+        />
       </Card>
     </div>
   );

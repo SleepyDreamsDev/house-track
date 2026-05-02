@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: Postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: house_track
+    user: house_track
+    jsonData:
+      sslmode: 'disable'

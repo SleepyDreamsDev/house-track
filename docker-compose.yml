@@ -19,6 +19,26 @@ services:
       timeout: 3s
       retries: 10
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: house-track-grafana
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ALLOW_EMBEDDING: 'true'
+      GF_SECURITY_COOKIE_SAMESITE: disabled
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+      TZ: Europe/Chisinau
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+    ports:
+      - '127.0.0.1:3001:3000'
+
   property-crawler:
     build: .
     container_name: property-crawler
@@ -38,3 +58,4 @@ services:
 
 volumes:
   pg-data:
+  grafana-data:
