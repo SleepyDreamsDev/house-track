@@ -285,3 +285,28 @@ POC is done when:
 - **Price normalization**: ~90% of houses are in EUR but watch for MDL/USD listings — store `priceRaw` always, normalize separately.
 - **Container time zone**: SQLite stores naive datetimes. Set `TZ=Europe/Chisinau` in compose so `datetime('now')` matches local cron behavior.
 - **First-time index page volume**: day 1 will fetch detail for *all* current listings (~200–500). Expect a 30–60 min initial sweep. Subsequent sweeps drop to 1–10 details.
+
+---
+
+## Phase 4 — Operator UI (delivered ahead of schedule)
+
+The UI shipped earlier than planned, consolidating work from slices 2–6:
+
+**What's delivered:**
+
+- **Postgres migration** (slice 1): SQLite → Postgres/testcontainers. All 146 existing tests green. Clean schema with `Setting` (runtime config), `Source` (crawl sources), and JSON column support.
+- **Settings layer** (slice 2): `getSetting`/`setSetting` API. Crawler reads politeness, filter, cron, circuit breaker, and logging settings at sweep-start. Defaults in `src/config.ts`, overrides in Postgres. Keys namespaced: `politeness.baseDelayMs`, `sweep.maxPagesPerSweep`, etc.
+- **Hono API** (slice 3): `/api/sweeps`, `/api/listings`, `/api/filters`, `/api/settings`, `/api/sources`, `/api/circuit`. Integration tests for each route.
+- **Vite SPA** (slice 4): React 18 + TS strict + Tailwind v4 + shadcn/ui. Four pages: Dashboard, Houses, Sweeps, Settings. TanStack Query + react-hook-form + zod. Server-side pagination, optimistic updates.
+- **Grafana provisioning** (slice 6): Postgres datasource, dashboard JSON (stats, time series, histogram). Embedded iframe on Dashboard page. Read-only, anonymously accessible on `127.0.0.1:3001`.
+
+**Not in this slice:**
+
+- Pluggable source adapters — UI ready, but only `999md` implemented.
+- Cron reschedule hot-reload — operator restarts crawler after editing schedule.
+- Auth / TLS.
+
+**How to run:**
+
+See [`docs/operator-ui.md`](./operator-ui.md).
+
