@@ -43,9 +43,13 @@ not write state files on failure.
 1. **R25 — Model gate.** If active model isn't Opus, abort. The
    orchestrator's DAG/merge decisions degrade silently on weaker models.
 2. **R15 — Permission gate (Gate 8).** Read
-   `~/.claude/projects/-Users-egorg-Dev-house-track-house-track/settings.local.json`.
-   If `permissionMode` is `default` or `plan`, abort with the message
-   "overnight runs require `acceptEdits` or `bypassPermissions`."
+   `.claude/settings.local.json` first, then fall back to
+   `.claude/settings.json`. If `permissionMode` is **explicitly** set to
+   `default` or `plan`, abort with the message "overnight runs require
+   `acceptEdits` or `bypassPermissions`." If the field is missing or
+   files don't exist, proceed with a one-line WARN: the mode likely
+   comes from a CLI flag or env var, which the loop can't introspect
+   — an interactive prompt could stall the run.
 3. **Plugin gate (Gate 7).** If `~/.claude/plugins/.../ralph-loop/...`
    isn't installed/enabled, abort: tell user to enable ralph-loop via
    `/plugins` and restart the session.
@@ -82,46 +86,77 @@ not write state files on failure.
 
    Atomically write the new lock with
    `<this session_id>\n<this pid>\n<started_at>`.
-6. **R20 / stall-watchdog (HARD GATE).** Closes the in-flight-stall gap
-   — no native Agent-tool timeout means a wedged subagent hangs forever
-   without an external killer. Verify BOTH:
-   - env var `RUN_BACKLOG_WATCHDOG=1` is set (proves parent was launched
-     under the wrapper);
-   - `.claude/run-backlog/.watchdog.pid` exists AND `kill -0 $(cat …)`
-     succeeds (proves the watchdog is alive).
+6. **R20 / stall-watchdog (self-bootstrapping).** Closes the
+   in-flight-stall gap — no native Agent-tool timeout means a wedged
+   subagent hangs forever without an external killer. The orchestrator
+   ensures a watchdog is alive before dispatch; it does NOT require the
+   user to launch a wrapper.
 
-   If either check fails, **ABORT** with this exact launch wrapper and
-   instruct the user to exit claude, run it, and re-invoke `/run-backlog`.
-   The wrapper captures **claude's real PID** (not the wrapper bash's,
-   not caffeinate's) so the watchdog can SIGTERM it directly:
+   Detect existing watchdog:
+   - env var `RUN_BACKLOG_WATCHDOG=1` set AND
+     `.claude/run-backlog/.watchdog.pid` exists AND `kill -0 $(cat …)`
+     succeeds → already gated, proceed.
+
+   Otherwise self-bootstrap: dispatch the loop below via `Bash` with
+   `run_in_background: true`. From inside a Bash tool invocation,
+   `$PPID` is claude's real PID, so the watchdog can `kill -TERM` it
+   directly when stalled:
    ```bash
    mkdir -p .claude/run-backlog
-   caffeinate -i -t 28800 &              # sleep-prevention as a sibling
-   CAFFEINATE_PID=$!
-   RUN_BACKLOG_WATCHDOG=1 claude &       # claude as a sibling we own
-   CLAUDE_PID=$!
+   CLAUDE_PID=$PPID
    echo $CLAUDE_PID > .claude/run-backlog/.claude.pid
-   ( ME=$BASHPID
-     echo $ME > .claude/run-backlog/.watchdog.pid
-     while sleep 60; do
-       # Self-evict if a newer wrapper took over (handles SIGKILLed wrappers
-       # whose trap never ran — orphaned watchdog otherwise haunts new sessions)
-       [ "$(cat .claude/run-backlog/.watchdog.pid 2>/dev/null)" = "$ME" ] || exit
-       [ -f .claude/run-backlog/state.json ] || continue
-       AGE=$(( $(date +%s) - $(stat -f %m .claude/run-backlog/state.json) ))
-       [ $AGE -gt 1800 ] && { kill -TERM $CLAUDE_PID; exit; }
-     done
-   ) & WATCHDOG_PID=$!
-   trap 'kill $WATCHDOG_PID $CAFFEINATE_PID 2>/dev/null;
-         rm -f .claude/run-backlog/.{claude,watchdog}.pid' EXIT
-   wait $CLAUDE_PID
+   ME=$$
+   echo $ME > .claude/run-backlog/.watchdog.pid
+   trap 'rm -f .claude/run-backlog/.watchdog.pid .claude/run-backlog/.claude.pid' EXIT
+   while sleep 60; do
+     # Self-evict if a newer watchdog took over (handles double-bootstrap
+     # or SIGKILLed predecessors whose trap never ran).
+     [ "$(cat .claude/run-backlog/.watchdog.pid 2>/dev/null)" = "$ME" ] || exit
+     # Exit if claude itself is gone (no point watching a dead parent).
+     kill -0 $CLAUDE_PID 2>/dev/null || exit
+     [ -f .claude/run-backlog/state.json ] || continue
+     AGE=$(( $(date +%s) - $(stat -f %m .claude/run-backlog/state.json) ))
+     [ $AGE -gt 1800 ] && { kill -TERM $CLAUDE_PID; exit; }
+   done
    ```
-   Recovery: stalled >30min → watchdog `kill -TERM`s claude directly
-   (no process-group guesswork) → trap reaps caffeinate + cleans pidfiles
-   → `state.json` survives → next-morning `/run-backlog` (re-launched
-   under the same wrapper) hits the Resume AskUserQuestion path.
+   After spawn, verify the pidfile exists and `kill -0` succeeds. If
+   verification fails twice, abort with a clear error pointing at the
+   external wrapper as a fallback. Self-bootstrapping does NOT prevent
+   macOS sleep — for **unattended overnight** runs, prefer the external
+   wrapper (see "Unattended overnight wrapper" below) so `caffeinate`
+   can keep the machine awake.
+
+   Recovery: stalled >30min → watchdog `kill -TERM`s claude directly →
+   trap cleans pidfiles → `state.json` survives → next `/run-backlog`
+   invocation hits the Resume AskUserQuestion path.
 
    **The same gate fires on Resume** — see "Resume" section below.
+
+### Unattended overnight wrapper (optional, recommended for overnight)
+
+For unattended overnight runs, launch claude under this wrapper so
+`caffeinate` prevents sleep. Self-bootstrapping handles stall-detection
+either way; the wrapper just adds sleep-prevention.
+```bash
+mkdir -p .claude/run-backlog
+caffeinate -i -t 28800 &
+CAFFEINATE_PID=$!
+RUN_BACKLOG_WATCHDOG=1 claude &
+CLAUDE_PID=$!
+echo $CLAUDE_PID > .claude/run-backlog/.claude.pid
+( ME=$BASHPID
+  echo $ME > .claude/run-backlog/.watchdog.pid
+  while sleep 60; do
+    [ "$(cat .claude/run-backlog/.watchdog.pid 2>/dev/null)" = "$ME" ] || exit
+    [ -f .claude/run-backlog/state.json ] || continue
+    AGE=$(( $(date +%s) - $(stat -f %m .claude/run-backlog/state.json) ))
+    [ $AGE -gt 1800 ] && { kill -TERM $CLAUDE_PID; exit; }
+  done
+) & WATCHDOG_PID=$!
+trap 'kill $WATCHDOG_PID $CAFFEINATE_PID 2>/dev/null;
+      rm -f .claude/run-backlog/.{claude,watchdog}.pid' EXIT
+wait $CLAUDE_PID
+```
 7. **`.gitignore` self-check.** `.claude/run-backlog/` and
    `.claude/ralph-loop.local.md` must be ignored. Else add them now.
 
@@ -277,7 +312,8 @@ any session.
 - Stale session_id → AskUserQuestion: **Resume** / **Abort** (clear
   state, lock, .active, .claude.pid) / **Inspect** (print last
   MORNING_REPORT path). On **Resume**: (a) re-verify gate; if it
-  fails, abort with the wrapper. (b) **Re-acquire `.lock`** by running
+  fails, self-bootstrap a watchdog per PHASE 0a step 6 (same logic).
+  (b) **Re-acquire `.lock`** by running
   the **same strict liveness routine from PHASE 0a step 5** (shape +
   integer pid + `kill -0` + `ps -p $pid -o command=` contains literal
   `claude` — NOT `comm` and NOT `node` alone, those false-accept
