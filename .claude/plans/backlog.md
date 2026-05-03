@@ -10,12 +10,12 @@ Parent plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). Phase 0
 (kit install + stub routes + frontend test rewrite) shipped — pages render
 end-to-end, all backend routes 200. Phases 1–4 are tracked here.
 
-- [ ] **Phase 1 — co-locate crawler + web API in one Node process.** Required
+- [x] **Phase 1 — co-locate crawler + web API in one Node process.** Required
       for the kit's in-process SSE EventEmitter to work; today they're
       separate processes. `src/index.ts` boots cron only; web API needs to
       `serve()` alongside. Add a `127.0.0.1:3000:3000` port mapping to the
       `property-crawler` service in `docker-compose.yml`.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Shipped in PR #17._
 - [ ] **Phase 2 Task 1 — persist sweep detail JSON columns.** Capture
       pages/details rows + config snapshot in `runSweep`/`finishSweep` (see
       `src/sweep.ts:42`, `src/persist.ts:150`). Then uncomment the REAL IMPL

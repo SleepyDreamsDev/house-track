@@ -3,6 +3,7 @@
 // Spec: docs/poc-spec.md §"Crawl flow (per sweep)".
 
 import { PrismaClient } from '@prisma/client';
+import { serve } from '@hono/node-server';
 import cron from 'node-cron';
 
 import { Circuit } from './circuit.js';
@@ -20,6 +21,7 @@ import { applyPostFilter, parseIndex } from './parse-index.js';
 import { Persistence } from './persist.js';
 import { getSetting } from './settings.js';
 import { runSweep, type SweepDeps } from './sweep.js';
+import { createApiApp } from './web/server.js';
 
 const SCHEDULE = process.env['CRON_SCHEDULE'] ?? '0 * * * *'; // top of every hour
 const SWEEPS_PER_DAY = 24;
@@ -99,6 +101,24 @@ async function tick(): Promise<void> {
 
 function bootstrap(): void {
   log.info({ event: 'crawler.boot', schedule: SCHEDULE });
+
+  // Start web API on port 3000 alongside cron scheduler.
+  // The in-process EventEmitter bridge (src/web/events.ts) connects
+  // SSE streams to active sweep events (Phase 3 Task 2).
+  const app = createApiApp();
+  const port = 3000;
+  const host = '127.0.0.1';
+
+  serve(
+    {
+      fetch: app.fetch,
+      port,
+      hostname: host,
+    },
+    (info) => {
+      log.info({ event: 'api.boot', address: info.address, port: info.port });
+    },
+  );
 
   if (process.env['RUN_ONCE'] === '1') {
     void tick().then(() => process.exit(0));

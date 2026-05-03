@@ -50,6 +50,8 @@ services:
       - NODE_ENV=production
       - TZ=Europe/Chisinau
       - DATABASE_URL=postgresql://house_track:${POSTGRES_PASSWORD}@postgres:5432/house_track
+    ports:
+      - '127.0.0.1:3000:3000'
     logging:
       driver: json-file
       options:
