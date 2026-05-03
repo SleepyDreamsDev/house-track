@@ -14,9 +14,9 @@ describe('Dashboard', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Dashboard page with tiles', async () => {
+  it('renders the redesigned KPI strip and side widgets', async () => {
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue({});
+    (apiCall as any).mockResolvedValue([]);
 
     const router = createMemoryRouter([{ path: '/', element: <Dashboard /> }]);
     render(
@@ -26,13 +26,17 @@ describe('Dashboard', () => {
     );
 
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Last Sweep')).toBeInTheDocument();
-    expect(screen.getByText('Circuit State')).toBeInTheDocument();
+    expect(screen.getByText('Active listings')).toBeInTheDocument();
+    expect(screen.getAllByText('New today').length).toBeGreaterThan(0);
+    expect(screen.getByText('Avg price')).toBeInTheDocument();
+    expect(screen.getByText('Sweep success')).toBeInTheDocument();
+    expect(screen.getByText('Crawler health')).toBeInTheDocument();
+    expect(screen.getByText('By district')).toBeInTheDocument();
   });
 
-  it('displays Grafana button', async () => {
+  it('exposes Grafana action and run-sweep button', async () => {
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue({});
+    (apiCall as any).mockResolvedValue([]);
 
     const router = createMemoryRouter([{ path: '/', element: <Dashboard /> }]);
     render(
@@ -41,10 +45,11 @@ describe('Dashboard', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Open in Grafana')).toBeInTheDocument();
+    expect(screen.getByText('Open Grafana')).toBeInTheDocument();
+    expect(screen.getByText('Run sweep now')).toBeInTheDocument();
   });
 
-  it('shows loading states', async () => {
+  it('renders title even while queries are pending', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockImplementation(
       () =>

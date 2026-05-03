@@ -96,6 +96,13 @@ model SweepRun {
   newListings     Int       @default(0)
   updatedListings Int       @default(0)
   errors          Json? // JSON array of {url, status, msg}
+
+  // Phase 0 of the UI redesign adds four nullable JSON columns; the crawler
+  // populates them in later phases. Migration: 20260503235214_sweep_detail_columns.
+  configSnapshot Json?
+  pagesDetail    Json?
+  detailsDetail  Json?
+  eventLog       Json?
 }
 
 model Source {

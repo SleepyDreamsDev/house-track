@@ -39,8 +39,9 @@ export default {
         8: '2rem',
         12: '3rem',
       },
-      borderRadius: {
-        sm: '0.5rem',
+      borderRadius: { sm: '0.5rem' },
+      animation: {
+        ping: 'ping 1.5s cubic-bezier(0,0,0.2,1) infinite',
       },
     },
   },

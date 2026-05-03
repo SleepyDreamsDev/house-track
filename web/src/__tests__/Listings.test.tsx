@@ -12,20 +12,55 @@ vi.mock('../lib/api.js', () => ({
 describe('Listings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
   });
 
-  it('renders listings table with data', async () => {
+  it('renders the redesigned Houses page with filter rail', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('Houses')).toBeInTheDocument();
+    expect(screen.getByText('Search')).toBeInTheDocument();
+    expect(screen.getByText('Max price')).toBeInTheDocument();
+    expect(screen.getByText('District')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Title, district…')).toBeInTheDocument();
+  });
+
+  it('renders the sort segmented control', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('Newest')).toBeInTheDocument();
+    expect(screen.getByText('Price ↑')).toBeInTheDocument();
+    expect(screen.getByText('€/m² ↑')).toBeInTheDocument();
+  });
+
+  it('renders listing cards from API data', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockResolvedValue({
       listings: [
         {
-          id: '1',
-          title: 'Apartment A',
-          priceEur: 150000,
-          areaSqm: 50,
-          rooms: 2,
-          district: 'Downtown',
-          firstSeenAt: '2024-05-01T00:00:00Z',
+          id: 'h-1',
+          title: 'Casă, 130 m², Buiucani',
+          priceEur: 145000,
+          areaSqm: 130,
+          rooms: 4,
+          district: 'Buiucani',
+          firstSeenAt: new Date().toISOString(),
         },
       ],
       total: 1,
@@ -38,36 +73,6 @@ describe('Listings', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Listings')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter max price...')).toBeInTheDocument();
-  });
-
-  it('renders pagination controls', async () => {
-    const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue({ listings: [], total: 50 });
-
-    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
-    render(
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
-
-    expect(screen.getByText('Previous')).toBeInTheDocument();
-    expect(screen.getByText('Next')).toBeInTheDocument();
-  });
-
-  it('renders filter input', async () => {
-    const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
-
-    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
-    render(
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
-
-    expect(screen.getByText('Max Price (EUR)')).toBeInTheDocument();
+    expect(await screen.findByText('Casă, 130 m², Buiucani')).toBeInTheDocument();
   });
 });
