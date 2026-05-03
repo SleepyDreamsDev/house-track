@@ -7,6 +7,10 @@ import { registerFiltersRoutes } from './routes/filters.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSourcesRoutes } from './routes/sources.js';
 import { registerCircuitRoutes } from './routes/circuit.js';
+import { sweepDetailRouter } from './routes/sweeps.detail.js';
+import { sweepStreamRouter } from './routes/sweeps.stream.js';
+import { statsRouter } from './routes/stats.js';
+import { listingsFeedRouter } from './routes/listings.feed.js';
 
 const app = new Hono();
 
@@ -14,6 +18,17 @@ export function createApiApp(): Hono {
   const prisma = getPrisma();
 
   registerSweepsRoutes(app, prisma);
+
+  // UI redesign Phase 0 (stub-backed): SweepDetail, SSE stream, Dashboard
+  // stats/feeds. Real impls land in subsequent phases — see
+  // .claude/plans/ui-redesign-port-kit.md. Order matters: register the
+  // feed routers BEFORE the generic /api/listings/:id route so concrete
+  // sub-paths (`new-today`, `price-drops`) win the prefix match.
+  app.route('/api', sweepDetailRouter);
+  app.route('/api', sweepStreamRouter);
+  app.route('/api', statsRouter);
+  app.route('/api', listingsFeedRouter);
+
   registerListingsRoutes(app, prisma);
   registerFiltersRoutes(app, prisma);
   registerSettingsRoutes(app);

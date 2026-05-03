@@ -173,4 +173,72 @@ describe('Hono API Server', () => {
     );
     expect([200, 404]).toContain(res.status);
   });
+
+  // ------------- UI-redesign Phase 0 (port-kit stub routes) -------------
+
+  it('GET /api/sweeps/:id returns the SweepDetail payload shape', async () => {
+    const sweep = await prisma.sweepRun.findFirst();
+    expect(sweep).not.toBeNull();
+    const res = await app.request(`/api/sweeps/${sweep!.id}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    for (const key of [
+      'id',
+      'status',
+      'startedAt',
+      'source',
+      'trigger',
+      'config',
+      'pages',
+      'details',
+      'errors',
+      'logTail',
+    ]) {
+      expect(body).toHaveProperty(key);
+    }
+  });
+
+  it('GET /api/sweeps/:id/stream advertises an SSE content-type', async () => {
+    const sweep = await prisma.sweepRun.findFirst();
+    expect(sweep).not.toBeNull();
+    const controller = new AbortController();
+    const res = await app.request(
+      new Request(`http://localhost/api/sweeps/${sweep!.id}/stream`, {
+        signal: controller.signal,
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    controller.abort();
+  });
+
+  it('GET /api/stats/by-district returns a populated stub array', async () => {
+    const res = await app.request('/api/stats/by-district');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as unknown[];
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThan(0);
+  });
+
+  it('GET /api/stats/new-per-day returns 7 daily counts', async () => {
+    const res = await app.request('/api/stats/new-per-day');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as number[];
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBe(7);
+  });
+
+  it('GET /api/listings/new-today returns a stub array', async () => {
+    const res = await app.request('/api/listings/new-today');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as unknown[];
+    expect(Array.isArray(body)).toBe(true);
+  });
+
+  it('GET /api/listings/price-drops returns a stub array', async () => {
+    const res = await app.request('/api/listings/price-drops');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as unknown[];
+    expect(Array.isArray(body)).toBe(true);
+  });
 });

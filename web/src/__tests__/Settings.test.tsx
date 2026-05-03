@@ -9,14 +9,24 @@ vi.mock('../lib/api.js', () => ({
   apiCall: vi.fn(),
 }));
 
+function mockBy(handlers: Record<string, unknown>) {
+  return async (path: string) => {
+    for (const prefix of Object.keys(handlers)) {
+      if (path.startsWith(prefix)) return handlers[prefix];
+    }
+    return [];
+  };
+}
+
 describe('Settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
   });
 
-  it('renders Settings page with three sections', async () => {
+  it('renders the redesigned settings header and Sources section', async () => {
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue([]);
+    (apiCall as any).mockImplementation(mockBy({ '/settings': [], '/sources': [] }));
 
     const router = createMemoryRouter([{ path: '/', element: <Settings /> }]);
     render(
@@ -26,14 +36,37 @@ describe('Settings', () => {
     );
 
     expect(screen.getByText('Settings')).toBeInTheDocument();
-    expect(screen.getByText('Crawler Tuning')).toBeInTheDocument();
-    expect(screen.getByText('Sources')).toBeInTheDocument();
-    expect(screen.getByText('Global Filter')).toBeInTheDocument();
+    expect(
+      screen.getByText('Runtime overrides applied at the start of each sweep'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Sources').length).toBeGreaterThan(0);
   });
 
-  it('displays settings form', async () => {
+  it('renders setting groups using the metadata returned by the API', async () => {
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue([]);
+    (apiCall as any).mockImplementation(
+      mockBy({
+        '/settings': [
+          {
+            key: 'politeness.baseDelayMs',
+            value: 8000,
+            default: 8000,
+            group: 'Politeness',
+            kind: 'number',
+            unit: 'ms',
+          },
+          {
+            key: 'log.level',
+            value: 'info',
+            default: 'info',
+            group: 'Logging',
+            kind: 'select',
+            options: ['debug', 'info', 'warn', 'error'],
+          },
+        ],
+        '/sources': [],
+      }),
+    );
 
     const router = createMemoryRouter([{ path: '/', element: <Settings /> }]);
     render(
@@ -42,10 +75,12 @@ describe('Settings', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Configure search filters for listings')).toBeInTheDocument();
+    expect((await screen.findAllByText('Politeness')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Logging').length).toBeGreaterThan(0);
+    expect(screen.getByText('politeness.baseDelayMs')).toBeInTheDocument();
   });
 
-  it('renders settings with loading state', async () => {
+  it('renders title even while queries are pending', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockImplementation(
       () =>
@@ -61,6 +96,6 @@ describe('Settings', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Crawler Tuning')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 });

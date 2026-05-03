@@ -1,128 +1,203 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/Table.js';
 import { Card } from '@/components/ui/Card.js';
-import { Input } from '@/components/ui/Input.js';
 import { Button } from '@/components/ui/Button.js';
+import { Badge } from '@/components/ui/Badge.js';
+import { Input } from '@/components/ui/Input.js';
+import { PhotoPlaceholder } from '@/components/ui/PhotoPlaceholder.js';
+import { PageHeader } from '@/components/ui/PageHeader.js';
 import { apiCall } from '@/lib/api.js';
+import { fmt } from '@/lib/format.js';
 
 interface Listing {
   id: string;
   title: string;
   priceEur: number;
+  priceWas?: number;
   areaSqm: number;
+  landSqm?: number;
   rooms: number | null;
+  floors?: number;
+  yearBuilt?: number;
   district: string;
+  street?: string;
   firstSeenAt: string;
+  snapshots?: number;
+  flags?: string[];
+  isNew?: boolean;
 }
 
+const DISTRICTS = ['all', 'Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
+
 export const Listings: React.FC = () => {
-  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
-  const [page, setPage] = useState(0);
+  const [q, setQ] = useState('');
+  const [maxPrice, setMaxPrice] = useState(250000);
+  const [district, setDistrict] = useState('all');
+  const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
 
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
-    queryKey: ['listings', { maxPrice, page }],
+    queryKey: ['listings', { q, maxPrice, district, sort }],
     queryFn: () => {
-      const params = new URLSearchParams();
-      if (maxPrice !== undefined) params.append('maxPrice', maxPrice.toString());
-      params.append('limit', '20');
-      params.append('offset', (page * 20).toString());
-      return apiCall(`/listings?${params}`);
+      const p = new URLSearchParams();
+      if (q) p.append('q', q);
+      if (maxPrice) p.append('maxPrice', String(maxPrice));
+      if (district !== 'all') p.append('district', district);
+      p.append('sort', sort);
+      p.append('limit', '50');
+      return apiCall(`/listings?${p}`);
     },
   });
 
-  const totalPages = Math.ceil((data?.total || 0) / 20);
-  const canGoNext = !data || page < totalPages - 1;
-  const canGoPrev = page > 0;
-
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold text-neutral-900">Listings</h1>
-
-      <Card>
-        <div className="mb-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-900 mb-2">
-              Max Price (EUR)
-            </label>
-            <Input
-              type="number"
-              value={maxPrice ?? ''}
-              onChange={(e) => {
-                setMaxPrice(e.target.value ? parseInt(e.target.value) : undefined);
-                setPage(0);
-              }}
-              placeholder="Enter max price..."
-            />
-          </div>
-        </div>
-
-        {isLoading ? (
-          <p className="text-sm text-neutral-400">Loading...</p>
-        ) : error ? (
-          <p className="text-sm text-error">Error loading listings</p>
-        ) : (
+    <div data-screen-label="Houses">
+      <PageHeader
+        title="Houses"
+        subtitle={`${data?.total ?? '…'} listings · €${maxPrice.toLocaleString()} max`}
+        actions={
           <>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableHeader>Title</TableHeader>
-                  <TableHeader className="text-right">Price (EUR)</TableHeader>
-                  <TableHeader className="text-right">Area (m²)</TableHeader>
-                  <TableHeader className="text-right">Rooms</TableHeader>
-                  <TableHeader>District</TableHeader>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data?.listings.map((listing) => (
-                  <TableRow key={listing.id}>
-                    <TableCell className="font-medium text-neutral-900">{listing.title}</TableCell>
-                    <TableCell className="text-right font-mono text-neutral-600">
-                      {listing.priceEur.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-neutral-600">
-                      {listing.areaSqm}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-neutral-600">
-                      {listing.rooms ?? '-'}
-                    </TableCell>
-                    <TableCell className="text-neutral-600">{listing.district}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            <div className="mt-6 flex items-center justify-between">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setPage(Math.max(0, page - 1))}
-                disabled={!canGoPrev}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-neutral-600">
-                Page {page + 1} of {Math.max(1, totalPages)}
-              </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setPage(page + 1)}
-                disabled={!canGoNext}
-              >
-                Next
-              </Button>
-            </div>
+            <Button variant="secondary">Refresh</Button>
+            <Button variant="secondary">Export CSV</Button>
           </>
-        )}
-      </Card>
+        }
+      />
+
+      <div className="grid grid-cols-[240px_1fr] gap-6">
+        <Card className="self-start">
+          <div className="space-y-5 text-sm">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
+                Search
+              </label>
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Title, district…"
+              />
+            </div>
+            <div>
+              <div className="flex justify-between mb-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                  Max price
+                </label>
+                <span className="text-xs tabular-nums text-neutral-600">{fmt.eur(maxPrice)}</span>
+              </div>
+              <input
+                type="range"
+                min={50000}
+                max={250000}
+                step={5000}
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(Number(e.target.value))}
+                className="w-full accent-accent"
+              />
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
+                District
+              </div>
+              <div className="space-y-0.5">
+                {DISTRICTS.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDistrict(d)}
+                    className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${district === d ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                  >
+                    {d === 'all' ? 'All districts' : d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 rounded-sm bg-neutral-100 p-0.5">
+              {(['newest', 'price', 'eurm2'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSort(s)}
+                  className={`rounded-sm px-3 py-1 text-xs font-medium transition-colors ${sort === s ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400'}`}
+                >
+                  {s === 'newest' ? 'Newest' : s === 'price' ? 'Price ↑' : '€/m² ↑'}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-neutral-400">{data?.listings?.length ?? 0} results</span>
+          </div>
+
+          {isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
+          {error && <p className="text-sm text-error">Error loading listings</p>}
+          {data?.listings?.map((l) => (
+            <ListingCard key={l.id} l={l} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
+  const drop = l.priceWas ? Math.round((1 - l.priceEur / l.priceWas) * 100) : null;
+  const eurm2 = l.areaSqm ? Math.round(l.priceEur / l.areaSqm) : 0;
+  return (
+    <div className="grid grid-cols-[120px_1fr_auto] gap-4 rounded-sm bg-white p-3 border border-neutral-200">
+      <PhotoPlaceholder id={l.id} className="h-[88px]" label={`#${String(l.id).slice(-4)}`} />
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 mb-1">
+          {l.isNew && <Badge variant="default">NEW</Badge>}
+          {drop && <Badge variant="warning">−{drop}%</Badge>}
+        </div>
+        <h3 className="truncate text-sm font-semibold text-neutral-900">{l.title}</h3>
+        <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-neutral-600 tabular-nums">
+          <span>
+            <span className="text-neutral-400">district </span>
+            {l.district}
+          </span>
+          <span>
+            <span className="text-neutral-400">area </span>
+            {l.areaSqm} m²
+          </span>
+          {l.landSqm && (
+            <span>
+              <span className="text-neutral-400">land </span>
+              {l.landSqm} m²
+            </span>
+          )}
+          {l.rooms && (
+            <span>
+              <span className="text-neutral-400">rooms </span>
+              {l.rooms}
+            </span>
+          )}
+          {l.yearBuilt && (
+            <span>
+              <span className="text-neutral-400">built </span>
+              {l.yearBuilt}
+            </span>
+          )}
+          <span>
+            <span className="text-neutral-400">first seen </span>
+            {fmt.rel(l.firstSeenAt)}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-col items-end justify-between text-right">
+        <div>
+          <div className="text-lg font-semibold tabular-nums text-neutral-900">
+            {fmt.eur(l.priceEur)}
+          </div>
+          {l.priceWas && (
+            <div className="text-xs tabular-nums text-neutral-400 line-through">
+              {fmt.eur(l.priceWas)}
+            </div>
+          )}
+          <div className="text-xs tabular-nums text-neutral-400">€{eurm2}/m²</div>
+        </div>
+        <Button size="sm" variant="secondary">
+          Open
+        </Button>
+      </div>
     </div>
   );
 };
