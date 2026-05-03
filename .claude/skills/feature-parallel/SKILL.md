@@ -66,24 +66,165 @@ Continue immediately — this is informational, not a gate.
 
 ### Step 1: Load plan context
 
-Use the same three-level plan lookup as `/feature`:
+Use the same three-level plan lookup as `/feature` (most reliable first):
 
 ```bash
+# Level 1 — active pointer (set by any previous /feature run for this feature)
 PLAN=$(cat .claude/plans/.active 2>/dev/null)
-[ -n "$PLAN" ] && [ ! -f "$PLAN" ] && PLAN=""
+[ -n "$PLAN" ] && [ ! -f "$PLAN" ] && PLAN=""   # clear if file was deleted
 
+# Level 2 — slug match (works when args are similar)
 if [ -z "$PLAN" ]; then
   SLUG=$(echo "$ARGUMENTS" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
   PLAN=$(ls .claude/plans/step-*${SLUG}*.md 2>/dev/null | head -1)
+  [ -z "$PLAN" ] && PLAN=$(ls .claude/plans/*${SLUG}*.md 2>/dev/null | head -1)
 fi
 
+# Level 3 — mtime fallback (last resort when args differ completely)
 [ -z "$PLAN" ] && PLAN=$(ls -t .claude/plans/*.md 2>/dev/null | grep -v '\.active' | head -1)
+```
+
+After finding a plan (any level), **write the active pointer**:
+
+```bash
 [ -n "$PLAN" ] && echo "$PLAN" > .claude/plans/.active
 ```
 
+This pointer survives interruptions — the next `/feature-parallel` invocation reads it first,
+bypassing slug matching entirely.
+
+1. If a plan file was found, read it. Use it as the detailed specification for this feature.
+   The plan is the source of truth for scope, file locations, acceptance criteria, and
+   any pre-identified domain split hints. Skip Step 1.5.
+2. If no plan file exists, proceed to Step 1.5 to auto-generate one.
+
+### Step 1.5: Auto-generate plan (when no plan exists)
+
+Only execute this step when Step 1 found no existing plan file.
+
+A plan matters more for `/feature-parallel` than `/feature`: the orchestrator's
+PHASE 2b DOMAIN-SPLIT decision is the single highest-leverage call in the
+entire flow, and a bad split wastes every parallel agent's work. Without a
+plan, the split is being derived from `$ARGUMENTS` alone.
+
+```bash
+mkdir -p .claude/plans
+```
+
+Dispatch an Opus planning subagent. It reads all project reference material in
+isolation — its context is discarded after writing the plan file. The main
+session only ever sees the compact plan.
+
+```
+Agent(model: "opus",
+      prompt: "
+<feature>$ARGUMENTS</feature>
+<task>
+You are a planning agent for the /feature-parallel TDD pipeline. Read available
+project documentation and produce a compact implementation plan. The main
+session will ONLY see your plan file — all reference material must be
+distilled, not pasted.
+
+Follow these steps IN ORDER:
+
+1. Read CLAUDE.md — understand project conventions, commands, and architecture.
+2. Read .claude/progress.md if it exists — get current branch and last commit.
+3. Read any spec or backlog files found in Specs/ or .claude/plans/ — extract
+   the matching story and its acceptance criteria.
+4. Read .claude/dependency-map.md if it exists — note layer ordering. This is
+   especially important for /feature-parallel: dependency layers translate
+   directly into domain split candidates.
+
+5. Write the plan to .claude/plans/<slug>.md where slug is a kebab-case
+   description of the feature.
+
+6. Output EXACTLY this line as the LAST line of your response:
+   PLAN_FILE: .claude/plans/<slug>.md
+
+Keep the plan between 1,000-3,000 tokens. Be dense, not verbose.
+Reason carefully about the Domain Split section — it drives parallel dispatch.
+</task>
+<format>
+# Plan: <Feature Name>
+
+## Goal
+One sentence.
+
+## Acceptance Criteria
+- [ ] ...
+
+## Tasks
+1. ...
+
+## File Map
+| Action | File | Notes |
+|--------|------|-------|
+| create | ... | ... |
+
+## Domain Split (hint for PHASE 2b)
+| Domain | Files | Depends on |
+|--------|-------|------------|
+| ...    | ...   | ...        |
+
+If the feature is single-domain (purely UI-layer, single layer of the stack,
+no independent parallel workstreams, or hard sequential dependency chain),
+write SINGLE-DOMAIN as the only entry in the table and add a one-line note:
+"SINGLE-DOMAIN — recommend /feature, not /feature-parallel" followed by a
+1-2 sentence reason. This lets the orchestrator bail before dispatching
+wasted discovery agents.
+
+## Verification
+- ...
+</format>
+")
+```
+
+After the subagent completes:
+
+1. Parse the `PLAN_FILE:` line from the agent's return value to get the exact filename.
+2. If the `PLAN_FILE:` line is present, read that file directly and write the active pointer:
+   ```bash
+   echo "$PLAN" > .claude/plans/.active
+   ```
+3. If the line is absent, fall back to slug-based search:
+   ```bash
+   PLAN=$(ls .claude/plans/*${SLUG}*.md 2>/dev/null | head -1)
+   [ -z "$PLAN" ] && PLAN=$(ls -t .claude/plans/*.md 2>/dev/null | grep -v '\.active' | head -1)
+   [ -n "$PLAN" ] && echo "$PLAN" > .claude/plans/.active
+   ```
+4. If still no file found, output warning and proceed with `$ARGUMENTS` only:
+
+> ── WARNING: Plan auto-generation failed. Proceeding with $ARGUMENTS only. ──
+
+### Phase status banner
+
+Output one of:
+
+> ── PHASE 0 PLAN ✓ ── loaded \<plan-filename> ← pre-existing plan found in Step 1
+> ── PHASE 0 PLAN ✓ ── auto-generated \<plan-filename> ← Opus subagent created in Step 1.5
+> ── PHASE 0 PLAN ✗ ── no plan, using $ARGUMENTS ← fallback (subagent failed)
+
+### Step 2: Early single-domain bail
+
+If a plan was loaded (either level), grep its Domain Split section for the
+literal string `SINGLE-DOMAIN`:
+
+```bash
+grep -q 'SINGLE-DOMAIN' "$PLAN" && SINGLE_DOMAIN=1
+```
+
+If `SINGLE_DOMAIN=1`, bail before discovery — the plan author (Opus
+subagent or human) already determined parallelization is unwarranted.
 Output:
 
-> ── PHASE 0 PLAN ✓ ── loaded \<plan-filename> (or "no plan, using $ARGUMENTS")
+> ── PHASE 0 BAIL ── plan declares SINGLE-DOMAIN. Re-run with `/feature` for sequential flow.
+
+Exit cleanly. Do NOT start any discovery, specification, or implementation.
+The plan file remains on disk so the `/feature` invocation picks it up via
+the same `.active` pointer.
+
+This preempts PHASE 3 GATE CHECK condition #1 and saves 4 horizontal
+discovery agents from being dispatched against a feature that will bail anyway.
 
 ---
 
