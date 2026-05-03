@@ -15,48 +15,52 @@ end-to-end, all backend routes 200. Phases 1–4 are tracked here.
       separate processes. `src/index.ts` boots cron only; web API needs to
       `serve()` alongside. Add a `127.0.0.1:3000:3000` port mapping to the
       `property-crawler` service in `docker-compose.yml`.
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 - [ ] **Phase 2 Task 1 — persist sweep detail JSON columns.** Capture
       pages/details rows + config snapshot in `runSweep`/`finishSweep` (see
       `src/sweep.ts:42`, `src/persist.ts:150`). Then uncomment the REAL IMPL
       in `src/web/routes/sweeps.detail.ts` and `parseInt` the `:id` param
       (SweepRun.id is `Int`, not string).
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 - [ ] **Phase 2 Task 4 — settings metadata.** Extend `src/settings.ts` with
       `{group, kind, unit?, options?, label?, hint?}` per row, and project
       those fields in `GET /api/settings`.
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 - [ ] **Phase 3 Task 2 — pino → EventEmitter tee for SSE.** Custom write
       stream in `src/log.ts` emits to `sweepEvents` keyed by an
       `activeSweepId` module variable from `src/sweep.ts`. Coerce the id
       comparison in `src/web/routes/sweeps.stream.ts` to `String(...)`.
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 - [ ] **Phase 3 Task 3 — real Prisma queries** for `/api/stats/by-district`,
       `/api/stats/new-per-day`, `/api/listings/new-today`, and
       `/api/listings/price-drops`. Use `ListingSnapshot` for price-drop
       detection (≥5% over 7d).
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 - [ ] **Task 5 — `/api/listings` envelope + sort/q/flags.** Currently
       returns a bare array; both old and new UI consume `{listings,total}`.
       Wrap with `prisma.listing.count`, wire `sort=newest|price|eurm2`,
       `q` (title ILIKE), `flags=priceDrop`. Update `searchListings` in
       `src/mcp/queries.ts` to accept the new params.
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
+- [ ] **Sweep API gaps (manual trigger, cancel, source/trigger cols, durationMs, progress shape).**
+      Wires up: (a) `POST /api/sweeps` thin wrapper around `runSweep(deps)`
+      for the Dashboard "Run sweep now" button; (b) `POST /api/sweeps/:id/cancel`
+      with `AbortController` plumbed through `Fetcher` + `runSweep`; (c)
+      adds `source` + `trigger` columns to `SweepRun` (Phase 2 currently
+      hard-codes `'999.md'`/`'cron'`); (d) `durationMs = finishedAt -
+      startedAt` (null when running) on the `/api/sweeps` projection
+      (`src/web/routes/sweeps.ts:12`); (e) structured `progress` (phase,
+      pagesDone/Total, queued) and `currentlyFetching` shape on
+      SweepDetail. Depends on Phase 1 co-location.
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 - [ ] **Task 6 — contract + BDD tests** for every new route, BDD spec
       `specs/sweep-sse-stream.feature`, integration test that creates a
       `SweepRun` row with populated JSON columns.
-- [ ] **`POST /api/sweeps` (manual trigger).** Dashboard "Run sweep now"
-      has no endpoint. Thin wrapper around `runSweep(deps)` once the
-      processes are co-located.
-- [ ] **`POST /api/sweeps/:id/cancel`.** SweepDetail "Cancel sweep" button
-      has no endpoint. Requires plumbing an `AbortController` through
-      `Fetcher` + `runSweep`. Non-trivial.
-- [ ] **Add `source` + `trigger` columns to `SweepRun`.** Kit's
-      `/api/sweeps/:id` returns these; schema has neither. For Phase 2 we
-      hard-code `'999.md'` / `'cron'`; promote to real columns when the
-      manual-trigger endpoint lands.
-- [ ] **`durationMs` on `/api/sweeps` list.** Compute as `finishedAt -
-      startedAt` (null when running) and add to the projection in
-      `src/web/routes/sweeps.ts:12`.
-- [ ] **SweepDetail `progress` + `currentlyFetching`.** Live banner needs
-      structured progress (phase, pagesDone/Total, queued, etc.).
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 - [ ] **CLAUDE_CODE_E2E.md cleanup.** Brief lives at repo root; once Phases
       1–4 ship, fold the still-relevant content into `docs/operator-ui.md`
       and delete the brief.
+      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
 
 ## Priority 1.5 — Backfill quality (newly tracked 2026-05-01)
 
