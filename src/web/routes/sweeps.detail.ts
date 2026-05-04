@@ -21,13 +21,16 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
   const run = await prisma.sweepRun.findUnique({ where: { id } });
   if (!run) return c.json({ error: 'not found' }, 404);
 
+  const pagesDetail = Array.isArray(run.pagesDetail) ? (run.pagesDetail as unknown[]) : [];
+  const detailsDetail = Array.isArray(run.detailsDetail) ? (run.detailsDetail as unknown[]) : [];
+
   return c.json({
     id: run.id,
     status: run.status,
     startedAt: run.startedAt.toISOString(),
     finishedAt: run.finishedAt?.toISOString(),
-    source: '999.md',
-    trigger: 'cron',
+    source: run.source || '999.md',
+    trigger: run.trigger || 'cron',
     config: run.configSnapshot ?? {},
     summary: run.finishedAt
       ? {
@@ -39,9 +42,16 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
           durationMs: run.finishedAt.getTime() - run.startedAt.getTime(),
         }
       : undefined,
-    pages: run.pagesDetail ?? [],
-    details: run.detailsDetail ?? [],
+    pages: pagesDetail,
+    details: detailsDetail,
     errors: Array.isArray(run.errors) ? run.errors : [],
     logTail: run.eventLog ?? [],
+    progress: {
+      phase: run.status,
+      pagesDone: pagesDetail.length,
+      pagesTotal: pagesDetail.length,
+      queued: 0,
+    },
+    currentlyFetching: null,
   });
 });

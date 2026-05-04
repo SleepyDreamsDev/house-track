@@ -19,6 +19,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       newListings: s.newListings,
       updatedListings: s.updatedListings,
       errorCount: Array.isArray(s.errors) ? (s.errors as unknown[]).length : 0,
+      durationMs: s.finishedAt ? s.finishedAt.getTime() - s.startedAt.getTime() : null,
     }));
 
     return c.json(result);
@@ -58,6 +59,50 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       return c.json(errors);
     } catch (error) {
       console.error('Error fetching sweep errors:', error);
+      return c.json({ error: 'Internal server error' }, 500);
+    }
+  });
+
+  app.post('/api/sweeps', async (c) => {
+    try {
+      const sweep = await prisma.sweepRun.create({
+        data: {
+          status: 'ok',
+          source: '999.md',
+          trigger: 'manual',
+        },
+      });
+
+      return c.json(
+        {
+          id: sweep.id,
+          startedAt: sweep.startedAt.toISOString(),
+        },
+        201,
+      );
+    } catch (error) {
+      console.error('Error creating sweep:', error);
+      return c.json({ error: 'Internal server error' }, 500);
+    }
+  });
+
+  app.post('/api/sweeps/:id/cancel', async (c) => {
+    try {
+      const id = parseInt(c.req.param('id'));
+      const sweep = await prisma.sweepRun.findUnique({ where: { id } });
+
+      if (!sweep) {
+        return c.json({ error: 'Sweep not found' }, 404);
+      }
+
+      await prisma.sweepRun.update({
+        where: { id },
+        data: { status: 'cancelled' },
+      });
+
+      return c.json({ id, status: 'cancelled' });
+    } catch (error) {
+      console.error('Error cancelling sweep:', error);
       return c.json({ error: 'Internal server error' }, 500);
     }
   });
