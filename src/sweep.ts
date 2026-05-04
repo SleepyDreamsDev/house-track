@@ -22,9 +22,17 @@ export function getActiveSweepId(): number | null {
   return activeSweepId;
 }
 
+// Module-level map of active sweeps to their AbortControllers
+// Keyed by sweepId; register on start, delete on finish
+const sweepAbortControllers = new Map<number, AbortController>();
+
+export function getSweepAbortControllers(): Map<number, AbortController> {
+  return sweepAbortControllers;
+}
+
 export interface SweepDeps {
-  fetchSearchPage: (pageIdx: number) => Promise<unknown>;
-  fetchAdvert: (id: string) => Promise<unknown>;
+  fetchSearchPage: (pageIdx: number, signal?: AbortSignal) => Promise<unknown>;
+  fetchAdvert: (id: string, signal?: AbortSignal) => Promise<unknown>;
   persist: Pick<
     Persistence,
     | 'diffAgainstDb'
@@ -48,7 +56,7 @@ export interface SweepDeps {
   log?: Logger;
 }
 
-export async function runSweep(deps: SweepDeps): Promise<void> {
+export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promise<void> {
   if (await deps.circuit.isOpen()) {
     deps.log?.warn({ event: 'sweep.skip', reason: 'circuit_open' });
     const { id } = await deps.persist.startSweep();
@@ -56,21 +64,23 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
     return;
   }
 
-  const { id: sweepId } = await deps.persist.startSweep();
+  const sweepId = initialSweepId || (await deps.persist.startSweep()).id;
   activeSweepId = sweepId;
+  const controller = new AbortController();
+  sweepAbortControllers.set(sweepId, controller);
   const result: SweepResult = emptyResult('ok');
 
   // Capture config snapshot at sweep start
   result.configSnapshot = await deps.persist.snapshotConfig();
 
   try {
-    const allStubs = await collectIndexStubs(deps, result);
+    const allStubs = await collectIndexStubs(deps, result, controller.signal);
     const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
     const { new: newStubs, seen: seenStubs } = await deps.persist.diffAgainstDb(stubs);
     result.newListings = newStubs.length;
 
-    await fetchAndPersistDetails(deps, newStubs, seenStubs, result);
-    await backfillUnenriched(deps, result);
+    await fetchAndPersistDetails(deps, newStubs, seenStubs, result, controller.signal);
+    await backfillUnenriched(deps, result, controller.signal);
 
     await deps.persist.markSeen(seenStubs);
     result.updatedListings = seenStubs.length;
@@ -83,24 +93,34 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
   } catch (err) {
     if (err instanceof CircuitTrippingError) {
       result.status = 'circuit_open';
+    } else if (controller.signal.aborted) {
+      result.status = 'cancelled';
     } else {
       result.status = 'failed';
       result.errors.push({ url: '<sweep>', status: null, msg: String(err) });
     }
   } finally {
     activeSweepId = null;
+    sweepAbortControllers.delete(sweepId);
     await deps.persist.finishSweep(sweepId, result);
     deps.log?.info({ event: 'sweep.done', ...result });
   }
 }
 
-async function collectIndexStubs(deps: SweepDeps, result: SweepResult): Promise<ListingStub[]> {
+async function collectIndexStubs(
+  deps: SweepDeps,
+  result: SweepResult,
+  signal: AbortSignal,
+): Promise<ListingStub[]> {
   const all: ListingStub[] = [];
   if (!result.pagesDetail) result.pagesDetail = [];
 
   for (let page = 0; page < deps.maxPagesPerSweep; page++) {
+    if (signal.aborted) {
+      break;
+    }
     const pageStart = Date.now();
-    const json = await deps.fetchSearchPage(page); // CircuitTrippingError bubbles
+    const json = await deps.fetchSearchPage(page, signal); // CircuitTrippingError bubbles
     result.pagesFetched += 1;
 
     let stubs: ListingStub[];
@@ -142,14 +162,18 @@ async function fetchAndPersistDetails(
   newStubs: ListingStub[],
   seenStubs: ListingStub[],
   result: SweepResult,
+  signal: AbortSignal,
 ): Promise<void> {
   if (!result.detailsDetail) result.detailsDetail = [];
 
   // Process new listings: fetch, parse, persist, and capture details
   for (const s of newStubs) {
+    if (signal.aborted) {
+      break;
+    }
     let json: unknown;
     try {
-      json = await deps.fetchAdvert(s.id);
+      json = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url: s.url, status: null, msg: String(err) });
@@ -193,9 +217,12 @@ async function fetchAndPersistDetails(
 
   // Capture detail records for seen listings (fetch + parse only, no persist)
   for (const s of seenStubs) {
+    if (signal.aborted) {
+      break;
+    }
     let json: unknown;
     try {
-      json = await deps.fetchAdvert(s.id);
+      json = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url: s.url, status: null, msg: String(err) });
@@ -234,15 +261,22 @@ async function fetchAndPersistDetails(
 // is NULL (legacy rows from before the schema enrichment landed). Each call goes
 // through the same fetch+parse+persist path as a new-listing detail, so it
 // respects the politeness budget and adds nothing new to the request shape.
-async function backfillUnenriched(deps: SweepDeps, result: SweepResult): Promise<void> {
+async function backfillUnenriched(
+  deps: SweepDeps,
+  result: SweepResult,
+  signal: AbortSignal,
+): Promise<void> {
   const limit = deps.backfillPerSweep ?? 0;
   if (limit <= 0) return;
   const ids = await deps.persist.findUnenrichedListings(limit);
   for (const id of ids) {
+    if (signal.aborted) {
+      break;
+    }
     const url = `<backfill:${id}>`;
     let json: unknown;
     try {
-      json = await deps.fetchAdvert(id);
+      json = await deps.fetchAdvert(id, signal);
     } catch (err) {
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url, status: null, msg: String(err) });
