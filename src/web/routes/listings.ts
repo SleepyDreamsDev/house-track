@@ -16,6 +16,9 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       ? parseFloat(c.req.query('maxAreaSqm')!)
       : undefined;
     const district = c.req.query('district');
+    const sort = c.req.query('sort') as 'newest' | 'price' | 'eurm2' | undefined;
+    const q = c.req.query('q');
+    const flags = c.req.query('flags');
 
     const results = await searchListings(prisma, {
       limit,
@@ -26,6 +29,9 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       minAreaSqm,
       maxAreaSqm,
       district,
+      sort,
+      q,
+      flags,
     });
 
     return c.json(results);
