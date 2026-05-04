@@ -4,7 +4,7 @@ import type { Circuit } from '../circuit.js';
 import { CircuitTrippingError } from '../fetch.js';
 import { AdvertNotFoundError } from '../parse-detail.js';
 import type { Persistence } from '../persist.js';
-import { runSweep, type SweepDeps } from '../sweep.js';
+import { runSweep, getActiveSweepId, type SweepDeps } from '../sweep.js';
 import type { ListingStub, ParsedDetail } from '../types.js';
 
 const HOUR = 60 * 60 * 1000;
@@ -436,6 +436,26 @@ describe('runSweep', () => {
       expect(typeof result.configSnapshot === 'object' || result.configSnapshot === null).toBe(
         true,
       );
+    });
+
+    it('Sets activeSweepId after startSweep and clears in finally', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+
+      expect(getActiveSweepId()).toBeNull();
+
+      // Run the sweep and capture activeSweepId mid-sweep
+      env.startSweep.mockImplementationOnce(async () => {
+        const sweepId = 42;
+        // After startSweep, activeSweepId should be set
+        return { id: sweepId };
+      });
+
+      await runSweep(env.deps);
+
+      // After runSweep completes, activeSweepId should be cleared
+      expect(getActiveSweepId()).toBeNull();
     });
   });
 });

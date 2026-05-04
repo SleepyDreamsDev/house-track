@@ -10,7 +10,7 @@ import { EventEmitter } from 'node:events';
 export interface SweepEvent {
   sweepId: string;
   t: string; // 'HH:MM:SS' for UI alignment with logTail
-  lvl: 'debug' | 'info' | 'warn' | 'error';
+  lvl: 'debug' | 'info' | 'warn' | 'error' | 'fatal';
   msg: string;
   meta?: string;
 }
