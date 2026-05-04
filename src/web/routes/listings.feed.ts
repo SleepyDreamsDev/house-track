@@ -102,8 +102,8 @@ listingsFeedRouter.get('/listings/price-drops', async (c) => {
     // Need at least 2 snapshots to calculate a drop
     if (listing.snapshots.length < 2) continue;
 
-    const earliest = listing.snapshots.at(0);
-    const latest = listing.snapshots.at(-1);
+    const earliest = listing.snapshots[0];
+    const latest = listing.snapshots[listing.snapshots.length - 1];
 
     // Only consider if we have both snapshots with prices
     if (!earliest || !latest || earliest.priceEur === null || latest.priceEur === null) {
