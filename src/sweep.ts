@@ -14,6 +14,14 @@ import { AdvertNotFoundError } from './parse-detail.js';
 import type { PostFilter } from './parse-index.js';
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
 
+// Module-level variable tracking the currently active sweep (if any)
+// for log.ts to subscribe to EventEmitter on per-sweep basis.
+let activeSweepId: number | null = null;
+
+export function getActiveSweepId(): number | null {
+  return activeSweepId;
+}
+
 export interface SweepDeps {
   fetchSearchPage: (pageIdx: number) => Promise<unknown>;
   fetchAdvert: (id: string) => Promise<unknown>;
@@ -49,6 +57,7 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
   }
 
   const { id: sweepId } = await deps.persist.startSweep();
+  activeSweepId = sweepId;
   const result: SweepResult = emptyResult('ok');
 
   // Capture config snapshot at sweep start
@@ -79,6 +88,7 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
       result.errors.push({ url: '<sweep>', status: null, msg: String(err) });
     }
   } finally {
+    activeSweepId = null;
     await deps.persist.finishSweep(sweepId, result);
     deps.log?.info({ event: 'sweep.done', ...result });
   }

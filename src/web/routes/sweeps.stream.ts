@@ -12,7 +12,7 @@ import { sweepEvents, type SweepEvent } from '../events.js';
 export const sweepStreamRouter = new Hono();
 
 sweepStreamRouter.get('/sweeps/:id/stream', (c) => {
-  const id = c.req.param('id');
+  const id = String(c.req.param('id'));
 
   c.header('Content-Type', 'text/event-stream');
   c.header('Cache-Control', 'no-cache, no-transform');
@@ -29,7 +29,7 @@ sweepStreamRouter.get('/sweeps/:id/stream', (c) => {
     await s.write(`: connected to ${id}\n\n`);
 
     const off = sweepEvents.onEvent(async (ev: SweepEvent) => {
-      if (!alive || ev.sweepId !== id) return;
+      if (!alive || String(ev.sweepId) !== id) return;
       const { sweepId: _sweepId, ...payload } = ev;
       await s.write(`data: ${JSON.stringify(payload)}\n\n`);
     });
