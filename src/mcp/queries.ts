@@ -29,8 +29,15 @@ export interface SearchListingsInput {
   filters?:
     | Array<{ filterId?: number | undefined; featureId: number; optionIds: number[] }>
     | undefined;
-  sort?: 'priceAsc' | 'priceDesc' | 'pricePerSqmAsc' | 'newest' | undefined;
+  sort?: 'priceAsc' | 'priceDesc' | 'pricePerSqmAsc' | 'price' | 'eurm2' | 'newest' | undefined;
   limit?: number | undefined;
+  q?: string | undefined;
+  flags?: string | undefined;
+}
+
+export interface SearchListingsEnvelope {
+  listings: SearchListingsRow[];
+  total: number;
 }
 
 export interface SearchListingsRow {
@@ -123,12 +130,13 @@ export async function listFilters(prisma: PrismaClient): Promise<FilterGroup[]> 
 /**
  * Multi-filter listing search. Top-level range filters (price/rooms/area)
  * are AND-ed; the `filters` array AND-s across (featureId, optionIds) groups
- * and OR-s within each group's option list. Returns clickable 999.md URLs.
+ * and OR-s within each group's option list. Returns clickable 999.md URLs
+ * wrapped in an envelope with total count.
  */
 export async function searchListings(
   prisma: PrismaClient,
   input: SearchListingsInput,
-): Promise<SearchListingsRow[]> {
+): Promise<SearchListingsEnvelope> {
   const where: Record<string, unknown> = { active: true };
   const filterAnds: unknown[] = [];
 
@@ -142,6 +150,7 @@ export async function searchListings(
     where['areaSqm'] = rangeWhere(input.minAreaSqm, input.maxAreaSqm);
   }
   if (input.district) where['district'] = input.district;
+  if (input.q) where['title'] = { contains: input.q, mode: 'insensitive' };
 
   for (const f of input.filters ?? []) {
     if (!f.optionIds.length) continue;
@@ -153,24 +162,66 @@ export async function searchListings(
   }
   if (filterAnds.length > 0) where['AND'] = filterAnds;
 
-  const rows = await prisma.listing.findMany({
-    where,
-    orderBy: orderBy(input.sort),
-    take: input.limit ?? DEFAULT_LIMIT,
-  });
+  // Handle priceDrop flag: fetch listings with snapshots, compute drops, filter
+  type ListingWithSnapshots = Awaited<
+    ReturnType<typeof prisma.listing.findMany<{ include: { snapshots: true } }>>
+  >[number];
 
-  return rows.map((r) => ({
-    id: r.id,
-    url: r.url,
-    title: r.title,
-    priceEur: r.priceEur,
-    priceRaw: r.priceRaw,
-    areaSqm: r.areaSqm,
-    rooms: r.rooms,
-    district: r.district,
-    firstSeenAt: r.firstSeenAt.toISOString(),
-    lastSeenAt: r.lastSeenAt.toISOString(),
-  }));
+  const rows: Array<
+    ListingWithSnapshots | Awaited<ReturnType<typeof prisma.listing.findMany>>[number]
+  > = [];
+
+  if (input.flags === 'priceDrop') {
+    const rowsWithSnapshots = await prisma.listing.findMany({
+      where,
+      orderBy: orderBy(input.sort),
+      take: input.limit ?? DEFAULT_LIMIT,
+      include: { snapshots: true },
+    });
+
+    // Filter by price drop (>= 5% drop in past 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    for (const r of rowsWithSnapshots) {
+      const relevantSnapshots = r.snapshots.filter((s) => s.capturedAt >= sevenDaysAgo);
+      if (relevantSnapshots.length < 2) continue; // Need both old and new
+
+      const sorted = relevantSnapshots.sort(
+        (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime(),
+      );
+      const oldest = sorted[0];
+      const newest = sorted[relevantSnapshots.length - 1];
+
+      if (oldest?.priceEur && newest?.priceEur) {
+        const drop = ((oldest.priceEur - newest.priceEur) / oldest.priceEur) * 100;
+        if (drop >= 5) rows.push(r);
+      }
+    }
+  } else {
+    const allRows = await prisma.listing.findMany({
+      where,
+      orderBy: orderBy(input.sort),
+      take: input.limit ?? DEFAULT_LIMIT,
+    });
+    rows.push(...allRows);
+  }
+
+  const total = await prisma.listing.count({ where });
+
+  return {
+    listings: rows.map((r) => ({
+      id: r.id,
+      url: r.url,
+      title: r.title,
+      priceEur: r.priceEur,
+      priceRaw: r.priceRaw,
+      areaSqm: r.areaSqm,
+      rooms: r.rooms,
+      district: r.district,
+      firstSeenAt: r.firstSeenAt.toISOString(),
+      lastSeenAt: r.lastSeenAt.toISOString(),
+    })),
+    total,
+  };
 }
 
 /**
@@ -236,10 +287,12 @@ function rangeWhere(min: number | undefined, max: number | undefined): Record<st
 function orderBy(sort: SearchListingsInput['sort']): Record<string, 'asc' | 'desc'> {
   switch (sort) {
     case 'priceAsc':
+    case 'price':
       return { priceEur: 'asc' };
     case 'priceDesc':
       return { priceEur: 'desc' };
     case 'pricePerSqmAsc':
+    case 'eurm2':
       // No dedicated column — newest as a sensible fallback. Claude can sort
       // client-side using priceEur/areaSqm if needed.
       return { firstSeenAt: 'desc' };

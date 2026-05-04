@@ -152,49 +152,49 @@ describe('searchListings', () => {
   });
 
   it('Filters by price range (min and max)', async () => {
-    const r = await searchListings(prisma, { minPrice: 80_000, maxPrice: 200_000 });
-    expect(r.map((x) => x.id).sort()).toEqual(['2', '3']);
+    const { listings } = await searchListings(prisma, { minPrice: 80_000, maxPrice: 200_000 });
+    expect(listings.map((x) => x.id).sort()).toEqual(['2', '3']);
   });
 
   it('Filters by rooms minimum', async () => {
-    const r = await searchListings(prisma, { minRooms: 4 });
-    expect(r.map((x) => x.id).sort()).toEqual(['3', '4']);
+    const { listings } = await searchListings(prisma, { minRooms: 4 });
+    expect(listings.map((x) => x.id).sort()).toEqual(['3', '4']);
   });
 
   it('Filters by area range', async () => {
-    const r = await searchListings(prisma, { minAreaSqm: 100, maxAreaSqm: 200 });
-    expect(r.map((x) => x.id).sort()).toEqual(['2', '3']);
+    const { listings } = await searchListings(prisma, { minAreaSqm: 100, maxAreaSqm: 200 });
+    expect(listings.map((x) => x.id).sort()).toEqual(['2', '3']);
   });
 
   it('Filters by district', async () => {
-    const r = await searchListings(prisma, { district: 'Botanica' });
-    expect(r.map((x) => x.id).sort()).toEqual(['1', '2']);
+    const { listings } = await searchListings(prisma, { district: 'Botanica' });
+    expect(listings.map((x) => x.id).sort()).toEqual(['1', '2']);
   });
 
   it('Excludes inactive listings by default', async () => {
-    const r = await searchListings(prisma, {});
-    expect(r.map((x) => x.id)).not.toContain('5');
+    const { listings } = await searchListings(prisma, {});
+    expect(listings.map((x) => x.id)).not.toContain('5');
   });
 
   it('Returns clickable 999.md URLs and structured JSON (no formatted strings)', async () => {
-    const r = await searchListings(prisma, { limit: 1 });
-    expect(r[0]?.url).toMatch(/^https:\/\/999\.md\/ro\/[a-zA-Z0-9]+$/);
-    expect(typeof r[0]?.priceEur === 'number' || r[0]?.priceEur === null).toBe(true);
+    const { listings } = await searchListings(prisma, { limit: 1 });
+    expect(listings[0]?.url).toMatch(/^https:\/\/999\.md\/ro\/[a-zA-Z0-9]+$/);
+    expect(typeof listings[0]?.priceEur === 'number' || listings[0]?.priceEur === null).toBe(true);
   });
 
   it('Sort priceAsc orders by price ascending', async () => {
-    const r = await searchListings(prisma, { sort: 'priceAsc', limit: 3 });
-    expect(r.map((x) => x.priceEur)).toEqual([50_000, 95_000, 150_000]);
+    const { listings } = await searchListings(prisma, { sort: 'priceAsc', limit: 3 });
+    expect(listings.map((x) => x.priceEur)).toEqual([50_000, 95_000, 150_000]);
   });
 
   it('Sort priceDesc orders by price descending', async () => {
-    const r = await searchListings(prisma, { sort: 'priceDesc', limit: 2 });
-    expect(r.map((x) => x.priceEur)).toEqual([250_000, 150_000]);
+    const { listings } = await searchListings(prisma, { sort: 'priceDesc', limit: 2 });
+    expect(listings.map((x) => x.priceEur)).toEqual([250_000, 150_000]);
   });
 
   it('Limit caps the result count', async () => {
-    const r = await searchListings(prisma, { limit: 2 });
-    expect(r).toHaveLength(2);
+    const { listings } = await searchListings(prisma, { limit: 2 });
+    expect(listings).toHaveLength(2);
   });
 
   it('Multi-filter: AND across feature groups, OR within optionIds for one group', async () => {
@@ -223,19 +223,19 @@ describe('searchListings', () => {
       filterValues: [{ featureId: 1, optionId: 776 }],
     });
 
-    const r = await searchListings(prisma, {
+    const { listings } = await searchListings(prisma, {
       filters: [
         { featureId: 7, optionIds: [12900, 12901] },
         { featureId: 1, optionIds: [776] },
       ],
     });
 
-    expect(r.map((x) => x.id).sort()).toEqual(['X', 'Y']);
+    expect(listings.map((x) => x.id).sort()).toEqual(['X', 'Y']);
   });
 
   it('Empty filters input is a no-op (returns all active)', async () => {
-    const r = await searchListings(prisma, { filters: [] });
-    expect(r.length).toBeGreaterThan(0);
+    const { listings } = await searchListings(prisma, { filters: [] });
+    expect(listings.length).toBeGreaterThan(0);
   });
 });
 
