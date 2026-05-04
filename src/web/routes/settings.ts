@@ -10,6 +10,12 @@ export function registerSettingsRoutes(app: Hono): void {
         key: s.key,
         value: s.value,
         default: s.default,
+        group: s.group,
+        kind: s.kind,
+        ...(s.unit && { unit: s.unit }),
+        ...(s.options && { options: s.options }),
+        ...(s.label && { label: s.label }),
+        ...(s.hint && { hint: s.hint }),
       }));
       return c.json(result);
     } catch (error) {
