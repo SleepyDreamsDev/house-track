@@ -41,7 +41,7 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
 
       const body = (await res.json()) as Record<string, unknown>;
 
-      // Required top-level fields per CLAUDE_CODE_E2E.md
+      // Required top-level fields per spec
       expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('status');
       expect(body).toHaveProperty('startedAt');
