@@ -53,7 +53,7 @@ export interface FetchResult {
   body: string;
 }
 
-export type SweepStatus = 'ok' | 'partial' | 'failed' | 'circuit_open';
+export type SweepStatus = 'ok' | 'partial' | 'failed' | 'circuit_open' | 'cancelled';
 
 export interface SweepError {
   url: string;

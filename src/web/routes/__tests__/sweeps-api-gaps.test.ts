@@ -236,27 +236,37 @@ describe('Sweep API gaps', () => {
     });
   });
 
-  describe('integration: manual trigger -> cancel -> status check', () => {
-    it('POST /api/sweeps creates sweep with source/trigger, then cancel sets status', async () => {
-      // Trigger a manual sweep
+  describe('integration: manual trigger + source/trigger + cancel', () => {
+    it('POST /api/sweeps creates sweep row with source/trigger columns set', async () => {
       const createRes = await app.request('/api/sweeps', { method: 'POST' });
       expect(createRes.status).toBe(201);
 
       const created = (await createRes.json()) as Record<string, unknown>;
       const sweepId = created.id as number;
 
-      // Verify source/trigger were set
-      let sweep = await prisma.sweepRun.findUnique({ where: { id: sweepId } });
+      // Verify source/trigger were set on the created row
+      const sweep = await prisma.sweepRun.findUnique({ where: { id: sweepId } });
       expect(sweep?.source).toBe('999.md');
       expect(sweep?.trigger).toBe('manual');
+      expect(sweep?.status).toBe('in_progress');
+    });
 
-      // Cancel the sweep
-      const cancelRes = await app.request(`/api/sweeps/${sweepId}/cancel`, { method: 'POST' });
+    it('POST /api/sweeps/:id/cancel marks an in-progress (non-running) sweep as cancelled', async () => {
+      // Manually create a sweep marked as in_progress (simulates API startup but before actual sweep starts)
+      const sweep = await prisma.sweepRun.create({
+        data: {
+          status: 'in_progress',
+          source: '999.md',
+          trigger: 'manual',
+        },
+      });
+
+      const cancelRes = await app.request(`/api/sweeps/${sweep.id}/cancel`, { method: 'POST' });
       expect(cancelRes.status).toBe(200);
 
-      // Verify status changed
-      sweep = await prisma.sweepRun.findUnique({ where: { id: sweepId } });
-      expect(sweep?.status).toBe('cancelled');
+      const updated = await prisma.sweepRun.findUnique({ where: { id: sweep.id } });
+      expect(updated?.status).toBe('cancelled');
+      expect(updated?.finishedAt).not.toBeNull();
     });
   });
 });

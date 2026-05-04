@@ -52,6 +52,8 @@ interface RequestOptions {
   delayMs?: number;
   /** Reject 200-OK responses whose content-type starts with this value (HTML interstitial). */
   rejectContentTypePrefix?: string;
+  /** AbortSignal to cancel this request. */
+  signal?: AbortSignal;
 }
 
 export class Fetcher {
@@ -64,8 +66,8 @@ export class Fetcher {
     this.jitter = deps.jitter ?? defaultJitter(deps.config.jitterMs);
   }
 
-  async fetchPage(url: string): Promise<FetchResult> {
-    return this.run(url, { method: 'GET' });
+  async fetchPage(url: string, signal?: AbortSignal): Promise<FetchResult> {
+    return this.run(url, { method: 'GET', ...(signal && { signal }) });
   }
 
   /**
@@ -84,7 +86,7 @@ export class Fetcher {
     operationName: string,
     variables: Record<string, unknown>,
     query: string,
-    options: { delayMs?: number } = {},
+    options: { delayMs?: number; signal?: AbortSignal } = {},
   ): Promise<unknown> {
     const body = JSON.stringify({ operationName, variables, query });
     const { config } = this.deps;
@@ -105,6 +107,7 @@ export class Fetcher {
       rejectContentTypePrefix: 'text/html',
     };
     if (options.delayMs !== undefined) opts.delayMs = options.delayMs;
+    if (options.signal !== undefined) opts.signal = options.signal;
     const res = await this.run(endpoint, opts);
     return JSON.parse(res.body);
   }
@@ -198,6 +201,7 @@ export class Fetcher {
       },
       ...(opts.body !== undefined ? { body: opts.body } : {}),
       ...(this.deps.dispatcher ? { dispatcher: this.deps.dispatcher } : {}),
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     });
     const text = await body.text();
     const ct = headers['content-type'];

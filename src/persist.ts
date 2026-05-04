@@ -161,11 +161,18 @@ export class Persistence {
     return rows.map((r) => r.id);
   }
 
-  async startSweep(): Promise<{ id: number }> {
+  async startSweep(opts?: {
+    source?: string;
+    trigger?: string;
+  }): Promise<{ id: number; startedAt: Date }> {
     const row = await this.prisma.sweepRun.create({
-      data: { status: 'in_progress' },
+      data: {
+        status: 'in_progress',
+        ...(opts?.source && { source: opts.source }),
+        ...(opts?.trigger && { trigger: opts.trigger }),
+      },
     });
-    return { id: row.id };
+    return { id: row.id, startedAt: row.startedAt };
   }
 
   async snapshotConfig(): Promise<Record<string, unknown>> {

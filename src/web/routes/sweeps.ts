@@ -1,7 +1,89 @@
 import type { Hono } from 'hono';
 import type { PrismaClient } from '@prisma/client';
+import { getSweepAbortControllers } from '../../sweep.js';
+import { runSweep } from '../../sweep.js';
+import { Circuit } from '../../circuit.js';
+import { CIRCUIT, FILTER, GRAPHQL_ENDPOINT, POLITENESS, SWEEP } from '../../config.js';
+import { Fetcher } from '../../fetch.js';
+import {
+  buildAdvertVariables,
+  buildSearchVariables,
+  GET_ADVERT_QUERY,
+  SEARCH_ADS_QUERY,
+} from '../../graphql.js';
+import { log } from '../../log.js';
+import { parseDetail } from '../../parse-detail.js';
+import { applyPostFilter, parseIndex } from '../../parse-index.js';
+import { Persistence } from '../../persist.js';
+import { getSetting } from '../../settings.js';
+import type { SweepDeps } from '../../sweep.js';
 
 export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
+  const SWEEPS_PER_DAY = 24;
+  const MISSING_THRESHOLD_MS =
+    SWEEP.missingSweepsBeforeInactive * (24 / SWEEPS_PER_DAY) * 60 * 60 * 1000;
+
+  async function buildDeps(): Promise<SweepDeps> {
+    const persist = new Persistence(prisma);
+    const circuit = new Circuit({
+      sentinelPath: CIRCUIT.sentinelPath,
+      threshold: CIRCUIT.consecutiveFailureThreshold,
+      pauseDurationMs: CIRCUIT.pauseDurationMs,
+    });
+
+    const baseDelayMs = await getSetting('politeness.baseDelayMs', POLITENESS.baseDelayMs);
+    const jitterMs = await getSetting('politeness.jitterMs', POLITENESS.jitterMs);
+    const detailDelayMs = await getSetting('politeness.detailDelayMs', POLITENESS.detailDelayMs);
+    const maxPagesPerSweep = await getSetting('sweep.maxPagesPerSweep', FILTER.maxPagesPerSweep);
+    const backfillPerSweep = await getSetting('sweep.backfillPerSweep', SWEEP.backfillPerSweep);
+
+    const fetcher = new Fetcher({
+      circuit,
+      config: {
+        baseDelayMs,
+        jitterMs,
+        retryBackoffsMs: POLITENESS.retryBackoffsMs,
+        userAgent: POLITENESS.userAgent,
+        acceptLanguage: POLITENESS.acceptLanguage,
+        accept: POLITENESS.accept,
+        acceptJson: POLITENESS.acceptJson,
+        origin: POLITENESS.origin,
+        referer: POLITENESS.referer,
+      },
+    });
+
+    return {
+      fetchSearchPage: (pageIdx, signal) => {
+        const opts = signal ? { signal } : {};
+        return fetcher.fetchGraphQL(
+          GRAPHQL_ENDPOINT,
+          'SearchAds',
+          buildSearchVariables(pageIdx),
+          SEARCH_ADS_QUERY,
+          opts,
+        );
+      },
+      fetchAdvert: (id, signal) => {
+        const opts = signal ? { delayMs: detailDelayMs, signal } : { delayMs: detailDelayMs };
+        return fetcher.fetchGraphQL(
+          GRAPHQL_ENDPOINT,
+          'GetAdvert',
+          buildAdvertVariables(id),
+          GET_ADVERT_QUERY,
+          opts,
+        );
+      },
+      persist,
+      circuit,
+      parseIndex,
+      parseDetail,
+      applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
+      maxPagesPerSweep,
+      missingThresholdMs: MISSING_THRESHOLD_MS,
+      backfillPerSweep,
+      log,
+    };
+  }
   app.get('/api/sweeps', async (c) => {
     const limit = parseInt(c.req.query('limit') || '20');
     const sweeps = await prisma.sweepRun.findMany({
@@ -65,13 +147,19 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
 
   app.post('/api/sweeps', async (c) => {
     try {
-      const sweep = await prisma.sweepRun.create({
-        data: {
-          status: 'ok',
-          source: '999.md',
-          trigger: 'manual',
-        },
-      });
+      const deps = await buildDeps();
+
+      // First, create the sweep row with source/trigger
+      const sweep = await deps.persist.startSweep({ source: '999.md', trigger: 'manual' });
+
+      // Launch runSweep non-blocking with the pre-created sweep ID
+      void (async () => {
+        try {
+          await runSweep(deps, sweep.id);
+        } catch (err) {
+          console.error('Error in non-blocking runSweep:', err);
+        }
+      })();
 
       return c.json(
         {
@@ -81,7 +169,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
         201,
       );
     } catch (error) {
-      console.error('Error creating sweep:', error);
+      console.error('Error triggering sweep:', error);
       return c.json({ error: 'Internal server error' }, 500);
     }
   });
@@ -95,10 +183,19 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
         return c.json({ error: 'Sweep not found' }, 404);
       }
 
-      await prisma.sweepRun.update({
-        where: { id },
-        data: { status: 'cancelled' },
-      });
+      // If there's an active AbortController for this sweep, signal abort
+      // The sweep will finish with 'cancelled' status in its finally block
+      const controllers = getSweepAbortControllers();
+      const controller = controllers.get(id);
+      if (controller) {
+        controller.abort();
+      } else if (!sweep.finishedAt) {
+        // If sweep is not running and not finished, mark as cancelled
+        await prisma.sweepRun.update({
+          where: { id },
+          data: { status: 'cancelled', finishedAt: new Date() },
+        });
+      }
 
       return c.json({ id, status: 'cancelled' });
     } catch (error) {

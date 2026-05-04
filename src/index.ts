@@ -63,21 +63,26 @@ async function buildDeps(): Promise<SweepDeps> {
   });
 
   return {
-    fetchSearchPage: (pageIdx) =>
-      fetcher.fetchGraphQL(
+    fetchSearchPage: (pageIdx, signal) => {
+      const opts = signal ? { signal } : {};
+      return fetcher.fetchGraphQL(
         GRAPHQL_ENDPOINT,
         'SearchAds',
         buildSearchVariables(pageIdx),
         SEARCH_ADS_QUERY,
-      ),
-    fetchAdvert: (id) =>
-      fetcher.fetchGraphQL(
+        opts,
+      );
+    },
+    fetchAdvert: (id, signal) => {
+      const opts = signal ? { delayMs: detailDelayMs, signal } : { delayMs: detailDelayMs };
+      return fetcher.fetchGraphQL(
         GRAPHQL_ENDPOINT,
         'GetAdvert',
         buildAdvertVariables(id),
         GET_ADVERT_QUERY,
-        { delayMs: detailDelayMs },
-      ),
+        opts,
+      );
+    },
     persist,
     circuit,
     parseIndex,
