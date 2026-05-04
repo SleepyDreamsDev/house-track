@@ -116,6 +116,55 @@ describe('Hono API Server', () => {
     expect(res.status).toBe(200);
   });
 
+  it('GET /api/settings includes metadata fields in response', async () => {
+    const res = await app.request('/api/settings');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThan(0);
+
+    // Verify core fields are always present
+    body.forEach((setting) => {
+      expect(setting).toHaveProperty('key');
+      expect(setting).toHaveProperty('value');
+      expect(setting).toHaveProperty('default');
+    });
+
+    // Verify settings with metadata have the required fields
+    const settingsWithMetadata = body.filter((s) => s.group !== undefined);
+    expect(settingsWithMetadata.length).toBeGreaterThan(0);
+
+    settingsWithMetadata.forEach((setting) => {
+      expect(setting).toHaveProperty('group');
+      expect(setting).toHaveProperty('kind');
+    });
+  });
+
+  it('GET /api/settings includes unit for number fields', async () => {
+    const res = await app.request('/api/settings');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+
+    const politenessDelay = body.find((s) => s.key === 'politeness.baseDelayMs');
+    expect(politenessDelay).toBeDefined();
+    expect(politenessDelay?.unit).toBe('ms');
+
+    const maxArea = body.find((s) => s.key === 'filter.maxAreaSqm');
+    expect(maxArea).toBeDefined();
+    expect(maxArea?.unit).toBe('m²');
+  });
+
+  it('GET /api/settings includes options for log.level select', async () => {
+    const res = await app.request('/api/settings');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+
+    const logLevel = body.find((s) => s.key === 'log.level');
+    expect(logLevel).toBeDefined();
+    expect(logLevel?.kind).toBe('select');
+    expect(logLevel?.options).toEqual(['debug', 'info', 'warn', 'error']);
+  });
+
   it('PATCH /api/settings/:key validates and updates setting', async () => {
     const res = await app.request(
       new Request('http://localhost/api/settings/politeness.baseDelayMs', {

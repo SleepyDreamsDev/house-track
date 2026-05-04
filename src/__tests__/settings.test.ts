@@ -94,4 +94,91 @@ describe('Settings', () => {
     expect(baseDelay?.default).toBe(8000); // config default
     expect(baseDelay?.schema).toBeDefined();
   });
+
+  it('includes metadata fields in listSettings() response', async () => {
+    // Act
+    const results = await listSettings();
+
+    // Assert
+    expect(results.length).toBeGreaterThan(0);
+
+    // Verify each setting that has metadata has the required fields
+    const settingsWithMetadata = results.filter(
+      (s): s is (typeof results)[0] & { group: string; kind: 'number' | 'text' | 'select' } =>
+        s.group !== undefined,
+    );
+    expect(settingsWithMetadata.length).toBeGreaterThan(0);
+
+    settingsWithMetadata.forEach((setting) => {
+      expect(setting).toHaveProperty('group');
+      expect(setting).toHaveProperty('kind');
+      expect(['number', 'text', 'select']).toContain(setting.kind);
+      expect(typeof setting.group).toBe('string');
+      expect(setting.group.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('assigns correct group to politeness settings', async () => {
+    // Act
+    const results = await listSettings();
+
+    // Assert
+    const politenessSettings = results.filter((s) => s.key.startsWith('politeness.'));
+    politenessSettings.forEach((setting) => {
+      expect(setting.group).toBe('Politeness');
+      expect(setting.kind).toBe('number');
+      expect(setting.unit).toBe('ms');
+    });
+  });
+
+  it('assigns correct group to sweep settings', async () => {
+    // Act
+    const results = await listSettings();
+
+    // Assert
+    const sweepSettings = results.filter((s) => s.key.startsWith('sweep.'));
+    sweepSettings.forEach((setting) => {
+      expect(setting.group).toBe('Sweep');
+      expect(['number', 'text']).toContain(setting.kind);
+    });
+  });
+
+  it('assigns correct group to circuit breaker settings', async () => {
+    // Act
+    const results = await listSettings();
+
+    // Assert
+    const circuitSettings = results.filter((s) => s.key.startsWith('circuit.'));
+    circuitSettings.forEach((setting) => {
+      expect(setting.group).toBe('Circuit breaker');
+      expect(setting.kind).toBe('number');
+      expect(['ms', 'failures']).toContain(setting.unit);
+    });
+  });
+
+  it('assigns correct group to filter settings', async () => {
+    // Act
+    const results = await listSettings();
+
+    // Assert
+    const filterSettings = results.filter(
+      (s) => s.key.startsWith('filter.') && s.key !== 'filter.searchInputJson',
+    );
+    filterSettings.forEach((setting) => {
+      expect(setting.group).toBe('Filter');
+      expect(setting.kind).toBe('number');
+    });
+  });
+
+  it('assigns correct metadata to log.level (select with options)', async () => {
+    // Act
+    const results = await listSettings();
+
+    // Assert
+    const logLevel = results.find((s) => s.key === 'log.level');
+    expect(logLevel).toBeDefined();
+    expect(logLevel?.group).toBe('Logging');
+    expect(logLevel?.kind).toBe('select');
+    expect(logLevel?.options).toEqual(['debug', 'info', 'warn', 'error']);
+  });
 });

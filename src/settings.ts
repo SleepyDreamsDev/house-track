@@ -40,6 +40,89 @@ const defaultValues: Record<string, unknown> = {
   'log.level': 'info',
 };
 
+// Metadata for settings UI rendering
+export const settingMeta: Record<
+  string,
+  {
+    group: string;
+    kind: 'number' | 'text' | 'select';
+    unit?: string;
+    options?: string[];
+    label?: string;
+    hint?: string;
+  }
+> = {
+  'politeness.baseDelayMs': {
+    group: 'Politeness',
+    kind: 'number',
+    unit: 'ms',
+    label: 'Base Delay',
+    hint: 'Base delay between requests (ms)',
+  },
+  'politeness.jitterMs': {
+    group: 'Politeness',
+    kind: 'number',
+    unit: 'ms',
+    label: 'Jitter',
+    hint: 'Random jitter added to delays (ms)',
+  },
+  'politeness.detailDelayMs': {
+    group: 'Politeness',
+    kind: 'number',
+    unit: 'ms',
+    label: 'Detail Delay',
+    hint: 'Delay for detail page requests (ms)',
+  },
+  'sweep.maxPagesPerSweep': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'pages',
+    label: 'Max Pages Per Sweep',
+  },
+  'sweep.backfillPerSweep': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'listings',
+    label: 'Backfill Per Sweep',
+  },
+  'sweep.cronSchedule': {
+    group: 'Sweep',
+    kind: 'text',
+    label: 'Cron Schedule',
+    hint: 'Cron expression for sweep timing',
+  },
+  'circuit.consecutiveFailureThreshold': {
+    group: 'Circuit breaker',
+    kind: 'number',
+    unit: 'failures',
+    label: 'Failure Threshold',
+  },
+  'circuit.pauseDurationMs': {
+    group: 'Circuit breaker',
+    kind: 'number',
+    unit: 'ms',
+    label: 'Pause Duration',
+  },
+  'filter.maxPriceEur': {
+    group: 'Filter',
+    kind: 'number',
+    unit: '€',
+    label: 'Max Price',
+  },
+  'filter.maxAreaSqm': {
+    group: 'Filter',
+    kind: 'number',
+    unit: 'm²',
+    label: 'Max Area',
+  },
+  'log.level': {
+    group: 'Logging',
+    kind: 'select',
+    options: ['debug', 'info', 'warn', 'error'],
+    label: 'Log Level',
+  },
+};
+
 export async function getSetting<T = unknown>(key: string, fallback?: T): Promise<T> {
   const prisma = getPrisma();
 
@@ -90,6 +173,12 @@ export async function listSettings(): Promise<
     value: unknown;
     default: unknown;
     schema: z.ZodSchema;
+    group?: string;
+    kind?: 'number' | 'text' | 'select';
+    unit?: string;
+    options?: string[];
+    label?: string;
+    hint?: string;
   }>
 > {
   const prisma = getPrisma();
@@ -97,10 +186,43 @@ export async function listSettings(): Promise<
 
   const settingMap = new Map(allSettings.map((s) => [s.key, s.valueJson]));
 
-  return Object.entries(settingSchemas).map(([key, schema]) => ({
-    key,
-    value: settingMap.get(key) ?? defaultValues[key],
-    default: defaultValues[key],
-    schema,
-  }));
+  return Object.entries(settingSchemas).map(([key, schema]) => {
+    const meta = settingMeta[key];
+    const result: {
+      key: string;
+      value: unknown;
+      default: unknown;
+      schema: z.ZodSchema;
+      group?: string;
+      kind?: 'number' | 'text' | 'select';
+      unit?: string;
+      options?: string[];
+      label?: string;
+      hint?: string;
+    } = {
+      key,
+      value: settingMap.get(key) ?? defaultValues[key],
+      default: defaultValues[key],
+      schema,
+    };
+
+    if (meta) {
+      result.group = meta.group;
+      result.kind = meta.kind;
+      if (meta.unit !== undefined) {
+        result.unit = meta.unit;
+      }
+      if (meta.options !== undefined) {
+        result.options = meta.options;
+      }
+      if (meta.label !== undefined) {
+        result.label = meta.label;
+      }
+      if (meta.hint !== undefined) {
+        result.hint = meta.hint;
+      }
+    }
+
+    return result;
+  });
 }
