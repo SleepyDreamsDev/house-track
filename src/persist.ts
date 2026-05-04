@@ -5,6 +5,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
+import { listSettings } from './settings.js';
 
 export interface DiffResult {
   new: ListingStub[];
@@ -18,6 +19,26 @@ export interface SweepResult {
   newListings: number;
   updatedListings: number;
   errors: SweepError[];
+  configSnapshot?: Record<string, unknown> | null;
+  pagesDetail?: Array<{
+    n: number;
+    url: string;
+    status?: number;
+    bytes?: number;
+    parseMs: number;
+    found: number;
+    took: number;
+  }> | null;
+  detailsDetail?: Array<{
+    id: string;
+    url: string;
+    status?: number;
+    bytes?: number;
+    parseMs: number;
+    action: 'new' | 'updated';
+    priceEur?: number | null;
+  }> | null;
+  eventLog?: unknown[] | null;
 }
 
 export class Persistence {
@@ -147,6 +168,15 @@ export class Persistence {
     return { id: row.id };
   }
 
+  async snapshotConfig(): Promise<Record<string, unknown>> {
+    const settings = await listSettings();
+    const snapshot: Record<string, unknown> = {};
+    for (const setting of settings) {
+      snapshot[setting.key] = setting.value;
+    }
+    return snapshot;
+  }
+
   async finishSweep(id: number, result: SweepResult): Promise<void> {
     await this.prisma.sweepRun.update({
       where: { id },
@@ -160,6 +190,22 @@ export class Persistence {
         errors:
           result.errors.length > 0
             ? (result.errors as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+        configSnapshot:
+          result.configSnapshot !== null && result.configSnapshot !== undefined
+            ? (result.configSnapshot as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+        pagesDetail:
+          result.pagesDetail && result.pagesDetail.length > 0
+            ? (result.pagesDetail as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+        detailsDetail:
+          result.detailsDetail && result.detailsDetail.length > 0
+            ? (result.detailsDetail as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+        eventLog:
+          result.eventLog && Array.isArray(result.eventLog) && result.eventLog.length > 0
+            ? (result.eventLog as unknown as Prisma.InputJsonValue)
             : Prisma.DbNull,
       },
     });

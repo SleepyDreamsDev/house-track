@@ -55,6 +55,7 @@ interface MockEnv {
   startSweep: ReturnType<typeof vi.fn>;
   finishSweep: ReturnType<typeof vi.fn>;
   findUnenrichedListings: ReturnType<typeof vi.fn>;
+  snapshotConfig: ReturnType<typeof vi.fn>;
   parseIndex: ReturnType<typeof vi.fn>;
   parseDetail: ReturnType<typeof vi.fn>;
 }
@@ -72,6 +73,11 @@ function makeEnv(): MockEnv {
   const startSweep = vi.fn().mockResolvedValue({ id: 1 });
   const finishSweep = vi.fn().mockResolvedValue(undefined);
   const findUnenrichedListings = vi.fn().mockResolvedValue([]);
+  const snapshotConfig = vi.fn().mockResolvedValue({
+    'politeness.baseDelayMs': 8000,
+    'politeness.jitterMs': 2000,
+    'filter.maxPriceEur': 250000,
+  });
   const parseIndex = vi.fn<(json: unknown) => ListingStub[]>();
   const parseDetail = vi.fn<(id: string, json: unknown) => ParsedDetail>();
 
@@ -86,6 +92,7 @@ function makeEnv(): MockEnv {
       startSweep,
       finishSweep,
       findUnenrichedListings,
+      snapshotConfig,
     } as unknown as Persistence,
     circuit: { isOpen } as unknown as Circuit,
     parseIndex,
@@ -106,6 +113,7 @@ function makeEnv(): MockEnv {
     startSweep,
     finishSweep,
     findUnenrichedListings,
+    snapshotConfig,
     parseIndex,
     parseDetail,
   };
@@ -225,8 +233,9 @@ describe('runSweep', () => {
     env.fetchSearchPage.mockResolvedValueOnce({});
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchAdvert.mockResolvedValueOnce({});
-    env.parseDetail.mockReturnValueOnce(detail('B'));
+    // Need to fetch and parse for both new (B) and seen (A)
+    env.fetchAdvert.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+    env.parseDetail.mockReturnValueOnce(detail('B')).mockReturnValueOnce(detail('A'));
     env.diffAgainstDb.mockResolvedValueOnce({ new: [stub('B')], seen: [stub('A')] });
 
     await runSweep(env.deps);
@@ -328,5 +337,105 @@ describe('runSweep', () => {
 
     expect(env.diffAgainstDb).toHaveBeenCalledOnce();
     expect(env.diffAgainstDb.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['A']);
+  });
+
+  describe('JSON column persistence (pagesDetail, detailsDetail, configSnapshot)', () => {
+    it('Captures pagesDetail with timing and found count during collectIndexStubs', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({}); // page 0
+      env.fetchSearchPage.mockResolvedValueOnce({}); // page 1
+      env.parseIndex.mockReturnValueOnce([stub('A')]); // page 0 has 1 result
+      env.parseIndex.mockReturnValueOnce([]); // page 1 empty → stops pagination
+      env.fetchAdvert.mockResolvedValueOnce({});
+      env.parseDetail.mockReturnValueOnce(detail('A'));
+
+      await runSweep(env.deps);
+
+      const result = env.finishSweep.mock.calls[0]?.[1];
+      expect(result.pagesDetail).toBeDefined();
+      expect(Array.isArray(result.pagesDetail)).toBe(true);
+      expect(result.pagesDetail).toHaveLength(2); // 2 pages (page 0 with stubs, page 1 empty)
+      const page = result.pagesDetail[0];
+      expect(page).toMatchObject({
+        n: 0,
+        url: expect.any(String),
+        parseMs: expect.any(Number),
+        found: 1,
+        took: expect.any(Number),
+      });
+    });
+
+    it('Captures detailsDetail with action (new|updated) during fetchAndPersistDetails', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
+      env.parseIndex.mockReturnValueOnce([]);
+      env.fetchAdvert.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+      env.parseDetail.mockReturnValueOnce(detail('A')).mockReturnValueOnce(detail('B'));
+      env.diffAgainstDb.mockResolvedValueOnce({ new: [stub('A')], seen: [stub('B')] });
+
+      await runSweep(env.deps);
+
+      const result = env.finishSweep.mock.calls[0]?.[1];
+      expect(result.detailsDetail).toBeDefined();
+      expect(Array.isArray(result.detailsDetail)).toBe(true);
+      expect(result.detailsDetail).toHaveLength(2);
+      expect(result.detailsDetail[0]).toMatchObject({
+        id: 'A',
+        action: 'new',
+        priceEur: expect.any(Number),
+        parseMs: expect.any(Number),
+      });
+      expect(result.detailsDetail[1]).toMatchObject({
+        id: 'B',
+        action: 'updated',
+      });
+    });
+
+    it('Captures configSnapshot from listSettings at sweep start', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+
+      await runSweep(env.deps);
+
+      const result = env.finishSweep.mock.calls[0]?.[1];
+      expect(result.configSnapshot).toBeDefined();
+      expect(typeof result.configSnapshot).toBe('object');
+    });
+
+    it('All JSON columns are present in SweepResult returned to finishSweep', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+
+      await runSweep(env.deps);
+
+      const result = env.finishSweep.mock.calls[0]?.[1];
+      expect(result).toHaveProperty('configSnapshot');
+      expect(result).toHaveProperty('pagesDetail');
+      expect(result).toHaveProperty('detailsDetail');
+      expect(result).toHaveProperty('eventLog');
+    });
+
+    it('JSON columns are arrays or objects, not undefined', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([stub('A')]);
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+      env.fetchAdvert.mockResolvedValueOnce({});
+      env.parseDetail.mockReturnValueOnce(detail('A'));
+
+      await runSweep(env.deps);
+
+      const result = env.finishSweep.mock.calls[0]?.[1];
+      expect(Array.isArray(result.pagesDetail) || result.pagesDetail === null).toBe(true);
+      expect(Array.isArray(result.detailsDetail) || result.detailsDetail === null).toBe(true);
+      expect(typeof result.configSnapshot === 'object' || result.configSnapshot === null).toBe(
+        true,
+      );
+    });
   });
 });

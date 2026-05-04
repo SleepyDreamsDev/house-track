@@ -26,6 +26,7 @@ export interface SweepDeps {
     | 'startSweep'
     | 'finishSweep'
     | 'findUnenrichedListings'
+    | 'snapshotConfig'
   >;
   circuit: Pick<Circuit, 'isOpen'>;
   parseIndex: (json: unknown) => ListingStub[];
@@ -50,13 +51,16 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
   const { id: sweepId } = await deps.persist.startSweep();
   const result: SweepResult = emptyResult('ok');
 
+  // Capture config snapshot at sweep start
+  result.configSnapshot = await deps.persist.snapshotConfig();
+
   try {
     const allStubs = await collectIndexStubs(deps, result);
     const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
     const { new: newStubs, seen: seenStubs } = await deps.persist.diffAgainstDb(stubs);
     result.newListings = newStubs.length;
 
-    await fetchAndPersistDetails(deps, newStubs, result);
+    await fetchAndPersistDetails(deps, newStubs, seenStubs, result);
     await backfillUnenriched(deps, result);
 
     await deps.persist.markSeen(seenStubs);
@@ -82,11 +86,15 @@ export async function runSweep(deps: SweepDeps): Promise<void> {
 
 async function collectIndexStubs(deps: SweepDeps, result: SweepResult): Promise<ListingStub[]> {
   const all: ListingStub[] = [];
+  if (!result.pagesDetail) result.pagesDetail = [];
+
   for (let page = 0; page < deps.maxPagesPerSweep; page++) {
+    const pageStart = Date.now();
     const json = await deps.fetchSearchPage(page); // CircuitTrippingError bubbles
     result.pagesFetched += 1;
 
     let stubs: ListingStub[];
+    const parseStart = Date.now();
     try {
       stubs = deps.parseIndex(json);
     } catch (err) {
@@ -98,6 +106,20 @@ async function collectIndexStubs(deps: SweepDeps, result: SweepResult): Promise<
       result.status = 'partial';
       break;
     }
+    const parseMs = Date.now() - parseStart;
+
+    // Capture page detail
+    const jsonBytes = JSON.stringify(json).length;
+    const pageDetail = {
+      n: page,
+      url: `<search-page-${page}>`,
+      status: 200,
+      bytes: jsonBytes,
+      parseMs,
+      found: stubs.length,
+      took: Date.now() - pageStart,
+    };
+    result.pagesDetail.push(pageDetail);
 
     if (stubs.length === 0) break;
     all.push(...stubs);
@@ -108,8 +130,12 @@ async function collectIndexStubs(deps: SweepDeps, result: SweepResult): Promise<
 async function fetchAndPersistDetails(
   deps: SweepDeps,
   newStubs: ListingStub[],
+  seenStubs: ListingStub[],
   result: SweepResult,
 ): Promise<void> {
+  if (!result.detailsDetail) result.detailsDetail = [];
+
+  // Process new listings: fetch, parse, persist, and capture details
   for (const s of newStubs) {
     let json: unknown;
     try {
@@ -123,6 +149,7 @@ async function fetchAndPersistDetails(
     result.detailsFetched += 1;
 
     let parsed: ParsedDetail;
+    const parseStart = Date.now();
     try {
       parsed = deps.parseDetail(s.id, json);
     } catch (err) {
@@ -131,6 +158,20 @@ async function fetchAndPersistDetails(
       result.status = 'partial';
       continue;
     }
+    const parseMs = Date.now() - parseStart;
+
+    // Capture detail info for new listing
+    const jsonBytes = JSON.stringify(json).length;
+    const detailRecord = {
+      id: s.id,
+      url: s.url,
+      status: 200,
+      bytes: jsonBytes,
+      parseMs,
+      action: 'new' as const,
+      priceEur: parsed.priceEur ?? null,
+    };
+    result.detailsDetail.push(detailRecord);
 
     try {
       await deps.persist.persistDetail(parsed);
@@ -138,6 +179,44 @@ async function fetchAndPersistDetails(
       record(result, { url: s.url, status: null, msg: `persist: ${String(err)}` });
       result.status = 'partial';
     }
+  }
+
+  // Capture detail records for seen listings (fetch + parse only, no persist)
+  for (const s of seenStubs) {
+    let json: unknown;
+    try {
+      json = await deps.fetchAdvert(s.id);
+    } catch (err) {
+      if (err instanceof CircuitTrippingError) throw err;
+      record(result, { url: s.url, status: null, msg: String(err) });
+      result.status = 'partial';
+      continue;
+    }
+
+    let parsed: ParsedDetail;
+    const parseStart = Date.now();
+    try {
+      parsed = deps.parseDetail(s.id, json);
+    } catch (err) {
+      if (err instanceof AdvertNotFoundError) continue; // delisted between index and detail — not an error
+      record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}` });
+      result.status = 'partial';
+      continue;
+    }
+    const parseMs = Date.now() - parseStart;
+
+    // Capture detail info for seen listing
+    const jsonBytes = JSON.stringify(json).length;
+    const detailRecord = {
+      id: s.id,
+      url: s.url,
+      status: 200,
+      bytes: jsonBytes,
+      parseMs,
+      action: 'updated' as const,
+      priceEur: parsed.priceEur ?? null,
+    };
+    result.detailsDetail.push(detailRecord);
   }
 }
 
@@ -193,5 +272,9 @@ function emptyResult(status: SweepStatus): SweepResult {
     newListings: 0,
     updatedListings: 0,
     errors: [],
+    configSnapshot: null,
+    pagesDetail: [],
+    detailsDetail: [],
+    eventLog: null,
   };
 }
