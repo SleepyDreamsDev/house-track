@@ -1,45 +1,67 @@
 // Stats endpoints powering Dashboard widgets.
-//
-// STATUS: stubs. Replace each with real Prisma queries — TODO blocks below
-// have the SQL sketches.
 
 import { Hono } from 'hono';
-// import { prisma } from '../../db.js';
+import { getPrisma } from '../../db.js';
 
 export const statsRouter = new Hono();
+
+interface DistrictRow {
+  name: string;
+  count: number;
+  eurPerSqm: number;
+}
 
 // GET /api/stats/by-district
 // Returns district name, active count, and avg €/m² for active listings.
 statsRouter.get('/stats/by-district', async (c) => {
-  // TODO (Claude Code, Task 3): real query
-  // const rows = await prisma.$queryRaw<DistrictRow[]>`
-  //   SELECT district AS name,
-  //          COUNT(*)::int AS count,
-  //          ROUND(AVG("priceEur" / NULLIF("areaSqm", 0)))::int AS "eurPerSqm"
-  //   FROM "Listing"
-  //   WHERE "deletedAt" IS NULL
-  //   GROUP BY district
-  //   ORDER BY count DESC
-  // `;
-  // return c.json(rows);
-
-  return c.json([
-    { name: 'Buiucani', count: 89, eurPerSqm: 1320 },
-    { name: 'Botanica', count: 64, eurPerSqm: 1180 },
-    { name: 'Centru', count: 42, eurPerSqm: 1850 },
-    { name: 'Ciocana', count: 38, eurPerSqm: 1090 },
-    { name: 'Durlești', count: 12, eurPerSqm: 920 },
-    { name: 'Râșcani', count: 2, eurPerSqm: 1140 },
-  ]);
+  const prisma = getPrisma();
+  const rows = await prisma.$queryRaw<DistrictRow[]>`
+    SELECT "district" AS name,
+           COUNT(*)::int AS count,
+           ROUND(AVG("priceEur" / NULLIF("areaSqm", 0)))::int AS "eurPerSqm"
+    FROM "Listing"
+    WHERE "active" = true AND "district" IS NOT NULL
+    GROUP BY "district"
+    ORDER BY count DESC
+  `;
+  return c.json(rows);
 });
 
 // GET /api/stats/new-per-day
 // Returns last 7 days of new-listing counts (oldest first).
 statsRouter.get('/stats/new-per-day', async (c) => {
-  // TODO (Claude Code, Task 3): real query
-  // SELECT date_trunc('day', "firstSeenAt") AS d, COUNT(*)::int
-  //   FROM "Listing"
-  //  WHERE "firstSeenAt" >= NOW() - INTERVAL '7 days'
-  //  GROUP BY 1 ORDER BY 1 ASC
-  return c.json([8, 12, 5, 9, 14, 7, 11]);
+  const prisma = getPrisma();
+
+  // Get 7 days of data with all days present
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Query data for last 7 days
+  const rows = await prisma.$queryRaw<Array<{ d: Date; count: bigint }>>`
+    SELECT date_trunc('day', "firstSeenAt") AS d, COUNT(*)::int AS count
+    FROM "Listing"
+    WHERE "firstSeenAt" >= ${sevenDaysAgo} AND "active" = true
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `;
+
+  // Build result array with 7 days, padding missing days with 0
+  const resultMap = new Map<string, number>();
+  for (const row of rows) {
+    const date = row.d instanceof Date ? row.d : new Date(row.d);
+    const dayKey = date.toISOString().split('T')[0] ?? '';
+    if (dayKey) {
+      resultMap.set(dayKey, Number(row.count));
+    }
+  }
+
+  const result: number[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    const dayKey = date.toISOString().split('T')[0] ?? '';
+    result.push(resultMap.get(dayKey) ?? 0);
+  }
+
+  return c.json(result);
 });

@@ -1,66 +1,133 @@
 // Dashboard "leads" feeds — what showed up today, what dropped in price.
 
 import { Hono } from 'hono';
-// import { prisma } from '../../db.js';
+import { getPrisma } from '../../db.js';
 
 export const listingsFeedRouter = new Hono();
+
+interface NewTodayListing {
+  id: string;
+  title: string;
+  priceEur: number | null;
+  areaSqm: number | null;
+  rooms: number | null;
+  landSqm?: number | null;
+  district: string | null;
+  street?: string | null;
+  firstSeenAt: string;
+  isNew: boolean;
+}
+
+interface PriceDropListing {
+  id: string;
+  title: string;
+  priceEur: number | null;
+  priceWas: number | null;
+  areaSqm: number | null;
+  rooms: number | null;
+  district: string | null;
+  firstSeenAt: string;
+  priceDrop: boolean;
+}
 
 // GET /api/listings/new-today
 // Listings whose firstSeenAt is within the last 24h.
 listingsFeedRouter.get('/listings/new-today', async (c) => {
-  // TODO (Claude Code, Task 3): real query
-  // const rows = await prisma.listing.findMany({
-  //   where: { firstSeenAt: { gte: new Date(Date.now() - 24*60*60*1000) }, deletedAt: null },
-  //   orderBy: { firstSeenAt: 'desc' },
-  //   take: 10,
-  // });
-  // return c.json(rows);
+  const prisma = getPrisma();
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  const now = Date.now();
-  return c.json([
-    {
-      id: 'h-91445',
-      title: 'Casă, 130 m², Buiucani · str. Ion Creangă',
-      priceEur: 145_000,
-      areaSqm: 130,
-      rooms: 4,
-      district: 'Buiucani',
-      street: 'str. Ion Creangă',
-      firstSeenAt: new Date(now - 12 * 60_000).toISOString(),
-      isNew: true,
+  const listings = await prisma.listing.findMany({
+    where: {
+      firstSeenAt: { gte: oneDayAgo },
+      active: true,
     },
-    {
-      id: 'h-91442',
-      title: 'Casă cu teren, 200 m², Botanica',
-      priceEur: 198_000,
-      areaSqm: 200,
-      landSqm: 600,
-      rooms: 5,
-      district: 'Botanica',
-      firstSeenAt: new Date(now - 47 * 60_000).toISOString(),
-      isNew: true,
+    orderBy: { firstSeenAt: 'desc' },
+    take: 10,
+    select: {
+      id: true,
+      title: true,
+      priceEur: true,
+      areaSqm: true,
+      rooms: true,
+      landSqm: true,
+      district: true,
+      street: true,
+      firstSeenAt: true,
     },
-  ]);
+  });
+
+  const result: NewTodayListing[] = listings.map((listing) => ({
+    id: listing.id,
+    title: listing.title,
+    priceEur: listing.priceEur,
+    areaSqm: listing.areaSqm,
+    rooms: listing.rooms,
+    landSqm: listing.landSqm,
+    district: listing.district,
+    street: listing.street,
+    firstSeenAt: listing.firstSeenAt.toISOString(),
+    isNew: true,
+  }));
+
+  return c.json(result);
 });
 
 // GET /api/listings/price-drops
 // Listings with ≥5% price drop in the last 7 days.
 listingsFeedRouter.get('/listings/price-drops', async (c) => {
-  // TODO (Claude Code, Task 3): real query
-  // Compare latest snapshot priceEur vs earliest snapshot priceEur in last 7d;
-  // include where ratio <= 0.95.
-  const now = Date.now();
-  return c.json([
-    {
-      id: 'h-91204',
-      title: 'Casă, 145 m², Ciocana',
-      priceEur: 132_000,
-      priceWas: 148_000,
-      areaSqm: 145,
-      rooms: 4,
-      district: 'Ciocana',
-      firstSeenAt: new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString(),
-      priceDrop: true,
+  const prisma = getPrisma();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Find listings with snapshots in last 7 days
+  const listings = await prisma.listing.findMany({
+    where: { active: true },
+    select: {
+      id: true,
+      title: true,
+      priceEur: true,
+      areaSqm: true,
+      rooms: true,
+      district: true,
+      firstSeenAt: true,
+      snapshots: {
+        where: { capturedAt: { gte: sevenDaysAgo } },
+        orderBy: { capturedAt: 'asc' },
+      },
     },
-  ]);
+  });
+
+  const result: PriceDropListing[] = [];
+
+  for (const listing of listings) {
+    // Need at least 2 snapshots to calculate a drop
+    if (listing.snapshots.length < 2) continue;
+
+    const earliest = listing.snapshots[0];
+    const latest = listing.snapshots[listing.snapshots.length - 1];
+
+    // Only consider if we have both snapshots with prices
+    if (!earliest || !latest || earliest.priceEur === null || latest.priceEur === null) {
+      continue;
+    }
+
+    // Calculate drop percentage
+    const dropRatio = latest.priceEur / earliest.priceEur;
+
+    // Include if >= 5% drop (ratio <= 0.95)
+    if (dropRatio <= 0.95) {
+      result.push({
+        id: listing.id,
+        title: listing.title,
+        priceEur: latest.priceEur,
+        priceWas: earliest.priceEur,
+        areaSqm: listing.areaSqm,
+        rooms: listing.rooms,
+        district: listing.district,
+        firstSeenAt: listing.firstSeenAt.toISOString(),
+        priceDrop: true,
+      });
+    }
+  }
+
+  return c.json(result);
 });
