@@ -182,6 +182,36 @@ export class Persistence {
     return { id: row.id, startedAt: row.startedAt };
   }
 
+  // Incrementally publish progress to the SweepRun row so the operator UI
+  // shows live counters during a long-running sweep. Called from the crawler
+  // after each page/detail fetch — one extra UPDATE per ~8s pacing tick is
+  // negligible alongside the politeness budget. `errors` is replaced wholesale
+  // because the array is short (rate-limited by the circuit breaker) and
+  // partial-array updates would require fragile JSONB merging.
+  async recordSweepProgress(
+    id: number,
+    snapshot: {
+      pagesFetched?: number;
+      detailsFetched?: number;
+      newListings?: number;
+      updatedListings?: number;
+      errors?: SweepResult['errors'];
+    },
+  ): Promise<void> {
+    const data: Prisma.SweepRunUpdateInput = {};
+    if (snapshot.pagesFetched !== undefined) data.pagesFetched = snapshot.pagesFetched;
+    if (snapshot.detailsFetched !== undefined) data.detailsFetched = snapshot.detailsFetched;
+    if (snapshot.newListings !== undefined) data.newListings = snapshot.newListings;
+    if (snapshot.updatedListings !== undefined) data.updatedListings = snapshot.updatedListings;
+    if (snapshot.errors !== undefined) {
+      data.errors =
+        snapshot.errors.length > 0
+          ? (snapshot.errors as unknown as Prisma.InputJsonValue)
+          : Prisma.DbNull;
+    }
+    await this.prisma.sweepRun.update({ where: { id }, data });
+  }
+
   async snapshotConfig(): Promise<Record<string, unknown>> {
     // Use this instance's prisma client instead of a separate getPrisma() singleton
     // to avoid split-brain reads when Persistence is constructed with a different client

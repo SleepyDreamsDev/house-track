@@ -80,7 +80,8 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
       const res = await app.request(`/api/sweeps/${sweep.id}`);
       const body = (await res.json()) as Record<string, unknown>;
 
-      expect(body.status).toBe('partial');
+      // API translates DB status ('partial') → UI status ('failed') via toUiStatus.
+      expect(body.status).toBe('failed');
       expect(typeof body.status).toBe('string');
     });
 
@@ -240,14 +241,22 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
       expect(progress).toHaveProperty('queued');
     });
 
-    it('progress.phase reflects the sweep status', async () => {
-      const statuses = ['ok', 'partial', 'failed', 'circuit_open'];
+    it('progress.phase reflects the sweep status (translated to UI)', async () => {
+      // DB status → UI status mapping at the API boundary (toUiStatus):
+      //   in_progress → running, ok → success, everything else → failed
+      const cases: Array<[string, string]> = [
+        ['ok', 'success'],
+        ['partial', 'failed'],
+        ['failed', 'failed'],
+        ['circuit_open', 'failed'],
+        ['in_progress', 'running'],
+      ];
 
-      for (const status of statuses) {
+      for (const [dbStatus, uiPhase] of cases) {
         await prisma.sweepRun.deleteMany();
         const sweep = await prisma.sweepRun.create({
           data: {
-            status,
+            status: dbStatus,
           },
         });
 
@@ -255,7 +264,7 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
         const body = (await res.json()) as Record<string, unknown>;
         const progress = body.progress as Record<string, unknown>;
 
-        expect(progress.phase).toBe(status);
+        expect(progress.phase).toBe(uiPhase);
       }
     });
 

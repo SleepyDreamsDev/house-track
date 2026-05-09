@@ -62,6 +62,7 @@ interface MockEnv {
   finishSweep: ReturnType<typeof vi.fn>;
   findUnenrichedListings: ReturnType<typeof vi.fn>;
   snapshotConfig: ReturnType<typeof vi.fn>;
+  recordSweepProgress: ReturnType<typeof vi.fn>;
   parseIndex: ReturnType<typeof vi.fn>;
   parseDetail: ReturnType<typeof vi.fn>;
 }
@@ -84,6 +85,7 @@ function makeEnv(): MockEnv {
     'politeness.jitterMs': 2000,
     'filter.maxPriceEur': 250000,
   });
+  const recordSweepProgress = vi.fn().mockResolvedValue(undefined);
   const parseIndex = vi.fn<(json: unknown) => ListingStub[]>();
   const parseDetail = vi.fn<(id: string, json: unknown) => ParsedDetail>();
 
@@ -99,6 +101,7 @@ function makeEnv(): MockEnv {
       finishSweep,
       findUnenrichedListings,
       snapshotConfig,
+      recordSweepProgress,
     } as unknown as Persistence,
     circuit: { isOpen } as unknown as Circuit,
     parseIndex,
@@ -120,6 +123,7 @@ function makeEnv(): MockEnv {
     finishSweep,
     findUnenrichedListings,
     snapshotConfig,
+    recordSweepProgress,
     parseIndex,
     parseDetail,
   };

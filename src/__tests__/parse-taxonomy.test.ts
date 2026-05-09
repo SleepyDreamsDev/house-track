@@ -12,12 +12,12 @@ const FIXTURE_PATH = join(
 );
 
 describe('bootstrapLutFromConfig', () => {
-  it('Includes the offer-type anchor (filterId 41, featureId 1)', () => {
-    expect(bootstrapLutFromConfig().get(1)).toBe(41);
+  it('Includes the offer-type anchor (filterId 16, featureId 1)', () => {
+    expect(bootstrapLutFromConfig().get(1)).toBe(16);
   });
 
-  it('Includes the region anchor (filterId 40, featureId 7)', () => {
-    expect(bootstrapLutFromConfig().get(7)).toBe(40);
+  it('Includes the region anchor (filterId 32, featureId 7)', () => {
+    expect(bootstrapLutFromConfig().get(7)).toBe(32);
   });
 
   it('Returns no entry for unknown feature ids', () => {

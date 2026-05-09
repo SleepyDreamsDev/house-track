@@ -231,8 +231,8 @@ describe('Persistence', () => {
     await persist.persistDetail(
       detail('LUT', {
         filterValues: [
-          triple({ featureId: 1, optionId: 776 }), // offer-type → filterId 41
-          triple({ featureId: 7, optionId: 12900 }), // region → filterId 40
+          triple({ featureId: 1, optionId: 776 }), // offer-type → filterId 16
+          triple({ featureId: 7, optionId: 12900 }), // region → filterId 32
           triple({ featureId: 999, optionId: 1 }), // unknown — stays at 0
         ],
       }),
@@ -243,8 +243,8 @@ describe('Persistence', () => {
       orderBy: { featureId: 'asc' },
     });
     expect(fvs).toHaveLength(3);
-    expect(fvs[0]).toMatchObject({ featureId: 1, filterId: 41 });
-    expect(fvs[1]).toMatchObject({ featureId: 7, filterId: 40 });
+    expect(fvs[0]).toMatchObject({ featureId: 1, filterId: 16 });
+    expect(fvs[1]).toMatchObject({ featureId: 7, filterId: 32 });
     expect(fvs[2]).toMatchObject({ featureId: 999, filterId: 0 });
   });
 

@@ -396,8 +396,10 @@ export function buildSearchVariables(pageIdx: number): Record<string, unknown> {
   return {
     input: {
       ...FILTER.searchInput,
-      limit: FILTER.pageSize,
-      skip: pageIdx * FILTER.pageSize,
+      pagination: {
+        limit: FILTER.pageSize,
+        skip: pageIdx * FILTER.pageSize,
+      },
     },
   };
 }

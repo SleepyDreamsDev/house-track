@@ -23,10 +23,9 @@ import { getSetting } from './settings.js';
 import { runSweep, type SweepDeps } from './sweep.js';
 import { createApiApp } from './web/server.js';
 
-const SCHEDULE = process.env['CRON_SCHEDULE'] ?? '0 * * * *'; // top of every hour
-const SWEEPS_PER_DAY = 24;
-const MISSING_THRESHOLD_MS =
-  SWEEP.missingSweepsBeforeInactive * (24 / SWEEPS_PER_DAY) * 60 * 60 * 1000;
+// Cron schedule + frequency are settings-driven at runtime; this is the
+// fallback when no DB row exists. Default fires twice daily at 9am and 9pm.
+const DEFAULT_SCHEDULE = '0 9,21 * * *';
 
 // Module-scoped: PrismaClient holds a connection pool. Re-instantiating per tick
 // leaks handles in a long-running cron process and can keep the event loop alive.
@@ -46,6 +45,18 @@ async function buildDeps(): Promise<SweepDeps> {
   const detailDelayMs = await getSetting('politeness.detailDelayMs', POLITENESS.detailDelayMs);
   const maxPagesPerSweep = await getSetting('sweep.maxPagesPerSweep', FILTER.maxPagesPerSweep);
   const backfillPerSweep = await getSetting('sweep.backfillPerSweep', SWEEP.backfillPerSweep);
+  const targetMean = await getSetting('sweep.targetListingsPerSweep', SWEEP.targetListingsPerSweep);
+  const targetJitter = await getSetting('sweep.targetListingsJitter', SWEEP.targetListingsJitter);
+  const expectedPerDay = await getSetting('sweep.expectedPerDay', SWEEP.expectedPerDay);
+
+  // Per-tick draw: each sweep gets a fresh random target so back-to-back
+  // sweeps don't look identical in volume. Math.random() is fine — the
+  // adversary (WAF pattern detection) can't see the seed.
+  const targetListingsThisSweep =
+    targetJitter > 0 ? targetMean + Math.floor((Math.random() * 2 - 1) * targetJitter) : targetMean;
+
+  const missingThresholdMs =
+    SWEEP.missingSweepsBeforeInactive * (24 / expectedPerDay) * 60 * 60 * 1000;
 
   const fetcher = new Fetcher({
     circuit,
@@ -89,8 +100,9 @@ async function buildDeps(): Promise<SweepDeps> {
     parseDetail,
     applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
     maxPagesPerSweep,
-    missingThresholdMs: MISSING_THRESHOLD_MS,
+    missingThresholdMs,
     backfillPerSweep,
+    targetListingsThisSweep,
     log,
   };
 }
@@ -105,11 +117,14 @@ async function tick(): Promise<void> {
 }
 
 function bootstrap(): void {
-  log.info({ event: 'crawler.boot', schedule: SCHEDULE });
+  // RUN_ONCE is the smoke-test path: do one sweep, exit. No API or cron —
+  // smoke doesn't read SSE and the listen would collide with a dev API.
+  if (process.env['RUN_ONCE'] === '1') {
+    log.info({ event: 'crawler.boot', mode: 'run_once' });
+    void tick().then(() => process.exit(0));
+    return;
+  }
 
-  // Start web API on port 3000 alongside cron scheduler.
-  // The in-process EventEmitter bridge (src/web/events.ts) connects
-  // SSE streams to active sweep events (Phase 3 Task 2).
   const app = createApiApp();
   const port = 3000;
   const host = '127.0.0.1';
@@ -125,14 +140,20 @@ function bootstrap(): void {
     },
   );
 
-  if (process.env['RUN_ONCE'] === '1') {
-    void tick().then(() => process.exit(0));
-    return;
-  }
+  // Schedule + jitter are read once at boot. Live mutation via the operator
+  // UI requires a process restart — acceptable because changing cadence is
+  // a deliberate operational decision, not a tunable knob.
+  void (async () => {
+    const schedule = await getSetting('sweep.cronSchedule', DEFAULT_SCHEDULE);
+    const jitterMs = await getSetting('sweep.cronWindowJitterMs', SWEEP.cronWindowJitterMs);
+    log.info({ event: 'crawler.boot', schedule, jitterMs });
 
-  cron.schedule(SCHEDULE, () => {
-    void tick();
-  });
+    cron.schedule(schedule, () => {
+      const offsetMs = jitterMs > 0 ? Math.floor(Math.random() * jitterMs) : 0;
+      log.info({ event: 'tick.deferred', offsetMs });
+      setTimeout(() => void tick(), offsetMs);
+    });
+  })();
 }
 
 bootstrap();

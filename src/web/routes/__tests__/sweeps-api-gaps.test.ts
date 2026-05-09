@@ -217,14 +217,20 @@ describe('Sweep API gaps', () => {
       expect(body.currentlyFetching).toBeNull();
     });
 
-    it('maps sweep status to progress phase', async () => {
-      const statuses = ['ok', 'partial', 'failed', 'circuit_open'];
+    it('maps sweep status to progress phase (translated to UI)', async () => {
+      // toUiStatus collapses partial/failed/circuit_open → 'failed' and ok → 'success'.
+      const cases: Array<[string, string]> = [
+        ['ok', 'success'],
+        ['partial', 'failed'],
+        ['failed', 'failed'],
+        ['circuit_open', 'failed'],
+      ];
 
-      for (const status of statuses) {
+      for (const [dbStatus, uiPhase] of cases) {
         await prisma.sweepRun.deleteMany();
         const sweep = await prisma.sweepRun.create({
           data: {
-            status,
+            status: dbStatus,
             startedAt: new Date(),
             finishedAt: new Date(),
           },
@@ -233,7 +239,7 @@ describe('Sweep API gaps', () => {
         const res = await app.request(`/api/sweeps/${sweep.id}`);
         const body = (await res.json()) as Record<string, unknown>;
         const progress = body.progress as Record<string, unknown>;
-        expect(progress.phase).toBe(status);
+        expect(progress.phase).toBe(uiPhase);
       }
     });
   });
@@ -431,7 +437,8 @@ describe('Sweep API gaps', () => {
 
       const body = (await res.json()) as Record<string, unknown>;
       expect(body).toHaveProperty('id', sweep.id);
-      expect(body).toHaveProperty('status', 'ok');
+      // API translates DB status 'ok' → UI status 'success' via toUiStatus.
+      expect(body).toHaveProperty('status', 'success');
       expect(body).toHaveProperty('config');
       expect(body).toHaveProperty('pages');
       expect(body).toHaveProperty('details');
@@ -510,7 +517,8 @@ describe('Sweep API gaps', () => {
 
       const body = (await res.json()) as Record<string, unknown>;
       expect(body.id).toBe(sweep.id);
-      expect(body.status).toBe('ok');
+      // API translates DB status 'ok' → UI status 'success' via toUiStatus.
+      expect(body.status).toBe('success');
       expect(body.source).toBe('999.md');
       expect(body.trigger).toBe('manual');
     });
