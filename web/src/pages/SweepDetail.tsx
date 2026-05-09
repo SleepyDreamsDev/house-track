@@ -365,7 +365,18 @@ const HttpTab: React.FC<{ detail: SweepDetailDto }> = ({ detail }) => {
               </td>
               <td className="px-3 py-2 font-mono">{r.identifier}</td>
               <td className="px-3 py-2">
-                <code className="font-mono text-neutral-400">{r.url}</code>
+                {r.kind === 'detail' && r.url ? (
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-blue-600 hover:underline"
+                  >
+                    {r.url}
+                  </a>
+                ) : (
+                  <code className="font-mono text-neutral-400">{r.url}</code>
+                )}
               </td>
               <td className="px-3 py-2 text-right">
                 <Badge variant={r.status >= 400 ? 'error' : 'success'}>{r.status}</Badge>

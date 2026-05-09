@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
@@ -33,24 +34,39 @@ const PRICE_MAX = 250000;
 const DISTRICTS = ['all', 'Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
 
 export const Listings: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState('');
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX);
   const [district, setDistrict] = useState('all');
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const queryClient = useQueryClient();
 
+  // Sweep-row links into this page set ?firstSeenAfter=<sweep.startedAt>
+  // (and an optional ?fromSweep=<id> for the breadcrumb chip). Read them
+  // from URL so the filter survives reload + the chip can clear them.
+  const firstSeenAfter = searchParams.get('firstSeenAfter') ?? undefined;
+  const fromSweep = searchParams.get('fromSweep');
+
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
-    queryKey: ['listings', { q, maxPrice, district, sort }],
+    queryKey: ['listings', { q, maxPrice, district, sort, firstSeenAfter }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
       if (maxPrice < PRICE_MAX) p.append('maxPrice', String(maxPrice));
       if (district !== 'all') p.append('district', district);
+      if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       p.append('sort', sort);
       p.append('limit', '50');
       return apiCall(`/listings?${p}`);
     },
   });
+
+  const clearSweepFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('firstSeenAfter');
+    next.delete('fromSweep');
+    setSearchParams(next);
+  };
 
   return (
     <div data-screen-label="Houses">
@@ -66,6 +82,24 @@ export const Listings: React.FC = () => {
           </Button>
         }
       />
+
+      {firstSeenAfter && (
+        <div className="mb-4 flex items-center gap-2 rounded-sm border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
+          <span className="text-neutral-700">
+            Filtered to listings first seen after{' '}
+            <span className="font-mono">{new Date(firstSeenAfter).toLocaleString()}</span>
+            {fromSweep && (
+              <>
+                {' '}
+                · from sweep <span className="font-mono">{fromSweep}</span>
+              </>
+            )}
+          </span>
+          <button onClick={clearSweepFilter} className="ml-auto text-blue-600 hover:underline">
+            Clear
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-[240px_1fr] gap-6">
         <Card className="self-start">

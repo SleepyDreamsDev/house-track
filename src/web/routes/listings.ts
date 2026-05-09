@@ -19,6 +19,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     const sort = c.req.query('sort') as 'newest' | 'price' | 'eurm2' | undefined;
     const q = c.req.query('q');
     const flags = c.req.query('flags');
+    const firstSeenAfter = c.req.query('firstSeenAfter');
 
     const results = await searchListings(prisma, {
       limit,
@@ -32,6 +33,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       sort,
       q,
       flags,
+      firstSeenAfter,
     });
 
     return c.json(results);
