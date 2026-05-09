@@ -263,6 +263,23 @@ describe('runSweep', () => {
     expect(env.markInactiveOlderThan).toHaveBeenCalledWith(3 * HOUR);
   });
 
+  it('Seen stubs are persisted so ListingSnapshot accumulates price-change history', async () => {
+    const env = makeEnv();
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
+    env.parseIndex.mockReturnValueOnce([]);
+    env.fetchAdvert.mockResolvedValueOnce(envelope({})).mockResolvedValueOnce(envelope({}));
+    env.parseDetail.mockReturnValueOnce(detail('B')).mockReturnValueOnce(detail('A'));
+    env.diffAgainstDb.mockResolvedValueOnce({ new: [stub('B')], seen: [stub('A')] });
+
+    await runSweep(env.deps);
+
+    expect(env.persistDetail).toHaveBeenCalledTimes(2);
+    const persistedIds = env.persistDetail.mock.calls.map((c) => (c[0] as ParsedDetail).id);
+    expect(persistedIds.sort()).toEqual(['A', 'B']);
+  });
+
   describe('backfillPerSweep', () => {
     it('Re-fetches up to N listings with NULL filterValuesEnrichedAt after new-detail fetches', async () => {
       const env = makeEnv();
