@@ -238,6 +238,15 @@ Output one of:
 
 {{TEST_PATTERNS}}
 
+3a. Dispatch the `discovery-explorer` subagent with layer hint `types` to
+    summarize existing types relevant to the feature. The agent is pinned to
+    Haiku (read-and-summarize work) and returns a fixed-template brief; use
+    that brief in place of an inline read of the type file. This is the
+    canonical inherit-mode probe — if no Haiku entry appears in the
+    Stop-hook `by_model` row of `.claude/logs/token-usage.jsonl`, the
+    `CLAUDE_CODE_SUBAGENT_MODEL` env var is being ignored and should be
+    investigated before trusting any subagent-cost KPI.
+
 4. Identify where the new feature's source and test files should live based on
    existing directory structure.
 

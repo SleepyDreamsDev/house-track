@@ -73,13 +73,24 @@ cached prefix intact.
 
 ## Subagent dispatch
 
-- Default model is Haiku (via `CLAUDE_CODE_SUBAGENT_MODEL` env). Use it
-  for read-and-summarize work (`discovery-explorer`).
-- Pin Sonnet for TDD-execution agents (`domain-implementer`).
-- Pin Opus for reviewer / threat-modeling work where cross-cutting
-  reasoning matters.
+- Default model is **Sonnet** (via `CLAUDE_CODE_SUBAGENT_MODEL` env).
+  This is the right floor for any inherit-mode agent that doesn't pin —
+  TDD-execution agents need Sonnet at minimum, and Sonnet is the safe
+  default for any future agent added without explicit `model:` frontmatter.
+- Pin **Haiku** explicitly (in the agent's frontmatter `model:` field) for
+  read-and-summarize work — `discovery-explorer` is the canonical example.
+  Inheriting "down" to Haiku via env var was tried and silently no-op'd
+  because Sonnet-default + no Haiku consumer = dead code; explicit pin is
+  the only reliable way to land on Haiku.
+- Pin **Opus** for `reviewer` / threat-modeling / cross-cutting reasoning.
 - Subagents inherit the parent context only when `CLAUDE_CODE_FORK_SUBAGENT=1`.
   Default is off; opt in only when subagents share heavy parent state.
+- **Verification.** After any change to subagent model defaults or pins,
+  run one `/feature` cycle and grep `by_model` in
+  `.claude/logs/token-usage.jsonl` for the expected model strings. The
+  Stop-hook logger appends a one-line warning if a `/feature` session
+  dispatches agents but `claude-haiku-4-5` is absent — see
+  `.claude/hooks/token-logger.sh`.
 
 ## Historical analysis
 
