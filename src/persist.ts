@@ -196,6 +196,8 @@ export class Persistence {
       newListings?: number;
       updatedListings?: number;
       errors?: SweepResult['errors'];
+      pagesDetail?: SweepResult['pagesDetail'];
+      detailsDetail?: SweepResult['detailsDetail'];
     },
   ): Promise<void> {
     const data: Prisma.SweepRunUpdateInput = {};
@@ -208,6 +210,14 @@ export class Persistence {
         snapshot.errors.length > 0
           ? (snapshot.errors as unknown as Prisma.InputJsonValue)
           : Prisma.DbNull;
+    }
+    // Flush per-page and per-detail rows so SweepDetail's HTTP/details tabs
+    // populate while a sweep is running, not just at finishSweep.
+    if (snapshot.pagesDetail && snapshot.pagesDetail.length > 0) {
+      data.pagesDetail = snapshot.pagesDetail as unknown as Prisma.InputJsonValue;
+    }
+    if (snapshot.detailsDetail && snapshot.detailsDetail.length > 0) {
+      data.detailsDetail = snapshot.detailsDetail as unknown as Prisma.InputJsonValue;
     }
     await this.prisma.sweepRun.update({ where: { id }, data });
   }

@@ -3,7 +3,7 @@
 
 import { Hono } from 'hono';
 import { getPrisma } from '../../db.js';
-import { getActiveSweepId, getCurrentlyFetching } from '../../sweep.js';
+import { getActiveSweepId, getCurrentlyFetching, getQueueDepth } from '../../sweep.js';
 import { toUiStatus } from '../sweep-status.js';
 
 export const sweepDetailRouter = new Hono();
@@ -56,13 +56,12 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
       phase: toUiStatus(run.status),
       pagesDone: pagesDetail.length,
       pagesTotal: pagesDetail.length,
-      // Frontend SweepDetail.tsx renders Queued/Updated/New KStats from these
-      // four fields during live runs. detailsDone tracks completed detail
-      // fetches; detailsQueued is left at 0 because the crawler doesn't
-      // currently expose its in-memory queue depth — surface it later when
-      // we add a per-tick queueSize counter.
       detailsDone: run.detailsFetched,
-      detailsQueued: 0,
+      // detailsQueued reflects the in-memory queue depth only for the
+      // currently-active sweep (process restart wipes it); finished or
+      // post-restart rows fall back to 0.
+      detailsQueued:
+        run.status === 'in_progress' && getActiveSweepId() === run.id ? getQueueDepth() : 0,
       newCount: run.newListings,
       updatedCount: run.updatedListings,
       queued: 0, // legacy field kept for backward-compat with existing tests
