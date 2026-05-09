@@ -5,7 +5,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
-import { listSettings } from './settings.js';
 
 export interface DiffResult {
   new: ListingStub[];
@@ -176,10 +175,12 @@ export class Persistence {
   }
 
   async snapshotConfig(): Promise<Record<string, unknown>> {
-    const settings = await listSettings();
+    // Use this instance's prisma client instead of a separate getPrisma() singleton
+    // to avoid split-brain reads when Persistence is constructed with a different client
+    const allSettings = await this.prisma.setting.findMany();
     const snapshot: Record<string, unknown> = {};
-    for (const setting of settings) {
-      snapshot[setting.key] = setting.value;
+    for (const setting of allSettings) {
+      snapshot[setting.key] = setting.valueJson;
     }
     return snapshot;
   }

@@ -8,18 +8,16 @@ import { Writable } from 'node:stream';
 import pino from 'pino';
 
 import { sweepEvents } from './web/events.js';
-import { getActiveSweepId } from './sweep.js';
+import * as sweepModule from './sweep.js';
 
 // Custom write stream that tees to both stdout and the sweepEvents EventEmitter.
 const teeStream = new Writable({
   write(chunk, _, cb) {
-    // Always write to stdout verbatim (preserve JSON formatting)
-    process.stdout.write(chunk);
-
     // Try to parse as JSON and emit to EventEmitter if a sweep is active
+    // Do this before stdout write to avoid blocking on backpressure
     try {
       const line = JSON.parse(chunk.toString());
-      const sweepId = getActiveSweepId();
+      const sweepId = sweepModule.getActiveSweepId();
       if (sweepId !== null) {
         // Map pino level (10-60) to string: 10→debug, 20→debug, 30→info, 40→warn, 50→error, 60→fatal
         const levelNum = line.level ?? 30;
@@ -33,11 +31,15 @@ const teeStream = new Writable({
         };
         const lvl = levelMap[levelNum] || 'info';
 
+        const date = new Date(line.time ?? Date.now());
+        const hh = String(date.getHours()).padStart(2, '0');
+        const mm = String(date.getMinutes()).padStart(2, '0');
+        const ss = String(date.getSeconds()).padStart(2, '0');
+        const time = `${hh}:${mm}:${ss}`;
+
         sweepEvents.emitEvent({
           sweepId: String(sweepId),
-          t: new Date(line.time ?? Date.now()).toLocaleTimeString('en-GB', {
-            hour12: false,
-          }),
+          t: time,
           lvl,
           msg: line.event ?? line.msg ?? '',
           meta: line.meta ? JSON.stringify(line.meta) : JSON.stringify(line),
@@ -47,7 +49,16 @@ const teeStream = new Writable({
       // Non-JSON line or parse error — just skip EventEmitter emission
     }
 
-    cb();
+    // Write to stdout and honor backpressure via the standard return-value
+    // contract: synchronous ack on `true`, drain-event ack on `false`. Avoids
+    // delegating cb to stdout.write directly so a test mock that returns true
+    // without invoking cb cannot stall the Writable's queue.
+    const ok = process.stdout.write(chunk);
+    if (ok) {
+      cb();
+    } else {
+      process.stdout.once('drain', cb);
+    }
   },
 });
 

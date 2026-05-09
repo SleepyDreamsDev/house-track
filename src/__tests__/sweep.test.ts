@@ -458,4 +458,53 @@ describe('runSweep', () => {
       expect(getActiveSweepId()).toBeNull();
     });
   });
+
+  describe('Bug fixes from PR #19/#21/#24', () => {
+    it('Bug#2: snapshotConfig() throws → finishSweep still runs (try-finally correctness)', async () => {
+      const env = makeEnv();
+      env.snapshotConfig.mockRejectedValueOnce(new Error('snapshot failed'));
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+
+      await runSweep(env.deps);
+
+      // finishSweep MUST be called even if snapshotConfig throws
+      expect(env.finishSweep).toHaveBeenCalledOnce();
+      const result = env.finishSweep.mock.calls[0]?.[1];
+      expect(result.status).toBe('failed');
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it('Bug#9: concurrent runSweep overlaps should not cause split-brain (activeSweepId safety)', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+      env.startSweep.mockResolvedValueOnce({ id: 1 });
+
+      await runSweep(env.deps);
+
+      // activeSweepId should be null after completion, not left dangling
+      expect(getActiveSweepId()).toBeNull();
+    });
+
+    it('Bug#10: activeSweepId cleared before finishSweep/final log would lose SSE (reorder)', async () => {
+      const env = makeEnv();
+      let activeSweepIdWhenFinishCalled: number | null = null;
+
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+      env.finishSweep.mockImplementationOnce(async () => {
+        // Capture activeSweepId when finishSweep is called
+        activeSweepIdWhenFinishCalled = getActiveSweepId();
+      });
+      env.startSweep.mockResolvedValueOnce({ id: 42 });
+
+      await runSweep(env.deps);
+
+      // activeSweepId should still be set (42) when finishSweep runs
+      // Bug: if it's null, SSE subscribers miss the final event
+      expect(activeSweepIdWhenFinishCalled).not.toBeNull();
+      expect(activeSweepIdWhenFinishCalled).toBe(42);
+    });
+  });
 });

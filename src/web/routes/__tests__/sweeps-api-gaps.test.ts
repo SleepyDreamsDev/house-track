@@ -63,7 +63,7 @@ describe('Sweep API gaps', () => {
     it('returns 200 when sweep exists', async () => {
       const sweep = await prisma.sweepRun.create({
         data: {
-          status: 'ok',
+          status: 'in_progress',
         },
       });
 
@@ -74,7 +74,7 @@ describe('Sweep API gaps', () => {
     it('sets status to cancelled on existing sweep', async () => {
       const sweep = await prisma.sweepRun.create({
         data: {
-          status: 'ok',
+          status: 'in_progress',
         },
       });
 
@@ -147,10 +147,10 @@ describe('Sweep API gaps', () => {
       expect(Math.abs(durationMs - 5000)).toBeLessThan(100); // Allow 100ms tolerance
     });
 
-    it('includes durationMs as null for running sweeps', async () => {
+    it('includes elapsed durationMs for running sweeps', async () => {
       await prisma.sweepRun.create({
         data: {
-          status: 'ok',
+          status: 'in_progress',
           startedAt: new Date(),
           finishedAt: null,
         },
@@ -162,7 +162,9 @@ describe('Sweep API gaps', () => {
       const sweeps = (await res.json()) as Record<string, unknown>[];
       expect(sweeps.length).toBeGreaterThan(0);
       expect(sweeps[0]).toHaveProperty('durationMs');
-      expect((sweeps[0] as Record<string, unknown>).durationMs).toBeNull();
+      const durationMs = (sweeps[0] as Record<string, unknown>).durationMs;
+      expect(typeof durationMs).toBe('number');
+      expect(durationMs as number).toBeGreaterThanOrEqual(0);
     });
   });
 

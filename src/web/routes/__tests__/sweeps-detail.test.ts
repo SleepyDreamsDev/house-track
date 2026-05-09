@@ -383,7 +383,7 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
       expect(typeof sweeps[0]?.durationMs).toBe('number');
     });
 
-    it('GET /api/sweeps includes null durationMs for running sweeps', async () => {
+    it('GET /api/sweeps includes elapsed durationMs for running sweeps', async () => {
       await prisma.sweepRun.create({
         data: {
           status: 'in_progress',
@@ -396,7 +396,8 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
 
       const running = sweeps.find((s) => s.finishedAt === null);
       expect(running).toBeDefined();
-      expect(running?.durationMs).toBeNull();
+      expect(typeof running?.durationMs).toBe('number');
+      expect(running?.durationMs as number).toBeGreaterThanOrEqual(0);
     });
   });
 });

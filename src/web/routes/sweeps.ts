@@ -101,7 +101,10 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       newListings: s.newListings,
       updatedListings: s.updatedListings,
       errorCount: Array.isArray(s.errors) ? (s.errors as unknown[]).length : 0,
-      durationMs: s.finishedAt ? s.finishedAt.getTime() - s.startedAt.getTime() : null,
+      // Always compute durationMs as elapsed time (now - startedAt for running, finishedAt - startedAt for finished)
+      durationMs: s.finishedAt
+        ? s.finishedAt.getTime() - s.startedAt.getTime()
+        : Date.now() - s.startedAt.getTime(),
     }));
 
     return c.json(result);
@@ -149,7 +152,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
     try {
       const deps = await buildDeps();
 
-      // First, create the sweep row with source/trigger
+      // startSweep creates with status:'in_progress' (correct state before work starts)
       const sweep = await deps.persist.startSweep({ source: '999.md', trigger: 'manual' });
 
       // Launch runSweep non-blocking with the pre-created sweep ID
@@ -183,14 +186,19 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
         return c.json({ error: 'Sweep not found' }, 404);
       }
 
+      // Only allow cancelling if sweep is still running
+      if (sweep.status !== 'in_progress') {
+        return c.json({ error: 'Can only cancel running sweeps' }, 409);
+      }
+
       // If there's an active AbortController for this sweep, signal abort
       // The sweep will finish with 'cancelled' status in its finally block
       const controllers = getSweepAbortControllers();
       const controller = controllers.get(id);
       if (controller) {
         controller.abort();
-      } else if (!sweep.finishedAt) {
-        // If sweep is not running and not finished, mark as cancelled
+      } else {
+        // If sweep is marked running but not active, mark as cancelled now
         await prisma.sweepRun.update({
           where: { id },
           data: { status: 'cancelled', finishedAt: new Date() },
