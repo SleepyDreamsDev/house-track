@@ -4,6 +4,7 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../../db.js';
 import { getActiveSweepId, getCurrentlyFetching } from '../../sweep.js';
+import { toUiStatus } from '../sweep-status.js';
 
 export const sweepDetailRouter = new Hono();
 
@@ -24,30 +25,35 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
   const pagesDetail = Array.isArray(run.pagesDetail) ? (run.pagesDetail as unknown[]) : [];
   const detailsDetail = Array.isArray(run.detailsDetail) ? (run.detailsDetail as unknown[]) : [];
 
+  // Live counters: while a sweep is running we surface the incrementally-flushed
+  // pagesFetched/detailsFetched/newListings/updatedListings as a "summary" too,
+  // so the SweepDetail page renders progress in-flight (not just at completion).
+  const liveSummary = {
+    pagesFetched: run.pagesFetched,
+    detailsFetched: run.detailsFetched,
+    newListings: run.newListings,
+    updatedListings: run.updatedListings,
+    errors: Array.isArray(run.errors) ? run.errors.length : 0,
+    durationMs: run.finishedAt
+      ? run.finishedAt.getTime() - run.startedAt.getTime()
+      : Date.now() - run.startedAt.getTime(),
+  };
+
   return c.json({
     id: run.id,
-    status: run.status,
+    status: toUiStatus(run.status),
     startedAt: run.startedAt.toISOString(),
     finishedAt: run.finishedAt?.toISOString(),
     source: run.source || '999.md',
     trigger: run.trigger || 'cron',
     config: run.configSnapshot ?? {},
-    summary: run.finishedAt
-      ? {
-          pagesFetched: run.pagesFetched,
-          detailsFetched: run.detailsFetched,
-          newListings: run.newListings,
-          updatedListings: run.updatedListings,
-          errors: Array.isArray(run.errors) ? run.errors.length : 0,
-          durationMs: run.finishedAt.getTime() - run.startedAt.getTime(),
-        }
-      : undefined,
+    summary: liveSummary,
     pages: pagesDetail,
     details: detailsDetail,
     errors: Array.isArray(run.errors) ? run.errors : [],
     logTail: run.eventLog ?? [],
     progress: {
-      phase: run.status,
+      phase: toUiStatus(run.status),
       pagesDone: pagesDetail.length,
       pagesTotal: pagesDetail.length,
       queued: 0,
