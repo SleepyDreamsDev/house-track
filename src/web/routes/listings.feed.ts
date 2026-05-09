@@ -7,6 +7,7 @@ export const listingsFeedRouter = new Hono();
 
 interface NewTodayListing {
   id: string;
+  url: string;
   title: string;
   priceEur: number | null;
   areaSqm: number | null;
@@ -20,6 +21,7 @@ interface NewTodayListing {
 
 interface PriceDropListing {
   id: string;
+  url: string;
   title: string;
   priceEur: number | null;
   priceWas: number | null;
@@ -45,6 +47,7 @@ listingsFeedRouter.get('/listings/new-today', async (c) => {
     take: 10,
     select: {
       id: true,
+      url: true,
       title: true,
       priceEur: true,
       areaSqm: true,
@@ -58,6 +61,7 @@ listingsFeedRouter.get('/listings/new-today', async (c) => {
 
   const result: NewTodayListing[] = listings.map((listing) => ({
     id: listing.id,
+    url: listing.url,
     title: listing.title,
     priceEur: listing.priceEur,
     areaSqm: listing.areaSqm,
@@ -83,6 +87,7 @@ listingsFeedRouter.get('/listings/price-drops', async (c) => {
     where: { active: true },
     select: {
       id: true,
+      url: true,
       title: true,
       priceEur: true,
       areaSqm: true,
@@ -117,6 +122,7 @@ listingsFeedRouter.get('/listings/price-drops', async (c) => {
     if (dropRatio <= 0.95) {
       result.push({
         id: listing.id,
+        url: listing.url,
         title: listing.title,
         priceEur: latest.priceEur,
         priceWas: earliest.priceEur,
