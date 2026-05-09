@@ -22,6 +22,19 @@ export function getActiveSweepId(): number | null {
   return activeSweepId;
 }
 
+// Module-level state tracking the listing URL we're currently fetching during
+// fetchAndPersistDetails. Surfaced via GET /api/sweeps/:id so the SweepDetail
+// page's live banner can show the in-flight URL.
+let currentlyFetching: { url: string; startedAt: number } | null = null;
+
+export function getCurrentlyFetching(): { url: string; startedAt: number } | null {
+  return currentlyFetching;
+}
+
+export function setCurrentlyFetching(url: string | null): void {
+  currentlyFetching = url ? { url, startedAt: Date.now() } : null;
+}
+
 // Module-level map of active sweeps to their AbortControllers
 // Keyed by sweepId; register on start, delete on finish
 const sweepAbortControllers = new Map<number, AbortController>();
@@ -105,6 +118,7 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
     deps.log?.info({ event: 'sweep.done', ...result });
     // Clear activeSweepId only after all final operations complete
     activeSweepId = null;
+    setCurrentlyFetching(null);
   }
 }
 
@@ -172,6 +186,7 @@ async function fetchAndPersistDetails(
     if (signal.aborted) {
       break;
     }
+    setCurrentlyFetching(s.url);
     let json: unknown;
     try {
       json = await deps.fetchAdvert(s.id, signal);
@@ -221,6 +236,7 @@ async function fetchAndPersistDetails(
     if (signal.aborted) {
       break;
     }
+    setCurrentlyFetching(s.url);
     let json: unknown;
     try {
       json = await deps.fetchAdvert(s.id, signal);
@@ -256,6 +272,7 @@ async function fetchAndPersistDetails(
     };
     result.detailsDetail.push(detailRecord);
   }
+  setCurrentlyFetching(null);
 }
 
 // Re-fetches up to `deps.backfillPerSweep` listings whose filterValuesEnrichedAt

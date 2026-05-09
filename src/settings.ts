@@ -22,6 +22,7 @@ const settingSchemas = {
     z.literal('warn'),
     z.literal('error'),
   ]),
+  'stats.successRateWindow': z.number().int().positive(),
 } as const;
 
 // Map of setting keys to their default values from config.ts
@@ -38,6 +39,7 @@ const defaultValues: Record<string, unknown> = {
   'filter.maxAreaSqm': FILTER.postFilter.maxAreaSqm,
   'filter.searchInputJson': FILTER.searchInput,
   'log.level': 'info',
+  'stats.successRateWindow': 100,
 };
 
 // Metadata for settings UI rendering
@@ -120,6 +122,13 @@ export const settingMeta: Record<
     kind: 'select',
     options: ['debug', 'info', 'warn', 'error'],
     label: 'Log Level',
+  },
+  'stats.successRateWindow': {
+    group: 'Stats',
+    kind: 'number',
+    unit: 'sweeps',
+    label: 'Success Rate Window',
+    hint: 'Last N finished sweeps used to compute Dashboard success rate',
   },
 };
 

@@ -308,6 +308,23 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
 
       expect(body).toHaveProperty('currentlyFetching');
     });
+
+    it('returns null when an in_progress sweep is NOT the in-memory active sweep', async () => {
+      // Stale row left over after a process restart: status is in_progress in
+      // the DB, but no module-level activeSweepId is set, so we cannot know
+      // what the crawler is fetching.
+      const sweep = await prisma.sweepRun.create({
+        data: {
+          status: 'in_progress',
+          startedAt: new Date(),
+        },
+      });
+
+      const res = await app.request(`/api/sweeps/${sweep.id}`);
+      const body = (await res.json()) as Record<string, unknown>;
+
+      expect(body.currentlyFetching).toBeNull();
+    });
   });
 
   describe('timestamp fields', () => {

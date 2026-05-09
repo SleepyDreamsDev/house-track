@@ -39,30 +39,7 @@ returns no labels.
 Discovered while auditing the redesign for finalization. Small, but the
 redesign is not honest until they ship.
 
-- [ ] **Dashboard KPI strip — replace hardcoded `successRate` + `avgPrice`.**
-      `web/src/pages/Dashboard.tsx:70-71` hardcodes `successRate: 0.95` and
-      `avgPrice: 174_500`. Either (a) ship `GET /api/stats/success-rate`
-      (`SweepRun.status='ok'` ratio over last N runs) and `GET
-      /api/stats/avg-price` (mean `priceEur` over active listings) and wire
-      them in, OR (b) remove the two placeholder KPIs from the strip.
-      Recommend (a) — both are one-liners on existing tables.
-      _Run via `/feature`._
-- [ ] **Wire (or remove) Listings header buttons.** `web/src/pages/Listings.tsx:58-59`
-      "Refresh" and "Export CSV" are UI-only with no handlers. Refresh →
-      `queryClient.invalidateQueries({ queryKey: ['listings'] })`. Export CSV
-      → either add `GET /api/listings.csv` streaming the same envelope, or
-      drop the button until a user asks. Recommend ship Refresh, drop Export.
-      _Run via `/feature`._
-- [ ] **Populate `SweepDetail.currentlyFetching`.** `web/src/pages/SweepDetail.tsx:54-62`
-      hardcodes `currentlyFetching: null`; the live banner never shows the
-      in-flight URL. Set in `src/sweep.ts` when each detail fetch starts /
-      clear on completion, expose via the SSE initial event payload from
-      `src/web/events.ts`, and surface in the `progress` shape.
-      _Run via `/feature`._
-- [ ] **Delete stale stub comments** at `src/web/routes/sweeps.detail.ts:1-7`.
-      The implementation is the real one; the "STATUS: stub" / "TODO Task 1"
-      header misleads future readers.
-      _Run via `/feature`._
+_All Priority 1.6 items shipped — see Done section._
 
 ## Priority 2 — Acceptance criteria validation
 
@@ -131,3 +108,12 @@ Parent plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). All phases 
 - [x] **Task 6 — contract + BDD tests** for every new route and SSE ([PR #25](https://github.com/SleepyDreamsDev/house-track/pull/25), `2eaeb77`). 22+ test cases across `sweeps-api-*`, `listings.feed`, `stats`, `sweeps.stream`.
 - [x] **Correctness fixes across sweep, log, persist, and routes** (`cd3af85`).
 - [x] **`CLAUDE_CODE_E2E.md` cleanup** ([PR #27](https://github.com/SleepyDreamsDev/house-track/pull/27), `ea85a29`). Brief deleted; relevant content folded into `docs/operator-ui.md`.
+
+### UI polish from finalization audit (Priority 1.6)
+
+Shipped 2026-05-09 via single bundled PR (4 small items).
+
+- [x] **Dashboard KPI strip — `successRate` + `avgPrice` from real endpoints.** `GET /api/stats/success-rate` returns `{rate, ok, total, window}` over last N finished sweeps (N from `stats.successRateWindow` setting, default 100). `GET /api/stats/avg-price` returns mean `priceEur` over active listings. Both wired into `web/src/pages/Dashboard.tsx`.
+- [x] **Listings header — Refresh wired, Export CSV removed.** `web/src/pages/Listings.tsx` Refresh now invalidates the `['listings']` query; Export CSV button removed.
+- [x] **`SweepDetail.currentlyFetching` populated.** `src/sweep.ts` exports `setCurrentlyFetching` / `getCurrentlyFetching`; the setter fires before each `fetchAdvert` in both new-stubs and seen-stubs loops, cleared at end of `fetchAndPersistDetails` + in `runSweep` finally. `src/web/routes/sweeps.detail.ts` returns the in-memory state only when `getActiveSweepId()` matches the requested sweep id (returns `null` for stale `in_progress` rows after a process restart).
+- [x] **Stale stub comments removed** from `src/web/routes/sweeps.detail.ts:1-7`.

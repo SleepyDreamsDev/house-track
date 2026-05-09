@@ -18,6 +18,8 @@ describe('Stats routes', () => {
     await prisma.listingSnapshot.deleteMany();
     await prisma.listingFilterValue.deleteMany();
     await prisma.listing.deleteMany();
+    await prisma.sweepRun.deleteMany();
+    await prisma.setting.deleteMany();
   });
 
   describe('GET /api/stats/by-district', () => {
@@ -327,6 +329,130 @@ describe('Stats routes', () => {
 
       // Only active listing should be counted
       expect(body[6]).toBe(1);
+    });
+  });
+
+  describe('GET /api/stats/success-rate', () => {
+    it('returns rate=0 with empty database', async () => {
+      const res = await app.request('/api/stats/success-rate');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        rate: number;
+        ok: number;
+        total: number;
+        window: number;
+      };
+      expect(body.rate).toBe(0);
+      expect(body.total).toBe(0);
+      expect(body.ok).toBe(0);
+      expect(body.window).toBe(100);
+    });
+
+    it('computes rate as ok-count over last N finished sweeps', async () => {
+      // 2 ok + 1 failed + 1 still in_progress (excluded — no finishedAt)
+      await prisma.sweepRun.createMany({
+        data: [
+          { status: 'ok', finishedAt: new Date() },
+          { status: 'ok', finishedAt: new Date() },
+          { status: 'failed', finishedAt: new Date() },
+          { status: 'in_progress' },
+        ],
+      });
+
+      const res = await app.request('/api/stats/success-rate');
+      const body = (await res.json()) as { rate: number; ok: number; total: number };
+      expect(body.total).toBe(3);
+      expect(body.ok).toBe(2);
+      expect(body.rate).toBeCloseTo(2 / 3, 5);
+    });
+
+    it('honors stats.successRateWindow setting', async () => {
+      await prisma.setting.create({
+        data: { key: 'stats.successRateWindow', valueJson: 2 },
+      });
+      // Create 4 finished sweeps; window=2 means only the 2 most recent matter
+      const now = Date.now();
+      await prisma.sweepRun.createMany({
+        data: [
+          { status: 'failed', finishedAt: new Date(), startedAt: new Date(now - 4000) },
+          { status: 'failed', finishedAt: new Date(), startedAt: new Date(now - 3000) },
+          { status: 'ok', finishedAt: new Date(), startedAt: new Date(now - 2000) },
+          { status: 'ok', finishedAt: new Date(), startedAt: new Date(now - 1000) },
+        ],
+      });
+
+      const res = await app.request('/api/stats/success-rate');
+      const body = (await res.json()) as { rate: number; total: number; window: number };
+      expect(body.window).toBe(2);
+      expect(body.total).toBe(2);
+      expect(body.rate).toBe(1);
+    });
+  });
+
+  describe('GET /api/stats/avg-price', () => {
+    it('returns avgPrice=0 with empty database', async () => {
+      const res = await app.request('/api/stats/avg-price');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { avgPrice: number; count: number };
+      expect(body.avgPrice).toBe(0);
+      expect(body.count).toBe(0);
+    });
+
+    it('averages priceEur across active listings only', async () => {
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'p-1',
+            url: 'https://999.md/p-1',
+            title: 'P1',
+            priceEur: 100_000,
+            areaSqm: 100,
+            active: true,
+            firstSeenAt: new Date(),
+            lastSeenAt: new Date(),
+            lastFetchedAt: new Date(),
+          },
+          {
+            id: 'p-2',
+            url: 'https://999.md/p-2',
+            title: 'P2',
+            priceEur: 200_000,
+            areaSqm: 100,
+            active: true,
+            firstSeenAt: new Date(),
+            lastSeenAt: new Date(),
+            lastFetchedAt: new Date(),
+          },
+          {
+            id: 'p-3',
+            url: 'https://999.md/p-3',
+            title: 'P3 (inactive — must be excluded)',
+            priceEur: 999_999,
+            areaSqm: 100,
+            active: false,
+            firstSeenAt: new Date(),
+            lastSeenAt: new Date(),
+            lastFetchedAt: new Date(),
+          },
+          {
+            id: 'p-4',
+            url: 'https://999.md/p-4',
+            title: 'P4 (null price — must be excluded)',
+            priceEur: null,
+            areaSqm: 100,
+            active: true,
+            firstSeenAt: new Date(),
+            lastSeenAt: new Date(),
+            lastFetchedAt: new Date(),
+          },
+        ],
+      });
+
+      const res = await app.request('/api/stats/avg-price');
+      const body = (await res.json()) as { avgPrice: number; count: number };
+      expect(body.avgPrice).toBe(150_000);
+      // P3 (inactive) and P4 (null priceEur) excluded by the WHERE clause; only P1 + P2 count
+      expect(body.count).toBe(2);
     });
   });
 });
