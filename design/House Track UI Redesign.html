@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>House Track — UI redesign preview</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: { fontFamily: {
+      sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+      mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+    }}}
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { background: #f3f4f6; font-family: 'Inter', system-ui, sans-serif; }
+  /* hide scrollbars on artboard contents to keep visuals clean */
+  .ab-screen::-webkit-scrollbar { display: none; }
+  .ab-screen { scrollbar-width: none; }
+  /* Slightly tighter range slider */
+  input[type="range"] { height: 4px; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="shell.jsx"></script>
+<script type="text/babel" src="pages.jsx"></script>
+<script type="text/babel" src="analytics.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+
+// Each page wrapped so the AppShell shows the right active nav item
+function ScreenFrame({ page, sweepId }) {
+  const [drillId, setDrillId] = useState(sweepId || null);
+  if (page === 'sweeps' && drillId) {
+    return (
+      <AppShell page="sweeps" setPage={()=>{}}>
+        <SweepDetailPage sweepId={drillId} onBack={() => setDrillId(null)}/>
+      </AppShell>
+    );
+  }
+  const Pages = {
+    dashboard: DashboardPage, listings: ListingsPage, sweeps: SweepsPage, settings: SettingsPage,
+  };
+  if (page && page.startsWith('analytics')) {
+    const initialTab = page === 'analytics-best-buys' ? 'best-buys'
+                     : page === 'analytics-price-drops' ? 'price-drops'
+                     : 'overview';
+    return (
+      <AppShell page="analytics" setPage={()=>{}}>
+        <AnalyticsPage initialTab={initialTab}/>
+      </AppShell>
+    );
+  }
+  const Page = Pages[page];
+  return (
+    <AppShell page={page} setPage={()=>{}}>
+      <Page onOpen={page === 'sweeps' ? setDrillId : undefined}/>
+    </AppShell>
+  );
+}
+
+function App() {
+  // The canvas viewport is 1440 wide per artboard; AppShell + content fits comfortably
+  const W = 1280, H = 880;
+  return (
+    <DesignCanvas projectName="House Track — UI redesign preview"
+                  description="Four redesigned pages. Compare side-by-side. Click an artboard's expand button to focus it.">
+      <DCSection id="overview" title="Overview" subtitle="Original POC vs. proposed redesign — same data, same palette, reorganized around the operator's actual job.">
+        <DCArtboard id="dashboard" label="① Dashboard — leads-first" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="dashboard"/></div>
+        </DCArtboard>
+        <DCArtboard id="listings" label="② Houses — card list + filters" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="listings"/></div>
+        </DCArtboard>
+        <DCArtboard id="sweeps" label="③ Sweeps — breaker state + timeline" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="sweeps"/></div>
+        </DCArtboard>
+        <DCArtboard id="sweep-live" label="③a Sweep detail — LIVE running sweep" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="sweeps" sweepId="s-481"/></div>
+        </DCArtboard>
+        <DCArtboard id="sweep-done" label="③b Sweep detail — completed sweep" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="sweeps" sweepId="s-480"/></div>
+        </DCArtboard>
+        <DCArtboard id="sweep-fail" label="③c Sweep detail — failed sweep" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="sweeps" sweepId="s-477"/></div>
+        </DCArtboard>
+        <DCArtboard id="settings" label="④ Settings — typed controls, grouped" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="settings"/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="analytics" title="Analytics" subtitle="New top-level page. Trends-led overview, with Best Buys and Price Drops as drill-down tabs holding the full ranked lists.">
+        <DCArtboard id="a-overview" label="Ⓐ Overview tab — KPIs, filters, trends, supply, scatter, heatmap, Top-20 previews" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="analytics-overview"/></div>
+        </DCArtboard>
+        <DCArtboard id="a-best-buys" label="Ⓑ Best buys tab — full 50-row ranked list (drilled in from Top 20 preview)" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="analytics-best-buys"/></div>
+        </DCArtboard>
+        <DCArtboard id="a-price-drops" label="Ⓒ Price drops tab — full 50-row ranked list" width={W} height={H}>
+          <div className="ab-screen w-full h-full overflow-auto"><ScreenFrame page="analytics-price-drops"/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="notes" title="Design notes" subtitle="What changed from the current POC and why.">
+        <DCArtboard id="rationale" label="Rationale" width={760} height={H}>
+          <div className="w-full h-full overflow-auto bg-white p-10 text-[13.5px] leading-relaxed text-neutral-700">
+            <h2 className="text-xl font-semibold text-neutral-900 mb-1">What changed, and why</h2>
+            <p className="text-neutral-500 mb-6">Same monochrome + teal palette from <code className="text-[12px]">DESIGN.md</code>. Same data shape. Tighter, more purposeful layouts.</p>
+
+            <h3 className="font-semibold text-neutral-900 mt-5 mb-1.5">Dashboard</h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><b>Leads first, plumbing second.</b> "New today" and "Price drops" sit in the primary column — those are the reason the crawler exists.</li>
+              <li>KPI strip up top (active, new today, avg price, success rate) replaces the two thin status cards.</li>
+              <li>Right column collapses crawler health, district breakdown, and a 7-day bar into one scannable rail.</li>
+              <li>The big embedded Grafana iframe moves behind a button — most operators don't need it open by default.</li>
+            </ul>
+
+            <h3 className="font-semibold text-neutral-900 mt-5 mb-1.5">Houses</h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li>From a flat 5-column table to <b>scannable cards</b> with photo placeholder, full specs grid, price + €/m², and freshness badges.</li>
+              <li>Persistent <b>filter rail</b>: search, max-price slider, district list, flag toggles. Nothing hidden in modals.</li>
+              <li>Sort segmented control: Newest / Price / €/m² — the three things you'd actually sort by.</li>
+            </ul>
+
+            <h3 className="font-semibold text-neutral-900 mt-5 mb-1.5">Sweeps</h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li>Circuit breaker state is now a <b>full-width banner with the action attached</b> — not a button hiding in the corner.</li>
+              <li>12-bar mini-timeline shows duration + status at a glance before you read the table.</li>
+              <li>Run rows expand with structured metadata + JSON error log instead of a collapsed details element.</li>
+            </ul>
+
+            <h3 className="font-semibold text-neutral-900 mt-5 mb-1.5">Settings</h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li>Settings are <b>grouped</b> (Politeness, Sweep, Circuit, Filter, Logging) with an anchor nav.</li>
+              <li>Each setting gets a typed control: numeric spinners with units, a select for log level, monospace input for cron.</li>
+              <li>Overridden values are explicitly badged so you can see at a glance what's not on defaults.</li>
+              <li>Sources get a dedicated card with toggles; Global Filter shows a structured key/value summary instead of a placeholder.</li>
+            </ul>
+
+            <h3 className="font-semibold text-neutral-900 mt-5 mb-1.5">Visual / type</h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li>Inter as primary type (system fallback). Tabular-nums on every numeric column.</li>
+              <li>Subtle ring-1 borders + tiny shadows replace flat dividers — gives the UI hierarchy without weight.</li>
+              <li>Status communicated by a single 8px dot + colored badge, never by border-glow or full-card tinting.</li>
+            </ul>
+
+            <h3 className="font-semibold text-neutral-900 mt-5 mb-1.5">Not changed</h3>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li>Sidebar IA — same four pages.</li>
+              <li>Color palette — neutral grays + teal-600 accent, exactly as in <code>DESIGN.md</code>.</li>
+              <li>Density discipline — small text, mono numerals, geometric spacing scale.</li>
+            </ul>
+
+            <h3 className="font-semibold text-neutral-900 mt-5 mb-1.5">Next steps if you like the direction</h3>
+            <ol className="list-decimal pl-5 space-y-1.5">
+              <li>Pick favorite per-page direction (we can fork variants for Listings into card vs. compact-table).</li>
+              <li>I'll port these into your real <code>web/src/pages/*.tsx</code> using your existing UI primitives — minimal new dependencies.</li>
+              <li>Add the small bits the API doesn't yet expose: price-history snapshot endpoint, district aggregate, "new today" filter shortcut.</li>
+            </ol>
+          </div>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="14" fill="#0f766e"/><path d="M22 52L50 28L78 52V74a2 2 0 01-2 2H62V62H38V76H24a2 2 0 01-2-2z" fill="#fff"/></svg>
+</template>
+</body>
+</html>

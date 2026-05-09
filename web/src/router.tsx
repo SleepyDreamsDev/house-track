@@ -7,6 +7,7 @@ import { Sweeps } from '@/pages/Sweeps.js';
 import { SweepDetail } from '@/pages/SweepDetail.js';
 import { Settings } from '@/pages/Settings.js';
 import { Filter } from '@/pages/Filter.js';
+import { Analytics } from '@/pages/Analytics.js';
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: 'sweeps', element: <Sweeps /> },
       { path: 'sweeps/:id', element: <SweepDetail /> },
       { path: 'filter', element: <Filter /> },
+      { path: 'analytics', element: <Analytics /> },
       { path: 'settings', element: <Settings /> },
     ],
   },
