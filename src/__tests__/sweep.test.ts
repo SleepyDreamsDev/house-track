@@ -8,6 +8,7 @@ import {
   runSweep,
   getActiveSweepId,
   getCurrentlyFetching,
+  getQueueDepth,
   setCurrentlyFetching,
   type SweepDeps,
 } from '../sweep.js';
@@ -582,6 +583,68 @@ describe('runSweep', () => {
       // and getCurrentlyFetching should have been clear once the sweep finished.
       expect(fetchedUrls).toEqual([stubA.url, stubB.url]);
       expect(getCurrentlyFetching()).toBeNull();
+    });
+  });
+
+  describe('getQueueDepth (live detail-fetch queue counter)', () => {
+    it('exports getQueueDepth() returning a number', () => {
+      expect(typeof getQueueDepth).toBe('function');
+      expect(typeof getQueueDepth()).toBe('number');
+    });
+
+    it('queue depth increments when details are enqueued and decrements as fetches complete', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValue(envelope({}));
+      const stubA = stub('a');
+      const stubB = stub('b');
+      const stubC = stub('c');
+      env.parseIndex.mockReturnValueOnce([stubA, stubB, stubC]).mockReturnValue([]);
+      env.diffAgainstDb.mockResolvedValueOnce({ new: [stubA, stubB, stubC], seen: [] });
+      env.parseDetail.mockImplementation((id: string) => detail(id));
+
+      const depthSamples: number[] = [];
+      env.fetchAdvert.mockImplementation(async () => {
+        depthSamples.push(getQueueDepth());
+        return envelope({});
+      });
+
+      await runSweep(env.deps);
+
+      // 3 stubs queued → depth starts at 3 inside fetchAdvert (before decrement),
+      // then 2, then 1 as each fetch completes.
+      expect(depthSamples).toEqual([3, 2, 1]);
+      // After sweep finishes, queue is drained.
+      expect(getQueueDepth()).toBe(0);
+    });
+
+    it('queue depth resets to 0 even when a fetch throws', async () => {
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValue(envelope({}));
+      const stubA = stub('a');
+      const stubB = stub('b');
+      env.parseIndex.mockReturnValueOnce([stubA, stubB]).mockReturnValue([]);
+      env.diffAgainstDb.mockResolvedValueOnce({ new: [stubA, stubB], seen: [] });
+      env.parseDetail.mockImplementation((id: string) => detail(id));
+      env.fetchAdvert
+        .mockRejectedValueOnce(new Error('socket hang up'))
+        .mockResolvedValueOnce(envelope({}));
+
+      await runSweep(env.deps);
+
+      // Even though one fetch threw, the queue counter is fully drained.
+      expect(getQueueDepth()).toBe(0);
+    });
+
+    it('queue depth is 0 before any sweep starts and after a sweep finishes', async () => {
+      expect(getQueueDepth()).toBe(0);
+
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+      env.parseIndex.mockReturnValueOnce([]);
+
+      await runSweep(env.deps);
+
+      expect(getQueueDepth()).toBe(0);
     });
   });
 });
