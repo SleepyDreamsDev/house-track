@@ -108,10 +108,17 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
   }
   app.get('/api/sweeps', async (c) => {
     const limit = parseInt(c.req.query('limit') || '20');
-    const sweeps = await prisma.sweepRun.findMany({
-      orderBy: { startedAt: 'desc' },
-      take: limit,
-    });
+    const offsetRaw = c.req.query('offset');
+    const offset = offsetRaw ? Math.max(0, parseInt(offsetRaw)) : 0;
+
+    const [sweeps, total] = await Promise.all([
+      prisma.sweepRun.findMany({
+        orderBy: { startedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.sweepRun.count(),
+    ]);
 
     const result = sweeps.map((s) => ({
       id: s.id,
@@ -130,7 +137,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
         : Date.now() - s.startedAt.getTime(),
     }));
 
-    return c.json(result);
+    return c.json({ sweeps: result, total, limit, offset });
   });
 
   app.get('/api/sweeps/latest', async (c) => {

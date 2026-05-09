@@ -40,10 +40,13 @@ describe('Smoke route + trigger surfacing', () => {
     });
 
     const res = await app.request('/api/sweeps?limit=10');
-    const body = (await res.json()) as Array<Record<string, unknown>>;
+    const body = (await res.json()) as {
+      sweeps: Array<Record<string, unknown>>;
+      total: number;
+    };
 
-    expect(body).toHaveLength(1);
-    expect(body[0]?.trigger).toBe('smoke');
+    expect(body.sweeps).toHaveLength(1);
+    expect(body.sweeps[0]?.trigger).toBe('smoke');
   });
 
   it('Scenario: GET /api/sweeps/:id/smoke-assertions returns assertions for a finished smoke sweep', async () => {

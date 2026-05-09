@@ -5,6 +5,8 @@ import { searchListings, getListing } from '../../mcp/queries.js';
 export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   app.get('/api/listings', async (c) => {
     const limit = parseInt(c.req.query('limit') || '50');
+    const offsetRaw = c.req.query('offset');
+    const offset = offsetRaw ? Math.max(0, parseInt(offsetRaw)) : undefined;
     const minPrice = c.req.query('minPrice') ? parseInt(c.req.query('minPrice')!) : undefined;
     const maxPrice = c.req.query('maxPrice') ? parseInt(c.req.query('maxPrice')!) : undefined;
     const minRooms = c.req.query('minRooms') ? parseInt(c.req.query('minRooms')!) : undefined;
@@ -23,6 +25,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
 
     const results = await searchListings(prisma, {
       limit,
+      offset,
       minPrice,
       maxPrice,
       minRooms,

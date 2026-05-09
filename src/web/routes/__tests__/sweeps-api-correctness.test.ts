@@ -159,7 +159,11 @@ describe('Sweeps API Correctness Fixes', () => {
       });
 
       const res = await app.request('/api/sweeps');
-      const sweeps = (await res.json()) as Array<Record<string, unknown>>;
+      const body = (await res.json()) as {
+        sweeps: Array<Record<string, unknown>>;
+        total: number;
+      };
+      const sweeps = body.sweeps;
       const running = sweeps.find((s) => s.id === sweep.id);
 
       expect(running).toBeDefined();
@@ -176,7 +180,11 @@ describe('Sweeps API Correctness Fixes', () => {
       });
 
       const res = await app.request('/api/sweeps');
-      const sweeps = (await res.json()) as Array<Record<string, unknown>>;
+      const body = (await res.json()) as {
+        sweeps: Array<Record<string, unknown>>;
+        total: number;
+      };
+      const sweeps = body.sweeps;
       const running = sweeps.find((s) => s.id === sweep.id);
 
       const durationMs = running?.durationMs as number;
@@ -225,6 +233,62 @@ describe('Sweeps API Correctness Fixes', () => {
 
       const summary = body.summary as Record<string, unknown> | undefined;
       expect(summary).toBeDefined();
+    });
+  });
+
+  describe('GET /api/sweeps pagination', () => {
+    it('returns {sweeps, total, limit, offset} envelope', async () => {
+      for (let i = 0; i < 5; i++) {
+        await prisma.sweepRun.create({
+          data: {
+            status: 'ok',
+            startedAt: new Date(Date.now() - i * 1000),
+            finishedAt: new Date(),
+          },
+        });
+      }
+      const res = await app.request('/api/sweeps?limit=2&offset=0');
+      const body = (await res.json()) as {
+        sweeps: unknown[];
+        total: number;
+        limit: number;
+        offset: number;
+      };
+      expect(body.sweeps).toHaveLength(2);
+      expect(body.total).toBe(5);
+      expect(body.limit).toBe(2);
+      expect(body.offset).toBe(0);
+    });
+
+    it('skips earlier rows with offset', async () => {
+      for (let i = 0; i < 5; i++) {
+        await prisma.sweepRun.create({
+          data: {
+            status: 'ok',
+            startedAt: new Date(Date.now() - i * 1000),
+            finishedAt: new Date(),
+          },
+        });
+      }
+      const page1 = (await (await app.request('/api/sweeps?limit=2&offset=0')).json()) as {
+        sweeps: Array<{ id: number }>;
+      };
+      const page2 = (await (await app.request('/api/sweeps?limit=2&offset=2')).json()) as {
+        sweeps: Array<{ id: number }>;
+      };
+      const ids1 = page1.sweeps.map((s) => s.id);
+      const ids2 = page2.sweeps.map((s) => s.id);
+      // No overlap between consecutive pages
+      expect(ids1.some((id) => ids2.includes(id))).toBe(false);
+    });
+
+    it('clamps negative offset to 0', async () => {
+      await prisma.sweepRun.create({
+        data: { status: 'ok', startedAt: new Date(), finishedAt: new Date() },
+      });
+      const res = await app.request('/api/sweeps?offset=-5');
+      const body = (await res.json()) as { offset: number };
+      expect(body.offset).toBe(0);
     });
   });
 });

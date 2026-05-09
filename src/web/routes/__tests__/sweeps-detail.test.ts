@@ -405,7 +405,11 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
       const res = await app.request('/api/sweeps');
       expect(res.status).toBe(200);
 
-      const sweeps = (await res.json()) as Array<Record<string, unknown>>;
+      const body = (await res.json()) as {
+        sweeps: Array<Record<string, unknown>>;
+        total: number;
+      };
+      const sweeps = body.sweeps;
       expect(sweeps.length).toBeGreaterThan(0);
       expect(sweeps[0]).toHaveProperty('durationMs');
       expect(typeof sweeps[0]?.durationMs).toBe('number');
@@ -420,7 +424,11 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
       });
 
       const res = await app.request('/api/sweeps');
-      const sweeps = (await res.json()) as Array<Record<string, unknown>>;
+      const body = (await res.json()) as {
+        sweeps: Array<Record<string, unknown>>;
+        total: number;
+      };
+      const sweeps = body.sweeps;
 
       const running = sweeps.find((s) => s.finishedAt === null);
       expect(running).toBeDefined();

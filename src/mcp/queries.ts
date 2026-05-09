@@ -31,6 +31,7 @@ export interface SearchListingsInput {
     | undefined;
   sort?: 'priceAsc' | 'priceDesc' | 'pricePerSqmAsc' | 'price' | 'eurm2' | 'newest' | undefined;
   limit?: number | undefined;
+  offset?: number | undefined;
   q?: string | undefined;
   flags?: string | undefined;
   /** Inclusive lower bound on firstSeenAt — used to link a sweep row to the
@@ -176,10 +177,14 @@ export async function searchListings(
   > = [];
 
   if (input.flags === 'priceDrop') {
+    // priceDrop filters AFTER fetching; pagination via offset would skip
+    // rows that the post-filter would have dropped. Treat offset as best-
+    // effort: applied to the pre-filter query, not the post-filter result.
     const rowsWithSnapshots = await prisma.listing.findMany({
       where,
       orderBy: orderBy(input.sort),
       take: input.limit ?? DEFAULT_LIMIT,
+      skip: input.offset ?? 0,
       include: { snapshots: true },
     });
 
@@ -205,6 +210,7 @@ export async function searchListings(
       where,
       orderBy: orderBy(input.sort),
       take: input.limit ?? DEFAULT_LIMIT,
+      skip: input.offset ?? 0,
     });
     rows.push(...allRows);
   }

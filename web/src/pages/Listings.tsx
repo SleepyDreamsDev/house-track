@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
@@ -30,6 +30,7 @@ interface Listing {
 }
 
 const PRICE_MAX = 250000;
+const PAGE_SIZE = 50;
 
 const DISTRICTS = ['all', 'Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
 
@@ -39,16 +40,22 @@ export const Listings: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX);
   const [district, setDistrict] = useState('all');
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
+  const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
 
-  // Sweep-row links into this page set ?firstSeenAfter=<sweep.startedAt>
-  // (and an optional ?fromSweep=<id> for the breadcrumb chip). Read them
-  // from URL so the filter survives reload + the chip can clear them.
+  // Sweep-row links set ?firstSeenAfter=<sweep.startedAt>&fromSweep=<id>;
+  // read from URL so the filter survives reload + the chip can clear them.
   const firstSeenAfter = searchParams.get('firstSeenAfter') ?? undefined;
   const fromSweep = searchParams.get('fromSweep');
 
+  // Reset to page 0 whenever any filter changes — page N may not exist for the
+  // new query (smaller result set).
+  useEffect(() => {
+    setPage(0);
+  }, [q, maxPrice, district, sort, firstSeenAfter]);
+
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
-    queryKey: ['listings', { q, maxPrice, district, sort, firstSeenAfter }],
+    queryKey: ['listings', { q, maxPrice, district, sort, page, firstSeenAfter }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
@@ -56,7 +63,8 @@ export const Listings: React.FC = () => {
       if (district !== 'all') p.append('district', district);
       if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       p.append('sort', sort);
-      p.append('limit', '50');
+      p.append('limit', String(PAGE_SIZE));
+      p.append('offset', String(page * PAGE_SIZE));
       return apiCall(`/listings?${p}`);
     },
   });
@@ -68,10 +76,14 @@ export const Listings: React.FC = () => {
     setSearchParams(next);
   };
 
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const onLastPage = page >= pageCount - 1;
+
   return (
-    <div data-screen-label="Houses">
+    <div data-screen-label="Listings">
       <PageHeader
-        title="Houses"
+        title="Listings"
         subtitle={`${data?.total ?? '…'} listings · ${maxPrice < PRICE_MAX ? `€${maxPrice.toLocaleString()} max` : 'any price'}`}
         actions={
           <Button
@@ -163,7 +175,9 @@ export const Listings: React.FC = () => {
                 </button>
               ))}
             </div>
-            <span className="text-xs text-neutral-400">{data?.listings?.length ?? 0} results</span>
+            <span className="text-xs text-neutral-400">
+              {data?.listings?.length ?? 0} of {total} · page {page + 1} of {pageCount}
+            </span>
           </div>
 
           {isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
@@ -171,6 +185,30 @@ export const Listings: React.FC = () => {
           {data?.listings?.map((l) => (
             <ListingCard key={l.id} l={l} />
           ))}
+
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0 || isLoading}
+              >
+                ← Prev
+              </Button>
+              <span className="text-xs tabular-nums text-neutral-500">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={onLastPage || isLoading}
+              >
+                Next →
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

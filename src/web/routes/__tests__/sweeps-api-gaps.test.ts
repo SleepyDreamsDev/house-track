@@ -138,7 +138,11 @@ describe('Sweep API gaps', () => {
       const res = await app.request('/api/sweeps');
       expect(res.status).toBe(200);
 
-      const sweeps = (await res.json()) as Record<string, unknown>[];
+      const body = (await res.json()) as {
+        sweeps: Record<string, unknown>[];
+        total: number;
+      };
+      const sweeps = body.sweeps;
       expect(sweeps.length).toBeGreaterThan(0);
       expect(sweeps[0]).toHaveProperty('durationMs');
       const durationMs = (sweeps[0] as Record<string, unknown>).durationMs as number;
@@ -159,7 +163,11 @@ describe('Sweep API gaps', () => {
       const res = await app.request('/api/sweeps');
       expect(res.status).toBe(200);
 
-      const sweeps = (await res.json()) as Record<string, unknown>[];
+      const body = (await res.json()) as {
+        sweeps: Record<string, unknown>[];
+        total: number;
+      };
+      const sweeps = body.sweeps;
       expect(sweeps.length).toBeGreaterThan(0);
       expect(sweeps[0]).toHaveProperty('durationMs');
       const durationMs = (sweeps[0] as Record<string, unknown>).durationMs;
