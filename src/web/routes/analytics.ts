@@ -215,16 +215,50 @@ analyticsRouter.get('/analytics/overview', async (c) => {
     }));
 
   const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const recentDropsCount = await prisma.listingSnapshot.count({
-    where: { capturedAt: { gte: since30d } },
+  const listingsWithRecentSnapshots = await prisma.listing.findMany({
+    where: { active: true, snapshots: { some: { capturedAt: { gte: since30d } } } },
+    select: {
+      snapshots: {
+        where: { capturedAt: { gte: since30d } },
+        orderBy: { capturedAt: 'asc' },
+        select: { priceEur: true },
+      },
+    },
   });
+  let recentDropsCount = 0;
+  for (const l of listingsWithRecentSnapshots) {
+    if (l.snapshots.length < 2) continue;
+    const earliest = l.snapshots[0];
+    const latest = l.snapshots[l.snapshots.length - 1];
+    if (!earliest || !latest || earliest.priceEur == null || latest.priceEur == null) continue;
+    const dropPct = (1 - latest.priceEur / earliest.priceEur) * 100;
+    if (dropPct >= 3) recentDropsCount++;
+  }
+
+  const districtPrices = new Map<string, number[]>();
+  for (const l of validForMedian) {
+    if (!l.district) continue;
+    const arr = districtPrices.get(l.district) ?? [];
+    arr.push(l.priceEur / l.areaSqm);
+    districtPrices.set(l.district, arr);
+  }
+  const districtMedians = new Map<string, number>();
+  for (const [d, arr] of districtPrices.entries()) {
+    districtMedians.set(d, median(arr));
+  }
+  const bestDealsCount = validForMedian.filter((l) => {
+    if (!l.district) return false;
+    const m = districtMedians.get(l.district);
+    if (!m || m <= 0) return false;
+    return (1 - l.priceEur / l.areaSqm / m) * 100 >= 15;
+  }).length;
 
   const body: OverviewResponse = {
     kpis: {
       medianEurPerSqm,
       activeInventory: active.length,
       medianDomDays,
-      bestDealsCount: 0,
+      bestDealsCount,
       recentDropsCount,
     },
     trendByDistrict,

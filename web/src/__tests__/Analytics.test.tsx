@@ -175,6 +175,6 @@ describe('Analytics', () => {
 
     await user.click(screen.getByRole('tab', { name: /Price drops/i }));
     await screen.findByRole('tabpanel', { name: /Price drops/i });
-    expect(apiCall).toHaveBeenCalledWith('/analytics/price-drops');
+    expect(apiCall).toHaveBeenCalledWith('/analytics/price-drops?period=30d');
   });
 });

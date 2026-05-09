@@ -88,7 +88,7 @@ export const BestBuysTable: React.FC<{
           {fullCols && (
             <td className="py-1.5 text-right">
               {r.priceDrop ? (
-                <span className="tabular-nums text-amber-700">{Math.round(r.dropPct * -100)}%</span>
+                <span className="tabular-nums text-amber-700">−{Math.round(r.dropPct)}%</span>
               ) : (
                 <span className="text-neutral-300">—</span>
               )}

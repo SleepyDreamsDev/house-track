@@ -30,11 +30,14 @@ const SUBTITLES: Record<TabId, string> = {
   'price-drops': '50 listings whose price was reduced in the last 30 days',
 };
 
+type DropPeriod = '7d' | '30d' | '90d';
+
 export const Analytics: React.FC = () => {
   const [tab, setTab] = useState<TabId>('overview');
   const [region, setRegion] = useState('all');
   const [type, setType] = useState('all');
   const [rooms, setRooms] = useState('all');
+  const [dropPeriod, setDropPeriod] = useState<DropPeriod>('30d');
 
   const overviewQ = useQuery<OverviewResponse>({
     queryKey: ['analytics', 'overview'],
@@ -48,8 +51,8 @@ export const Analytics: React.FC = () => {
   });
 
   const priceDropsQ = useQuery<PriceDropRow[]>({
-    queryKey: ['analytics', 'price-drops'],
-    queryFn: () => apiCall<PriceDropRow[]>('/analytics/price-drops'),
+    queryKey: ['analytics', 'price-drops', dropPeriod],
+    queryFn: () => apiCall<PriceDropRow[]>(`/analytics/price-drops?period=${dropPeriod}`),
     enabled: tab === 'price-drops',
   });
 
@@ -109,6 +112,8 @@ export const Analytics: React.FC = () => {
           setType={setType}
           rooms={rooms}
           setRooms={setRooms}
+          period={dropPeriod}
+          setPeriod={setDropPeriod}
         />
       </TabPanel>
     </div>
@@ -351,9 +356,10 @@ const PriceDropsPanel: React.FC<{
   setType: (v: string) => void;
   rooms: string;
   setRooms: (v: string) => void;
-}> = ({ rows, region, setRegion, type, setType, rooms, setRooms }) => {
+  period: DropPeriod;
+  setPeriod: (v: DropPeriod) => void;
+}> = ({ rows, region, setRegion, type, setType, rooms, setRooms, period, setPeriod }) => {
   const [sort, setSort] = useState('% drop');
-  const [period, setPeriod] = useState('30d');
   const filtered = useMemo(() => {
     let r = rows;
     if (region !== 'all') r = r.filter((x) => x.district === region);
@@ -376,7 +382,7 @@ const PriceDropsPanel: React.FC<{
       <Card className="!p-0 mb-5">
         <div className="grid grid-cols-4 divide-x divide-neutral-200">
           <div className="p-4">
-            <KStat label="Drops in 30d" value={rows.length} tone="accent" />
+            <KStat label={`Drops in ${period}`} value={rows.length} tone="accent" />
           </div>
           <div className="p-4">
             <KStat label="Median drop" value={`${medianDrop}%`} hint="of original price" />
@@ -418,7 +424,11 @@ const PriceDropsPanel: React.FC<{
               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
                 Period
               </div>
-              <Segmented options={['7d', '30d', '90d']} value={period} setValue={setPeriod} />
+              <Segmented
+                options={['7d', '30d', '90d']}
+                value={period}
+                setValue={(v) => setPeriod(v as DropPeriod)}
+              />
             </div>
           </div>
         </Card>
