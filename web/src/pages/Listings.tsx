@@ -73,10 +73,25 @@ export const Listings: React.FC = () => {
 
   // Sweep-row links set ?firstSeenAfter (new only) or ?lastFetchedAfter
   // (touched by sweep) plus ?fromSweep=<id> for the breadcrumb chip.
+  // ?highlight=<listingId> tells us which specific listing was clicked on
+  // the sweep detail page so the matching card can be visually marked +
+  // scrolled into view.
   const firstSeenAfter = searchParams.get('firstSeenAfter') ?? undefined;
   const lastFetchedAfter = searchParams.get('lastFetchedAfter') ?? undefined;
   const fromSweep = searchParams.get('fromSweep');
+  const highlightId = searchParams.get('highlight');
   const sweepFilterActive = firstSeenAfter || lastFetchedAfter;
+
+  // Selected card — driven by clicks on the listings grid OR seeded from
+  // the URL ?highlight= when arriving from a sweep detail link. Local state
+  // so the URL stays clean as the user clicks around; the URL highlight
+  // wins only on the first relevant render.
+  const [selectedId, setSelectedId] = useState<string | null>(highlightId);
+  // Keep selection in sync with URL changes (e.g., user clicks a different
+  // sweep link that brings them back here with a new highlight).
+  useEffect(() => {
+    if (highlightId) setSelectedId(highlightId);
+  }, [highlightId]);
 
   // Reset to page 0 whenever any filter changes — page N may not exist for the
   // new query (smaller result set).
@@ -234,7 +249,13 @@ export const Listings: React.FC = () => {
           {isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
           {error && <p className="text-sm text-error">Error loading listings</p>}
           {data?.listings?.map((l) => (
-            <ListingCard key={l.id} l={l} />
+            <ListingCard
+              key={l.id}
+              l={l}
+              selected={selectedId === l.id}
+              autoScroll={highlightId === l.id}
+              onSelect={() => setSelectedId((cur) => (cur === l.id ? null : l.id))}
+            />
           ))}
 
           {total > PAGE_SIZE && (
@@ -266,15 +287,44 @@ export const Listings: React.FC = () => {
   );
 };
 
-const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
+interface ListingCardProps {
+  l: Listing;
+  selected: boolean;
+  /** True when this card was deep-linked from a sweep (?highlight=<id>) on
+   *  initial render — triggers scrollIntoView so the user lands on it. */
+  autoScroll: boolean;
+  onSelect: () => void;
+}
+
+const ListingCard: React.FC<ListingCardProps> = ({ l, selected, autoScroll, onSelect }) => {
   const drop = l.priceWas && l.priceEur ? Math.round((1 - l.priceEur / l.priceWas) * 100) : null;
   const eurm2 = l.areaSqm && l.priceEur ? Math.round(l.priceEur / l.areaSqm) : 0;
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (autoScroll && ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // intentionally fire only when autoScroll first becomes true (URL deep-link)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScroll]);
   return (
-    <a
-      href={l.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="grid grid-cols-[120px_1fr_auto] gap-4 rounded-sm bg-white p-3 border border-neutral-200 hover:border-neutral-400 transition-colors"
+    <div
+      ref={ref}
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      data-listing-id={l.id}
+      className={`grid grid-cols-[120px_1fr_auto] gap-4 rounded-sm bg-white p-3 border transition-colors cursor-pointer ${
+        selected
+          ? 'border-accent ring-2 ring-accent ring-offset-1'
+          : 'border-neutral-200 hover:border-neutral-400'
+      }`}
     >
       <PhotoPlaceholder id={l.id} className="h-[88px]" label={`#${String(l.id).slice(-4)}`} />
       <div className="min-w-0">
@@ -328,10 +378,16 @@ const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
           )}
           <div className="text-xs tabular-nums text-neutral-400">€{eurm2}/m²</div>
         </div>
-        <span className="rounded-sm border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700">
+        <a
+          href={l.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="rounded-sm border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+        >
           Open ↗
-        </span>
+        </a>
       </div>
-    </a>
+    </div>
   );
 };
