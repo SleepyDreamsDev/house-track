@@ -238,7 +238,7 @@ async function fetchAndPersistDetails(
 ): Promise<void> {
   if (!result.detailsDetail) result.detailsDetail = [];
 
-  detailQueueDepth += newStubs.length;
+  detailQueueDepth += newStubs.length + seenStubs.length;
 
   // Process new listings: fetch, parse, persist, and capture details
   for (const s of newStubs) {
@@ -305,12 +305,14 @@ async function fetchAndPersistDetails(
     try {
       envelope = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
+      detailQueueDepth = Math.max(0, detailQueueDepth - 1);
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url: s.url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
     }
+    detailQueueDepth = Math.max(0, detailQueueDepth - 1);
     const { json, bytes, attempts } = envelope;
 
     let parsed: ParsedDetail;
@@ -355,6 +357,7 @@ async function backfillUnenriched(
   const limit = deps.backfillPerSweep ?? 0;
   if (limit <= 0) return;
   const ids = await deps.persist.findUnenrichedListings(limit);
+  detailQueueDepth += ids.length;
   for (const id of ids) {
     if (signal.aborted) {
       break;
@@ -364,12 +367,14 @@ async function backfillUnenriched(
     try {
       envelope = await deps.fetchAdvert(id, signal);
     } catch (err) {
+      detailQueueDepth = Math.max(0, detailQueueDepth - 1);
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
     }
+    detailQueueDepth = Math.max(0, detailQueueDepth - 1);
     const { json, attempts } = envelope;
     result.detailsFetched += 1;
 
