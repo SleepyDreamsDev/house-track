@@ -54,14 +54,15 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
     logTail: run.eventLog ?? [],
     progress: {
       phase: toUiStatus(run.status),
-      pagesDone: pagesDetail.length,
-      // pagesTotal = the cap this sweep was started with (smoke=1, full~8).
-      // Falls back to pagesDone for legacy rows missing the snapshot key so
-      // the bar still renders (just doesn't show "out of N" on old runs).
+      // The progress bar tracks detail fetches (smoke=3, full≈250), since
+      // pages-fetched is a small constant (1 or up to 8) and most of a
+      // sweep's wall-time is the per-listing politeness gap. The total is
+      // captured into configSnapshot once known (after diffAgainstDb).
+      pagesDone: run.detailsFetched,
       pagesTotal:
         (run.configSnapshot && typeof run.configSnapshot === 'object'
-          ? (run.configSnapshot as Record<string, unknown>)['sweep.maxPagesPerSweep']
-          : null) ?? pagesDetail.length,
+          ? ((run.configSnapshot as Record<string, unknown>)['sweep.detailsTotal'] as number | null)
+          : null) ?? Math.max(run.detailsFetched, 1),
       detailsDone: run.detailsFetched,
       // detailsQueued reflects the in-memory queue depth only for the
       // currently-active sweep (process restart wipes it); finished or
