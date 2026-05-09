@@ -35,8 +35,11 @@ export interface SearchListingsInput {
   q?: string | undefined;
   flags?: string | undefined;
   /** Inclusive lower bound on firstSeenAt — used to link a sweep row to the
-   *  listings it added. ISO-8601 string. */
+   *  listings it added (new ones only). ISO-8601 string. */
   firstSeenAfter?: string | undefined;
+  /** Inclusive lower bound on lastFetchedAt — used to link a sweep's HTTP
+   *  log to all listings it fetched (new + updated). ISO-8601 string. */
+  lastFetchedAfter?: string | undefined;
 }
 
 export interface SearchListingsEnvelope {
@@ -156,6 +159,9 @@ export async function searchListings(
   if (input.district) where['district'] = input.district;
   if (input.q) where['title'] = { contains: input.q, mode: 'insensitive' };
   if (input.firstSeenAfter) where['firstSeenAt'] = { gte: new Date(input.firstSeenAfter) };
+  if (input.lastFetchedAfter) {
+    where['lastFetchedAt'] = { gte: new Date(input.lastFetchedAfter) };
+  }
 
   for (const f of input.filters ?? []) {
     if (!f.optionIds.length) continue;

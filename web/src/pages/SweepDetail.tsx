@@ -359,7 +359,10 @@ const HttpTab: React.FC<{ detail: SweepDetailDto }> = ({ detail }) => {
       n: 0,
     })),
   ];
-  const listingsHref = `/listings?firstSeenAfter=${encodeURIComponent(detail.startedAt)}&fromSweep=${detail.id}&sort=newest`;
+  // HTTP log shows ALL fetches (new + updated). Filter by lastFetchedAt
+  // (always updated on persistDetail) so seen-stub rows match too —
+  // firstSeenAt would only match the genuinely new listings.
+  const listingsHref = `/listings?lastFetchedAfter=${encodeURIComponent(detail.startedAt)}&fromSweep=${detail.id}&sort=newest`;
   return (
     <Card className="!p-0">
       <table className="w-full text-xs">
