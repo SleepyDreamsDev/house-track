@@ -6,10 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { bootstrapLutFromConfig, mergeLuts, parseTaxonomyResponse } from '../parse-taxonomy.js';
 
-const FIXTURE_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  'fixtures/filter-taxonomy-response.json',
-);
+const FIXTURE_PATH = join(dirname(fileURLToPath(import.meta.url)), '../data/filter-taxonomy.json');
 
 describe('bootstrapLutFromConfig', () => {
   it('Includes the offer-type anchor (filterId 16, featureId 1)', () => {

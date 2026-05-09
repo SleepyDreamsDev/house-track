@@ -8,6 +8,8 @@
 
 import type { PrismaClient } from '@prisma/client';
 
+import { getFeatureLabel, getFilterLabel, getOptionLabel } from '../taxonomy-labels.js';
+
 export interface FilterGroup {
   /** filterId, 0 until the taxonomy query is captured. */
   filterId: number;
@@ -16,6 +18,12 @@ export interface FilterGroup {
   /** A few listing ids that have any of these option values — Claude can call get_listing on one to read labels. */
   sampleListingIds: string[];
   listingCount: number;
+  /** Human-readable group label from the captured taxonomy (e.g., "Tip ofertă"). Null if the taxonomy doesn't cover this filter group. */
+  filterLabel?: string | null;
+  /** Human-readable feature label (e.g., "Stare"). Distinct from filterLabel only when a filter has multiple features. */
+  featureLabel?: string | null;
+  /** Per-optionId label map ({776: "Vând", 903: "De închiriat", ...}). Only entries with a known label are present. */
+  optionLabels?: Record<number, string>;
 }
 
 export interface SearchListingsInput {
@@ -131,7 +139,23 @@ export async function listFilters(prisma: PrismaClient): Promise<FilterGroup[]> 
     group.listingCount += 1;
   }
 
-  return Array.from(map.values()).sort((a, b) => b.listingCount - a.listingCount);
+  // Enrich with taxonomy labels so consumers (operator UI, MCP analysis)
+  // see "Vând" / "Tip ofertă" instead of bare optionIds. The taxonomy is
+  // a static distillation; rows with no label fall through (filterLabel,
+  // featureLabel = null), keeping the response stable when 999.md adds new
+  // filter groups before the next capture.
+  const groups = Array.from(map.values()).sort((a, b) => b.listingCount - a.listingCount);
+  for (const g of groups) {
+    g.filterLabel = getFilterLabel(g.filterId);
+    g.featureLabel = getFeatureLabel(g.filterId, g.featureId);
+    const labels: Record<number, string> = {};
+    for (const oid of g.optionIds) {
+      const label = getOptionLabel(g.filterId, g.featureId, oid);
+      if (label) labels[oid] = label;
+    }
+    if (Object.keys(labels).length > 0) g.optionLabels = labels;
+  }
+  return groups;
 }
 
 /**
