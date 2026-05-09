@@ -39,9 +39,9 @@ export const FILTER = {
     source: 'AD_SOURCE_DESKTOP' as const,
     filters: [
       // Sale listings only ("Vând").
-      { filterId: 41, features: [{ featureId: 1, optionIds: [776] }] },
+      { filterId: 16, features: [{ featureId: 1, optionIds: [776] }] },
       // Chișinău municipality (includes Durlești, Codru, Colonița, etc.).
-      { filterId: 40, features: [{ featureId: 7, optionIds: [12900] }] },
+      { filterId: 32, features: [{ featureId: 7, optionIds: [12900] }] },
     ],
   },
 
@@ -91,4 +91,18 @@ export const SWEEP = {
   // 0 disables backfill. Each backfill request shares the same 8s±2s gap so
   // the request shape is indistinguishable from a sweep with extra new listings.
   backfillPerSweep: 30,
+  // Variable sweep size: each tick targets a random draw from
+  // [mean - jitter, mean + jitter] listings; pagination stops once
+  // accumulated listings cross the draw. Set jitter to 0 to disable.
+  targetListingsPerSweep: 400,
+  targetListingsJitter: 130,
+  // Cron-fire jitter: the actual tick is deferred by setTimeout(random(0, N))
+  // after the cron expression fires. Defangs pattern-detection on fixed
+  // firing times. 0 = fire immediately.
+  cronWindowJitterMs: 60 * 60 * 1000, // 1h
+  // Expected sweeps/day. Decoupled from the cron expression because the
+  // cron is user-mutable but the missing-listings threshold needs a stable
+  // anchor. Phase B's forecast panel surfaces inconsistencies between
+  // these two values.
+  expectedPerDay: 2,
 } as const;

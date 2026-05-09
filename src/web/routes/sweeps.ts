@@ -17,12 +17,9 @@ import { applyPostFilter, parseIndex } from '../../parse-index.js';
 import { Persistence } from '../../persist.js';
 import { getSetting } from '../../settings.js';
 import type { SweepDeps } from '../../sweep.js';
+import { toUiStatus } from '../sweep-status.js';
 
 export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
-  const SWEEPS_PER_DAY = 24;
-  const MISSING_THRESHOLD_MS =
-    SWEEP.missingSweepsBeforeInactive * (24 / SWEEPS_PER_DAY) * 60 * 60 * 1000;
-
   async function buildDeps(): Promise<SweepDeps> {
     const persist = new Persistence(prisma);
     const circuit = new Circuit({
@@ -36,6 +33,19 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
     const detailDelayMs = await getSetting('politeness.detailDelayMs', POLITENESS.detailDelayMs);
     const maxPagesPerSweep = await getSetting('sweep.maxPagesPerSweep', FILTER.maxPagesPerSweep);
     const backfillPerSweep = await getSetting('sweep.backfillPerSweep', SWEEP.backfillPerSweep);
+    const targetMean = await getSetting(
+      'sweep.targetListingsPerSweep',
+      SWEEP.targetListingsPerSweep,
+    );
+    const targetJitter = await getSetting('sweep.targetListingsJitter', SWEEP.targetListingsJitter);
+    const expectedPerDay = await getSetting('sweep.expectedPerDay', SWEEP.expectedPerDay);
+
+    const targetListingsThisSweep =
+      targetJitter > 0
+        ? targetMean + Math.floor((Math.random() * 2 - 1) * targetJitter)
+        : targetMean;
+    const missingThresholdMs =
+      SWEEP.missingSweepsBeforeInactive * (24 / expectedPerDay) * 60 * 60 * 1000;
 
     const fetcher = new Fetcher({
       circuit,
@@ -79,8 +89,9 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       parseDetail,
       applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
       maxPagesPerSweep,
-      missingThresholdMs: MISSING_THRESHOLD_MS,
+      missingThresholdMs,
       backfillPerSweep,
+      targetListingsThisSweep,
       log,
     };
   }
@@ -95,7 +106,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       id: s.id,
       startedAt: s.startedAt.toISOString(),
       finishedAt: s.finishedAt?.toISOString() || null,
-      status: s.status,
+      status: toUiStatus(s.status),
       pagesFetched: s.pagesFetched,
       detailsFetched: s.detailsFetched,
       newListings: s.newListings,
@@ -123,7 +134,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       id: sweep.id,
       startedAt: sweep.startedAt.toISOString(),
       finishedAt: sweep.finishedAt?.toISOString() || null,
-      status: sweep.status,
+      status: toUiStatus(sweep.status),
       pagesFetched: sweep.pagesFetched,
       detailsFetched: sweep.detailsFetched,
       newListings: sweep.newListings,

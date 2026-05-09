@@ -56,6 +56,7 @@ export interface SweepDeps {
     | 'finishSweep'
     | 'findUnenrichedListings'
     | 'snapshotConfig'
+    | 'recordSweepProgress'
   >;
   circuit: Pick<Circuit, 'isOpen'>;
   parseIndex: (json: unknown) => ListingStub[];
@@ -66,6 +67,10 @@ export interface SweepDeps {
   missingThresholdMs: number;
   /** Cap on per-sweep backfill of listings with NULL filterValuesEnrichedAt. 0 disables. */
   backfillPerSweep?: number;
+  /** If accumulated listings cross this, stop paginating early. Computed
+   *  per-tick (in index.ts) so each sweep varies in size. Defaults to a
+   *  high value if absent — preserves prior behavior in tests. */
+  targetListingsThisSweep?: number;
   log?: Logger;
 }
 
@@ -86,16 +91,18 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
   try {
     // Capture config snapshot at sweep start (inside try so error triggers catch → finishSweep)
     result.configSnapshot = await deps.persist.snapshotConfig();
-    const allStubs = await collectIndexStubs(deps, result, controller.signal);
+    const allStubs = await collectIndexStubs(deps, result, controller.signal, sweepId);
     const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
     const { new: newStubs, seen: seenStubs } = await deps.persist.diffAgainstDb(stubs);
     result.newListings = newStubs.length;
+    await publishProgress(deps, sweepId, result);
 
-    await fetchAndPersistDetails(deps, newStubs, seenStubs, result, controller.signal);
-    await backfillUnenriched(deps, result, controller.signal);
+    await fetchAndPersistDetails(deps, newStubs, seenStubs, result, controller.signal, sweepId);
+    await backfillUnenriched(deps, result, controller.signal, sweepId);
 
     await deps.persist.markSeen(seenStubs);
     result.updatedListings = seenStubs.length;
+    await publishProgress(deps, sweepId, result);
     // Only age out when this sweep saw a complete index. A partial sweep means
     // some listings would be missing for a reason unrelated to delisting, so
     // aging them out would corrupt the active set.
@@ -122,10 +129,34 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
   }
 }
 
+// Best-effort flush of in-memory counters to the SweepRun row. The operator UI
+// polls /api/sweeps every few seconds while a sweep is running; without these
+// flushes the row stays at zeros until finishSweep, hiding all progress.
+// Wrapped in try/catch so a transient DB blip doesn't abort the sweep — the
+// next flush (or finishSweep) will reconcile.
+async function publishProgress(
+  deps: SweepDeps,
+  sweepId: number,
+  result: SweepResult,
+): Promise<void> {
+  try {
+    await deps.persist.recordSweepProgress(sweepId, {
+      pagesFetched: result.pagesFetched,
+      detailsFetched: result.detailsFetched,
+      newListings: result.newListings,
+      updatedListings: result.updatedListings,
+      errors: result.errors,
+    });
+  } catch (err) {
+    deps.log?.warn({ event: 'sweep.progress.publish_failed', err: String(err) });
+  }
+}
+
 async function collectIndexStubs(
   deps: SweepDeps,
   result: SweepResult,
   signal: AbortSignal,
+  sweepId: number,
 ): Promise<ListingStub[]> {
   const all: ListingStub[] = [];
   if (!result.pagesDetail) result.pagesDetail = [];
@@ -137,6 +168,7 @@ async function collectIndexStubs(
     const pageStart = Date.now();
     const json = await deps.fetchSearchPage(page, signal); // CircuitTrippingError bubbles
     result.pagesFetched += 1;
+    await publishProgress(deps, sweepId, result);
 
     let stubs: ListingStub[];
     const parseStart = Date.now();
@@ -168,6 +200,9 @@ async function collectIndexStubs(
 
     if (stubs.length === 0) break;
     all.push(...stubs);
+    if (deps.targetListingsThisSweep !== undefined && all.length >= deps.targetListingsThisSweep) {
+      break;
+    }
   }
   return all;
 }
@@ -178,6 +213,7 @@ async function fetchAndPersistDetails(
   seenStubs: ListingStub[],
   result: SweepResult,
   signal: AbortSignal,
+  sweepId: number,
 ): Promise<void> {
   if (!result.detailsDetail) result.detailsDetail = [];
 
@@ -194,6 +230,7 @@ async function fetchAndPersistDetails(
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url: s.url, status: null, msg: String(err) });
       result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
       continue;
     }
     result.detailsFetched += 1;
@@ -206,6 +243,7 @@ async function fetchAndPersistDetails(
       if (err instanceof AdvertNotFoundError) continue; // delisted between index and detail — not an error
       record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}` });
       result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
       continue;
     }
     const parseMs = Date.now() - parseStart;
@@ -229,6 +267,7 @@ async function fetchAndPersistDetails(
       record(result, { url: s.url, status: null, msg: `persist: ${String(err)}` });
       result.status = 'partial';
     }
+    await publishProgress(deps, sweepId, result);
   }
 
   // Capture detail records for seen listings (fetch + parse only, no persist)
@@ -244,6 +283,7 @@ async function fetchAndPersistDetails(
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url: s.url, status: null, msg: String(err) });
       result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
       continue;
     }
 
@@ -255,6 +295,7 @@ async function fetchAndPersistDetails(
       if (err instanceof AdvertNotFoundError) continue; // delisted between index and detail — not an error
       record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}` });
       result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
       continue;
     }
     const parseMs = Date.now() - parseStart;
@@ -283,6 +324,7 @@ async function backfillUnenriched(
   deps: SweepDeps,
   result: SweepResult,
   signal: AbortSignal,
+  sweepId: number,
 ): Promise<void> {
   const limit = deps.backfillPerSweep ?? 0;
   if (limit <= 0) return;
@@ -299,6 +341,7 @@ async function backfillUnenriched(
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url, status: null, msg: String(err) });
       result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
       continue;
     }
     result.detailsFetched += 1;
@@ -310,6 +353,7 @@ async function backfillUnenriched(
       if (err instanceof AdvertNotFoundError) continue;
       record(result, { url, status: null, msg: `parseDetail: ${String(err)}` });
       result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
       continue;
     }
 
@@ -319,6 +363,7 @@ async function backfillUnenriched(
       record(result, { url, status: null, msg: `persist: ${String(err)}` });
       result.status = 'partial';
     }
+    await publishProgress(deps, sweepId, result);
   }
 }
 
