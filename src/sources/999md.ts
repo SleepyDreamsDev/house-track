@@ -90,6 +90,15 @@ function resolve(generic: GenericFilter): ResolvedFilter {
     triples.push(mapped);
   }
 
+  // Source-native filter triples from /api/filters (selected in the dynamic
+  // filters UI). Expanded into per-optionId rows so groupFiltersByFilterId
+  // dedupes against any overlap with the well-known fields above.
+  for (const extra of generic.extraFilters) {
+    for (const optionId of extra.optionIds) {
+      triples.push({ filterId: extra.filterId, featureId: extra.featureId, optionId });
+    }
+  }
+
   const postFilter: ResolvedFilter['postFilter'] = {
     maxPriceEur: generic.priceMax ?? Number.MAX_SAFE_INTEGER,
     maxAreaSqm: generic.sqmMax ?? Number.MAX_SAFE_INTEGER,

@@ -7,6 +7,7 @@ import { PageHeader, SectionHeader } from '@/components/ui/PageHeader.js';
 import { apiCall } from '@/lib/api.js';
 import {
   CATEGORIES,
+  type ExtraFilterTriple,
   type GenericFilter,
   genericFilterSchema,
   LOCALITIES,
@@ -24,6 +25,14 @@ interface FilterResponse {
   sourceSlug: string;
 }
 
+interface FilterFacet {
+  filterId: number;
+  featureId: number;
+  optionIds: number[];
+  listingCount: number;
+  sampleListingIds: string[];
+}
+
 const NUMERIC_FIELDS = ['priceMin', 'priceMax', 'sqmMin', 'sqmMax'] as const;
 
 export const Filter: React.FC = () => {
@@ -32,13 +41,24 @@ export const Filter: React.FC = () => {
     queryKey: ['filter'],
     queryFn: () => apiCall('/filter'),
   });
+  const { data: facets } = useQuery<FilterFacet[]>({
+    queryKey: ['filter-facets'],
+    queryFn: () => apiCall('/filters'),
+  });
 
   const [draft, setDraft] = useState<GenericFilter | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (data?.generic && draft === null) {
-      setDraft({ ...data.generic, locality: [...data.generic.locality] });
+      setDraft({
+        ...data.generic,
+        locality: [...data.generic.locality],
+        extraFilters: (data.generic.extraFilters ?? []).map((t) => ({
+          ...t,
+          optionIds: [...t.optionIds],
+        })),
+      });
     }
   }, [data, draft]);
 
@@ -85,6 +105,33 @@ export const Filter: React.FC = () => {
     update('locality', next);
   }
 
+  function toggleExtraOption(filterId: number, featureId: number, optionId: number) {
+    if (!draft) return;
+    const matchIdx = draft.extraFilters.findIndex(
+      (t) => t.filterId === filterId && t.featureId === featureId,
+    );
+    const next = draft.extraFilters.map((t) => ({ ...t, optionIds: [...t.optionIds] }));
+    if (matchIdx === -1) {
+      next.push({ filterId, featureId, optionIds: [optionId] });
+    } else {
+      const current = next[matchIdx]!;
+      const has = current.optionIds.includes(optionId);
+      current.optionIds = has
+        ? current.optionIds.filter((o) => o !== optionId)
+        : [...current.optionIds, optionId];
+      if (current.optionIds.length === 0) next.splice(matchIdx, 1);
+    }
+    update('extraFilters', next);
+  }
+
+  function isExtraSelected(filterId: number, featureId: number, optionId: number): boolean {
+    if (!draft) return false;
+    const triple = draft.extraFilters.find(
+      (t) => t.filterId === filterId && t.featureId === featureId,
+    );
+    return triple?.optionIds.includes(optionId) ?? false;
+  }
+
   function onSave() {
     if (!draft) return;
     const parsed = genericFilterSchema.safeParse(draft);
@@ -99,7 +146,15 @@ export const Filter: React.FC = () => {
   }
 
   function onReset() {
-    if (data) setDraft({ ...data.generic, locality: [...data.generic.locality] });
+    if (data)
+      setDraft({
+        ...data.generic,
+        locality: [...data.generic.locality],
+        extraFilters: (data.generic.extraFilters ?? []).map((t) => ({
+          ...t,
+          optionIds: [...t.optionIds],
+        })),
+      });
     setError(null);
   }
 
@@ -123,6 +178,12 @@ export const Filter: React.FC = () => {
             className="block rounded-sm px-2.5 py-1.5 text-neutral-600 hover:bg-neutral-100"
           >
             Generic filter
+          </a>
+          <a
+            href="#Dynamic"
+            className="block rounded-sm px-2.5 py-1.5 text-neutral-600 hover:bg-neutral-100"
+          >
+            Source filters
           </a>
           <a
             href="#Resolved"
@@ -264,6 +325,74 @@ export const Filter: React.FC = () => {
                 <span className="text-xs text-success">Saved · next sweep will use this</span>
               )}
             </div>
+          </Card>
+
+          <Card id="Dynamic">
+            <SectionHeader title={`Source filters · ${data.sourceSlug}`} />
+            <p className="mb-3 mt-1 text-xs text-neutral-500">
+              Filter triples observed in detail-fetched listings. Selections AND across triples and
+              OR within optionIds. Option IDs are 999.md-internal numbers (labels arrive once filter
+              taxonomy is captured — see <code>FILTER_TAXONOMY_QUERY</code>).
+            </p>
+            {!facets ? (
+              <div className="py-3 text-xs text-neutral-400">Loading facets…</div>
+            ) : facets.length === 0 ? (
+              <div className="py-3 text-xs text-neutral-400">
+                No filter values observed yet. Run a sweep to populate.
+              </div>
+            ) : (
+              <div className="divide-y divide-neutral-100">
+                {facets.map((f) => {
+                  const selectedCount =
+                    draft.extraFilters.find(
+                      (t) => t.filterId === f.filterId && t.featureId === f.featureId,
+                    )?.optionIds.length ?? 0;
+                  return (
+                    <details
+                      key={`${f.filterId}:${f.featureId}`}
+                      className="py-2 group"
+                      open={selectedCount > 0}
+                    >
+                      <summary className="flex cursor-pointer items-center gap-2 text-sm">
+                        <span className="font-mono text-xs text-neutral-700">
+                          filter {f.filterId} · feature {f.featureId}
+                        </span>
+                        <span className="text-xs text-neutral-400">
+                          {f.optionIds.length} options · {f.listingCount} listings
+                        </span>
+                        {selectedCount > 0 && (
+                          <span className="ml-auto rounded-sm bg-neutral-900 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                            {selectedCount} selected
+                          </span>
+                        )}
+                      </summary>
+                      <div className="mt-2 flex flex-wrap gap-1.5 pl-1">
+                        {f.optionIds
+                          .slice()
+                          .sort((a, b) => a - b)
+                          .map((opt) => {
+                            const active = isExtraSelected(f.filterId, f.featureId, opt);
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => toggleExtraOption(f.filterId, f.featureId, opt)}
+                                className={`rounded-sm px-2 py-0.5 font-mono text-[11px] tabular-nums border transition-colors ${
+                                  active
+                                    ? 'bg-neutral-900 text-white border-neutral-900'
+                                    : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
+                                }`}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
           <Card id="Resolved">

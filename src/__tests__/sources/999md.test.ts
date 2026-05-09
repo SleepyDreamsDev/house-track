@@ -43,6 +43,34 @@ describe('999md source adapter', () => {
     });
     expect(resolved.postFilter).toEqual({ maxPriceEur: 180_000, maxAreaSqm: 150 });
   });
+
+  it('merges extraFilters into the resolved searchInput.filters', () => {
+    const resolved = source999md.resolve({
+      ...defaultGenericFilter,
+      extraFilters: [
+        { filterId: 100, featureId: 200, optionIds: [1, 2, 3] },
+        { filterId: 101, featureId: 201, optionIds: [42] },
+      ],
+    });
+    const findGroup = (fid: number) => resolved.searchInput.filters.find((f) => f.filterId === fid);
+    const g100 = findGroup(100);
+    const g101 = findGroup(101);
+    expect(g100?.features[0]?.featureId).toBe(200);
+    expect(g100?.features[0]?.optionIds).toEqual([1, 2, 3]);
+    expect(g101?.features[0]?.featureId).toBe(201);
+    expect(g101?.features[0]?.optionIds).toEqual([42]);
+  });
+
+  it('extraFilter optionIds dedupe against well-known triples on the same featureId', () => {
+    // sale = filterId 16 / featureId 1 / optionId 776 (already added by transactionType)
+    // user also picks 776 via the dynamic UI on the same triple
+    const resolved = source999md.resolve({
+      ...defaultGenericFilter,
+      extraFilters: [{ filterId: 16, featureId: 1, optionIds: [776, 999] }],
+    });
+    const saleGroup = resolved.searchInput.filters.find((f) => f.filterId === 16);
+    expect(saleGroup?.features[0]?.optionIds).toEqual([776, 999]);
+  });
 });
 
 describe('source registry', () => {
