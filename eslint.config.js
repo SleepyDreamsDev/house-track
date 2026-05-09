@@ -6,13 +6,17 @@ import globals from 'globals';
 export default [
   {
     ignores: [
-      'dist/**',
-      'node_modules/**',
+      '**/dist/**',
+      '**/node_modules/**',
       'data/**',
       'prisma/migrations/**',
       '.claude/**',
       'eslint.config.js',
       'vitest.config.ts',
+      // web/ has its own toolchain (Vite + Tailwind + tsx); root eslint
+      // doesn't have the right parser config for .tsx and chokes on built
+      // assets in web/dist. Lint there separately if needed.
+      'web/**',
     ],
   },
   js.configs.recommended,

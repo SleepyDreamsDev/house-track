@@ -1,42 +1,27 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import type { Hono } from 'hono';
 
-import { CIRCUIT } from '../../../config.js';
 import { getPrisma } from '../../../db.js';
+import { useTempCircuitSentinel } from '../../../__tests__/helpers/circuit-sentinel.js';
 import { createApiApp } from '../../server.js';
 
 describe('Smoke route + trigger surfacing', () => {
   let prisma: PrismaClient;
   let app: Hono;
-  let dir: string;
-  let originalSentinel: string;
+  const sentinel = useTempCircuitSentinel();
 
   beforeAll(() => {
     prisma = getPrisma();
     app = createApiApp();
-    originalSentinel = CIRCUIT.sentinelPath;
-  });
-
-  afterAll(() => {
-    (CIRCUIT as { sentinelPath: string }).sentinelPath = originalSentinel;
   });
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'smoke-'));
-    (CIRCUIT as { sentinelPath: string }).sentinelPath = join(dir, '.circuit_open');
     await prisma.sweepRun.deleteMany();
   });
 
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
-
   it('Scenario: refuses with 409 when circuit breaker is open', async () => {
-    writeFileSync(CIRCUIT.sentinelPath, '');
+    sentinel.tripBreaker();
 
     const before = await prisma.sweepRun.count();
     const res = await app.request('/api/sweeps/smoke', { method: 'POST' });
