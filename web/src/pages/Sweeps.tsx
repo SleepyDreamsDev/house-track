@@ -100,6 +100,8 @@ export const Sweeps: React.FC = () => {
     ? sweeps.filter((s) => s.status === 'success').length / sweeps.length
     : 0;
 
+  const hasActiveSweep = sweeps?.some((s) => s.status === 'running') ?? false;
+
   return (
     <div data-screen-label="Sweeps">
       <div className="flex items-start justify-between mb-2">
@@ -111,16 +113,26 @@ export const Sweeps: React.FC = () => {
           <Button
             variant="secondary"
             onClick={() => smoke.mutate()}
-            disabled={smoke.isPending || runSweep.isPending || circuit?.open}
-            title={circuit?.open ? 'Circuit breaker open — reset before running smoke' : undefined}
+            disabled={smoke.isPending || runSweep.isPending || circuit?.open || hasActiveSweep}
+            title={
+              circuit?.open
+                ? 'Circuit breaker open — reset before running smoke'
+                : hasActiveSweep
+                  ? 'A sweep is already running — cancel it first to start a new one'
+                  : undefined
+            }
           >
             {smoke.isPending ? 'Running smoke… ~30s' : 'Run smoke'}
           </Button>
           <Button
             onClick={() => runSweep.mutate()}
-            disabled={runSweep.isPending || smoke.isPending || circuit?.open}
+            disabled={runSweep.isPending || smoke.isPending || circuit?.open || hasActiveSweep}
             title={
-              circuit?.open ? 'Circuit breaker open — reset before running a sweep' : undefined
+              circuit?.open
+                ? 'Circuit breaker open — reset before running a sweep'
+                : hasActiveSweep
+                  ? 'A sweep is already running — cancel it first to start a new one'
+                  : undefined
             }
           >
             {runSweep.isPending ? 'Starting…' : 'Run sweep now'}

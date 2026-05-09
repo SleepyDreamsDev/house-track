@@ -6,6 +6,8 @@
 // `fetchAdvert(id)` callbacks rather than raw URLs, so it doesn't have to know
 // the operation strings or variable shapes.
 
+import type { PrismaClient } from '@prisma/client';
+
 import type { Circuit } from './circuit.js';
 import { CircuitTrippingError } from './fetch.js';
 import type { Logger } from './log.js';
@@ -44,6 +46,19 @@ export function getCurrentlyFetching(): { url: string; startedAt: number } | nul
 
 export function setCurrentlyFetching(url: string | null): void {
   currentlyFetching = url ? { url, startedAt: Date.now() } : null;
+}
+
+// Single-active-sweep guard. Returns the SweepRun id if any row is currently
+// in_progress (manual, smoke, or cron), else null. Callers should reject new
+// sweep starts while non-null. Phantom rows from a crashed prior process count
+// — the operator must cancel them via POST /api/sweeps/:id/cancel first.
+export async function findInProgressSweep(prisma: PrismaClient): Promise<number | null> {
+  const row = await prisma.sweepRun.findFirst({
+    where: { status: 'in_progress' },
+    select: { id: true },
+    orderBy: { startedAt: 'desc' },
+  });
+  return row?.id ?? null;
 }
 
 // Module-level map of active sweeps to their AbortControllers

@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import type { PrismaClient } from '@prisma/client';
-import { getSweepAbortControllers } from '../../sweep.js';
+import { findInProgressSweep, getSweepAbortControllers } from '../../sweep.js';
 import { runSweep } from '../../sweep.js';
 import { Circuit } from '../../circuit.js';
 import { CIRCUIT, FILTER, GRAPHQL_ENDPOINT, POLITENESS, SWEEP } from '../../config.js';
@@ -185,6 +185,11 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
 
   app.post('/api/sweeps', async (c) => {
     try {
+      const activeSweepId = await findInProgressSweep(prisma);
+      if (activeSweepId !== null) {
+        return c.json({ error: 'sweep_in_progress', activeSweepId }, 409);
+      }
+
       const deps = await buildDeps();
 
       // startSweep creates with status:'in_progress' (correct state before work starts)
@@ -214,6 +219,11 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
 
   app.post('/api/sweeps/smoke', async (c) => {
     try {
+      const activeSweepId = await findInProgressSweep(prisma);
+      if (activeSweepId !== null) {
+        return c.json({ error: 'sweep_in_progress', activeSweepId }, 409);
+      }
+
       const deps = await buildDeps();
 
       // Defense-in-depth: refuse if breaker is open. UI also disables the
