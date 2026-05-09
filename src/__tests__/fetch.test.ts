@@ -254,9 +254,11 @@ describe('Fetcher', () => {
         .intercept({ path: '/graphql', method: 'POST' })
         .reply(200, JSON.stringify({ data: { searchAds: { ads: [], count: 0 } } }));
 
-      const json = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+      const result = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
 
-      expect(json).toEqual({ data: { searchAds: { ads: [], count: 0 } } });
+      expect(result.json).toEqual({ data: { searchAds: { ads: [], count: 0 } } });
+      expect(result.attempts).toBe(1);
+      expect(result.bytes).toBeGreaterThan(0);
     });
 
     it('Retries 5xx with exponential backoff then succeeds', async () => {
@@ -267,9 +269,10 @@ describe('Fetcher', () => {
         .intercept({ path: '/graphql', method: 'POST' })
         .reply(200, JSON.stringify({ data: 'ok' }));
 
-      const json = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+      const result = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
 
-      expect(json).toEqual({ data: 'ok' });
+      expect(result.json).toEqual({ data: 'ok' });
+      expect(result.attempts).toBe(3);
       expect(sleep).toHaveBeenCalledWith(10);
       expect(sleep).toHaveBeenCalledWith(30);
     });
@@ -396,8 +399,8 @@ describe('Fetcher', () => {
           headers: { 'content-type': 'application/json; charset=utf-8' },
         });
 
-      const json = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
-      expect(json).toEqual({ data: 'ok' });
+      const result = await makeFetcher().fetchGraphQL(`${ORIGIN}/graphql`, 'Op', {}, 'q');
+      expect(result.json).toEqual({ data: 'ok' });
     });
 
     it('delayMs override extends the inter-request wait beyond baseDelayMs', async () => {

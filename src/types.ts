@@ -59,4 +59,8 @@ export interface SweepError {
   url: string;
   status: number | null;
   msg: string;
+  /** Total request attempts (including retries) before this error surfaced.
+   *  Optional for backward-compat with rows persisted before this field
+   *  existed — operator UI renders missing values as "—". */
+  attempts?: number;
 }

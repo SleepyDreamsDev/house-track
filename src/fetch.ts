@@ -38,9 +38,18 @@ export class CircuitTrippingError extends Error {
   constructor(
     public readonly status: number,
     public readonly url: string,
+    public readonly attempts: number = 1,
   ) {
     super(`Circuit-tripping status ${status} from ${url}`);
     this.name = 'CircuitTrippingError';
+  }
+}
+
+// Tag generic errors with attempt count so `record()` in sweep.ts can pull
+// the value off without coupling to a specific error type.
+function annotateAttempts(err: unknown, attempts: number): void {
+  if (err && typeof err === 'object') {
+    (err as { attempts?: number }).attempts = attempts;
   }
 }
 
@@ -67,7 +76,8 @@ export class Fetcher {
   }
 
   async fetchPage(url: string, signal?: AbortSignal): Promise<FetchResult> {
-    return this.run(url, { method: 'GET', ...(signal && { signal }) });
+    const { res } = await this.run(url, { method: 'GET', ...(signal && { signal }) });
+    return res;
   }
 
   /**
@@ -87,7 +97,7 @@ export class Fetcher {
     variables: Record<string, unknown>,
     query: string,
     options: { delayMs?: number; signal?: AbortSignal } = {},
-  ): Promise<unknown> {
+  ): Promise<{ json: unknown; bytes: number; attempts: number }> {
     const body = JSON.stringify({ operationName, variables, query });
     const { config } = this.deps;
     const headers: Record<string, string> = {
@@ -108,11 +118,18 @@ export class Fetcher {
     };
     if (options.delayMs !== undefined) opts.delayMs = options.delayMs;
     if (options.signal !== undefined) opts.signal = options.signal;
-    const res = await this.run(endpoint, opts);
-    return JSON.parse(res.body);
+    const { res, attempts } = await this.run(endpoint, opts);
+    return {
+      json: JSON.parse(res.body),
+      bytes: Buffer.byteLength(res.body, 'utf8'),
+      attempts,
+    };
   }
 
-  private async run(url: string, opts: RequestOptions): Promise<FetchResult> {
+  private async run(
+    url: string,
+    opts: RequestOptions,
+  ): Promise<{ res: FetchResult; attempts: number }> {
     await this.maybeWaitBetweenRequests(opts.delayMs);
     return this.attempt(url, opts, 0);
   }
@@ -134,7 +151,8 @@ export class Fetcher {
     url: string,
     opts: RequestOptions,
     attemptIdx: number,
-  ): Promise<FetchResult> {
+  ): Promise<{ res: FetchResult; attempts: number }> {
+    const attempts = attemptIdx + 1;
     let res: FetchResult;
     let contentType: string | undefined;
     try {
@@ -145,6 +163,9 @@ export class Fetcher {
         await this.sleep(backoff);
         return this.attempt(url, opts, attemptIdx + 1);
       }
+      // Exhausted retries — surface attempt count to the caller via the error.
+      // sweep.ts catches and writes it into SweepError.attempts.
+      annotateAttempts(err, attempts);
       throw err;
     }
 
@@ -152,7 +173,7 @@ export class Fetcher {
       // Unambiguous block signal — open the breaker immediately so the next tick
       // skips entirely. Risking another hit could escalate to an IP-level block.
       await this.deps.circuit.tripImmediately();
-      throw new CircuitTrippingError(res.status, url);
+      throw new CircuitTrippingError(res.status, url, attempts);
     }
 
     if (res.status >= 500) {
@@ -161,14 +182,16 @@ export class Fetcher {
         await this.sleep(backoff);
         return this.attempt(url, opts, attemptIdx + 1);
       }
-      throw new Error(`5xx after retries: ${res.status} ${url}`);
+      const err = new Error(`5xx after retries: ${res.status} ${url}`);
+      annotateAttempts(err, attempts);
+      throw err;
     }
 
     // Per spec: "3 consecutive 4xx (excluding 404) → pause". 404 is normal
     // (delisted listings); other 4xx (400/401/405/...) count toward the threshold.
     if (res.status >= 400 && res.status < 500 && res.status !== 404) {
       await this.deps.circuit.recordFailure();
-      return res;
+      return { res, attempts };
     }
 
     // 2xx body that violates the expected content-type (e.g. HTML CAPTCHA on a
@@ -179,11 +202,11 @@ export class Fetcher {
       contentType?.toLowerCase().startsWith(opts.rejectContentTypePrefix.toLowerCase())
     ) {
       await this.deps.circuit.tripImmediately();
-      throw new CircuitTrippingError(res.status, url);
+      throw new CircuitTrippingError(res.status, url, attempts);
     }
 
     this.deps.circuit.recordSuccess();
-    return res;
+    return { res, attempts };
   }
 
   private async doRequest(
