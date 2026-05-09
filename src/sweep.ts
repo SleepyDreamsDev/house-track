@@ -138,6 +138,12 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
       seenStubs = seenSlice;
     }
     result.newListings = newStubs.length;
+    // Stash the actual count of detail fetches we'll perform so the UI's
+    // listings progress bar has a real total to render against.
+    result.configSnapshot = {
+      ...(result.configSnapshot ?? {}),
+      'sweep.detailsTotal': newStubs.length + seenStubs.length,
+    };
     await publishProgress(deps, sweepId, result);
 
     await fetchAndPersistDetails(deps, newStubs, seenStubs, result, controller.signal, sweepId);
@@ -191,6 +197,7 @@ async function publishProgress(
       errors: result.errors,
       pagesDetail: result.pagesDetail,
       detailsDetail: result.detailsDetail,
+      configSnapshot: result.configSnapshot,
     });
   } catch (err) {
     deps.log?.warn({ event: 'sweep.progress.publish_failed', err: String(err) });

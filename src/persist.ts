@@ -198,6 +198,7 @@ export class Persistence {
       errors?: SweepResult['errors'];
       pagesDetail?: SweepResult['pagesDetail'];
       detailsDetail?: SweepResult['detailsDetail'];
+      configSnapshot?: SweepResult['configSnapshot'];
     },
   ): Promise<void> {
     const data: Prisma.SweepRunUpdateInput = {};
@@ -218,6 +219,9 @@ export class Persistence {
     }
     if (snapshot.detailsDetail && snapshot.detailsDetail.length > 0) {
       data.detailsDetail = snapshot.detailsDetail as unknown as Prisma.InputJsonValue;
+    }
+    if (snapshot.configSnapshot) {
+      data.configSnapshot = snapshot.configSnapshot as unknown as Prisma.InputJsonValue;
     }
     await this.prisma.sweepRun.update({ where: { id }, data });
   }

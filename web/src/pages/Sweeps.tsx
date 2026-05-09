@@ -219,7 +219,17 @@ export const Sweeps: React.FC = () => {
                 <td className="px-3 py-2.5 text-right tabular-nums">{s.detailsFetched}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
                   {s.newListings > 0 ? (
-                    <span className="font-semibold text-accent-dark">+{s.newListings}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(
+                          `/listings?firstSeenAfter=${encodeURIComponent(s.startedAt)}&fromSweep=${s.id}&sort=newest`,
+                        );
+                      }}
+                      className="font-semibold text-accent-dark hover:underline"
+                    >
+                      +{s.newListings}
+                    </button>
                   ) : (
                     <span className="text-neutral-400">—</span>
                   )}

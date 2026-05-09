@@ -174,7 +174,7 @@ export const SweepDetail: React.FC = () => {
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center mb-3">
             <div>
               <div className="flex justify-between mb-1 text-xs">
-                <span className="text-neutral-600">Index pages</span>
+                <span className="text-neutral-600">Listings fetched</span>
                 <span className="tabular-nums text-neutral-600">
                   {detail.progress.pagesDone} / {detail.progress.pagesTotal}
                 </span>
@@ -365,7 +365,18 @@ const HttpTab: React.FC<{ detail: SweepDetailDto }> = ({ detail }) => {
               </td>
               <td className="px-3 py-2 font-mono">{r.identifier}</td>
               <td className="px-3 py-2">
-                <code className="font-mono text-neutral-400">{r.url}</code>
+                {r.kind === 'detail' && r.url ? (
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-blue-600 hover:underline"
+                  >
+                    {r.url}
+                  </a>
+                ) : (
+                  <code className="font-mono text-neutral-400">{r.url}</code>
+                )}
               </td>
               <td className="px-3 py-2 text-right">
                 <Badge variant={r.status >= 400 ? 'error' : 'success'}>{r.status}</Badge>

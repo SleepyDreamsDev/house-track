@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
@@ -34,6 +35,7 @@ const PAGE_SIZE = 50;
 const DISTRICTS = ['all', 'Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
 
 export const Listings: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState('');
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX);
   const [district, setDistrict] = useState('all');
@@ -41,26 +43,38 @@ export const Listings: React.FC = () => {
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
 
+  // Sweep-row links set ?firstSeenAfter=<sweep.startedAt>&fromSweep=<id>;
+  // read from URL so the filter survives reload + the chip can clear them.
+  const firstSeenAfter = searchParams.get('firstSeenAfter') ?? undefined;
+  const fromSweep = searchParams.get('fromSweep');
+
   // Reset to page 0 whenever any filter changes — page N may not exist for the
-  // new query (smaller result set) and showing an empty list is worse than
-  // jumping to the first matching page.
+  // new query (smaller result set).
   useEffect(() => {
     setPage(0);
-  }, [q, maxPrice, district, sort]);
+  }, [q, maxPrice, district, sort, firstSeenAfter]);
 
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
-    queryKey: ['listings', { q, maxPrice, district, sort, page }],
+    queryKey: ['listings', { q, maxPrice, district, sort, page, firstSeenAfter }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
       if (maxPrice < PRICE_MAX) p.append('maxPrice', String(maxPrice));
       if (district !== 'all') p.append('district', district);
+      if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       p.append('sort', sort);
       p.append('limit', String(PAGE_SIZE));
       p.append('offset', String(page * PAGE_SIZE));
       return apiCall(`/listings?${p}`);
     },
   });
+
+  const clearSweepFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('firstSeenAfter');
+    next.delete('fromSweep');
+    setSearchParams(next);
+  };
 
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -80,6 +94,24 @@ export const Listings: React.FC = () => {
           </Button>
         }
       />
+
+      {firstSeenAfter && (
+        <div className="mb-4 flex items-center gap-2 rounded-sm border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
+          <span className="text-neutral-700">
+            Filtered to listings first seen after{' '}
+            <span className="font-mono">{new Date(firstSeenAfter).toLocaleString()}</span>
+            {fromSweep && (
+              <>
+                {' '}
+                · from sweep <span className="font-mono">{fromSweep}</span>
+              </>
+            )}
+          </span>
+          <button onClick={clearSweepFilter} className="ml-auto text-blue-600 hover:underline">
+            Clear
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-[240px_1fr] gap-6">
         <Card className="self-start">
