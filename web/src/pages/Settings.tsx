@@ -43,6 +43,12 @@ export const Settings: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
 
+  const toggleSource = useMutation({
+    mutationFn: ({ id, enabled }: { id: Source['id']; enabled: boolean }) =>
+      apiCall(`/sources/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources'] }),
+  });
+
   const groups = useMemo(() => {
     const m: Record<string, Setting[]> = {};
     for (const s of settings ?? []) (m[s.group ?? 'Other'] ||= []).push(s);
@@ -100,7 +106,11 @@ export const Settings: React.FC = () => {
                     </div>
                     <div className="font-mono text-xs text-neutral-400 truncate">{src.baseUrl}</div>
                   </div>
-                  <Toggle checked={src.enabled} disabled={src.placeholder ?? false} />
+                  <Toggle
+                    checked={src.enabled}
+                    disabled={src.placeholder ?? false}
+                    onChange={(v) => toggleSource.mutate({ id: src.id, enabled: v })}
+                  />
                 </div>
               ))}
             </div>
