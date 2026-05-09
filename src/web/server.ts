@@ -5,6 +5,7 @@ import { getPrisma } from '../db.js';
 import { registerSweepsRoutes } from './routes/sweeps.js';
 import { registerListingsRoutes } from './routes/listings.js';
 import { registerFiltersRoutes } from './routes/filters.js';
+import { registerFilterRoutes } from './routes/filter.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSourcesRoutes } from './routes/sources.js';
 import { registerCircuitRoutes } from './routes/circuit.js';
@@ -32,6 +33,7 @@ export function createApiApp(): Hono {
 
   registerListingsRoutes(app, prisma);
   registerFiltersRoutes(app, prisma);
+  registerFilterRoutes(app);
   registerSettingsRoutes(app);
   registerSourcesRoutes(app, prisma);
   registerCircuitRoutes(app);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { CIRCUIT, FILTER, POLITENESS, SWEEP } from './config.js';
 import { getPrisma } from './db.js';
+import { defaultGenericFilter, genericFilterSchema } from './types/filter.js';
 
 // Define schemas for each setting
 const settingSchemas = {
@@ -20,6 +21,7 @@ const settingSchemas = {
   'filter.maxPriceEur': z.number().int().positive(),
   'filter.maxAreaSqm': z.number().positive(),
   'filter.searchInputJson': z.any(),
+  'filter.generic': genericFilterSchema,
   'log.level': z.union([
     z.literal('debug'),
     z.literal('info'),
@@ -47,6 +49,7 @@ const defaultValues: Record<string, unknown> = {
   'filter.maxPriceEur': FILTER.postFilter.maxPriceEur,
   'filter.maxAreaSqm': FILTER.postFilter.maxAreaSqm,
   'filter.searchInputJson': FILTER.searchInput,
+  'filter.generic': defaultGenericFilter,
   'log.level': 'info',
   'stats.successRateWindow': 100,
   'monitoring.grafanaUrl': '',
@@ -239,43 +242,50 @@ export async function listSettings(): Promise<
 
   const settingMap = new Map(allSettings.map((s) => [s.key, s.valueJson]));
 
-  return Object.entries(settingSchemas).map(([key, schema]) => {
-    const meta = settingMeta[key];
-    const result: {
-      key: string;
-      value: unknown;
-      default: unknown;
-      schema: z.ZodSchema;
-      group?: string;
-      kind?: 'number' | 'text' | 'select';
-      unit?: string;
-      options?: string[];
-      label?: string;
-      hint?: string;
-    } = {
-      key,
-      value: settingMap.get(key) ?? defaultValues[key],
-      default: defaultValues[key],
-      schema,
-    };
+  // filter.generic is edited via the dedicated /filter page — its JSON
+  // shape has no flat-row UI in the generic Settings list. filter.searchInputJson
+  // is similarly opaque and predates the generic filter; keep it hidden too.
+  const HIDDEN_FROM_LIST = new Set(['filter.generic', 'filter.searchInputJson']);
 
-    if (meta) {
-      result.group = meta.group;
-      result.kind = meta.kind;
-      if (meta.unit !== undefined) {
-        result.unit = meta.unit;
-      }
-      if (meta.options !== undefined) {
-        result.options = meta.options;
-      }
-      if (meta.label !== undefined) {
-        result.label = meta.label;
-      }
-      if (meta.hint !== undefined) {
-        result.hint = meta.hint;
-      }
-    }
+  return Object.entries(settingSchemas)
+    .filter(([key]) => !HIDDEN_FROM_LIST.has(key))
+    .map(([key, schema]) => {
+      const meta = settingMeta[key];
+      const result: {
+        key: string;
+        value: unknown;
+        default: unknown;
+        schema: z.ZodSchema;
+        group?: string;
+        kind?: 'number' | 'text' | 'select';
+        unit?: string;
+        options?: string[];
+        label?: string;
+        hint?: string;
+      } = {
+        key,
+        value: settingMap.get(key) ?? defaultValues[key],
+        default: defaultValues[key],
+        schema,
+      };
 
-    return result;
-  });
+      if (meta) {
+        result.group = meta.group;
+        result.kind = meta.kind;
+        if (meta.unit !== undefined) {
+          result.unit = meta.unit;
+        }
+        if (meta.options !== undefined) {
+          result.options = meta.options;
+        }
+        if (meta.label !== undefined) {
+          result.label = meta.label;
+        }
+        if (meta.hint !== undefined) {
+          result.hint = meta.hint;
+        }
+      }
+
+      return result;
+    });
 }

@@ -15,6 +15,7 @@ import { log } from '../../log.js';
 import { parseDetail } from '../../parse-detail.js';
 import { applyPostFilter, parseIndex } from '../../parse-index.js';
 import { Persistence } from '../../persist.js';
+import { resolveActiveFilter } from '../../filter-resolver.js';
 import { getSetting } from '../../settings.js';
 import { runSmokeAssertions } from '../../smoke-assertions.js';
 import type { SweepDeps } from '../../sweep.js';
@@ -68,13 +69,17 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       },
     });
 
+    const resolved = await resolveActiveFilter();
+    const searchInputOverride = resolved.searchInput;
+    const postFilterOverride = resolved.postFilter;
+
     return {
       fetchSearchPage: (pageIdx, signal) => {
         const opts = signal ? { signal } : {};
         return fetcher.fetchGraphQL(
           GRAPHQL_ENDPOINT,
           'SearchAds',
-          buildSearchVariables(pageIdx),
+          buildSearchVariables(pageIdx, searchInputOverride),
           SEARCH_ADS_QUERY,
           opts,
         );
@@ -93,7 +98,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       circuit,
       parseIndex,
       parseDetail,
-      applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
+      applyPostFilter: (stubs) => applyPostFilter(stubs, postFilterOverride),
       maxPagesPerSweep,
       missingThresholdMs,
       backfillPerSweep,

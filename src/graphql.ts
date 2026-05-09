@@ -414,10 +414,23 @@ fragment i18NKeyFragment on I18NKey {
   __typename
 }`;
 
-export function buildSearchVariables(pageIdx: number): Record<string, unknown> {
+export interface SearchInputOverride {
+  subCategoryId: number;
+  source: 'AD_SOURCE_DESKTOP';
+  filters: ReadonlyArray<{
+    filterId: number;
+    features: ReadonlyArray<{ featureId: number; optionIds: number[] }>;
+  }>;
+}
+
+export function buildSearchVariables(
+  pageIdx: number,
+  override?: SearchInputOverride,
+): Record<string, unknown> {
+  const base = override ?? FILTER.searchInput;
   return {
     input: {
-      ...FILTER.searchInput,
+      ...base,
       pagination: {
         limit: FILTER.pageSize,
         skip: pageIdx * FILTER.pageSize,

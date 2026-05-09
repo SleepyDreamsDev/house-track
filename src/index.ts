@@ -19,6 +19,7 @@ import { log } from './log.js';
 import { parseDetail } from './parse-detail.js';
 import { applyPostFilter, parseIndex } from './parse-index.js';
 import { Persistence } from './persist.js';
+import { resolveActiveFilter } from './filter-resolver.js';
 import { getSetting } from './settings.js';
 import { runSweep, type SweepDeps } from './sweep.js';
 import { createApiApp } from './web/server.js';
@@ -73,13 +74,19 @@ async function buildDeps(): Promise<SweepDeps> {
     },
   });
 
+  // Resolve the active filter once at sweep start; mid-sweep mutation is
+  // intentionally out of scope (next tick picks up the change).
+  const resolved = await resolveActiveFilter();
+  const searchInputOverride = resolved.searchInput;
+  const postFilterOverride = resolved.postFilter;
+
   return {
     fetchSearchPage: (pageIdx, signal) => {
       const opts = signal ? { signal } : {};
       return fetcher.fetchGraphQL(
         GRAPHQL_ENDPOINT,
         'SearchAds',
-        buildSearchVariables(pageIdx),
+        buildSearchVariables(pageIdx, searchInputOverride),
         SEARCH_ADS_QUERY,
         opts,
       );
@@ -98,7 +105,7 @@ async function buildDeps(): Promise<SweepDeps> {
     circuit,
     parseIndex,
     parseDetail,
-    applyPostFilter: (stubs) => applyPostFilter(stubs, FILTER.postFilter),
+    applyPostFilter: (stubs) => applyPostFilter(stubs, postFilterOverride),
     maxPagesPerSweep,
     missingThresholdMs,
     backfillPerSweep,
