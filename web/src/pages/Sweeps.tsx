@@ -31,6 +31,18 @@ interface RunSweepResponse {
   startedAt: string;
 }
 
+interface SmokeAssertion {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+interface SmokeResult {
+  sweepId: number;
+  durationMs: number;
+  passed: boolean;
+  assertions: SmokeAssertion[];
+}
+
 export const Sweeps: React.FC = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -62,6 +74,17 @@ export const Sweeps: React.FC = () => {
     },
   });
 
+  // Bounded 3-listing sweep + DB assertions for fast post-deploy validation.
+  // Stays alongside Run-sweep-now: smoke catches schema/parse regressions
+  // in ~30s without burning the politeness budget on a full 250-listing run.
+  const smoke = useMutation<SmokeResult>({
+    mutationFn: () => apiCall<SmokeResult>('/sweeps/smoke', { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sweeps'] });
+      qc.invalidateQueries({ queryKey: ['circuit'] });
+    },
+  });
+
   const successRate = sweeps?.length
     ? sweeps.filter((s) => s.status === 'success').length / sweeps.length
     : 0;
@@ -73,14 +96,62 @@ export const Sweeps: React.FC = () => {
           title="Sweeps"
           subtitle={`${sweeps?.length ?? 0} runs · ${Math.round(successRate * 100)}% success`}
         />
-        <Button
-          onClick={() => runSweep.mutate()}
-          disabled={runSweep.isPending || circuit?.open}
-          title={circuit?.open ? 'Circuit breaker open — reset before running a sweep' : undefined}
-        >
-          {runSweep.isPending ? 'Starting…' : 'Run sweep now'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => smoke.mutate()}
+            disabled={smoke.isPending || runSweep.isPending || circuit?.open}
+            title={circuit?.open ? 'Circuit breaker open — reset before running smoke' : undefined}
+          >
+            {smoke.isPending ? 'Running smoke… ~30s' : 'Run smoke'}
+          </Button>
+          <Button
+            onClick={() => runSweep.mutate()}
+            disabled={runSweep.isPending || smoke.isPending || circuit?.open}
+            title={
+              circuit?.open ? 'Circuit breaker open — reset before running a sweep' : undefined
+            }
+          >
+            {runSweep.isPending ? 'Starting…' : 'Run sweep now'}
+          </Button>
+        </div>
       </div>
+
+      {smoke.data && (
+        <div
+          className={`mb-6 rounded-sm border p-4 ${
+            smoke.data.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold">
+              Smoke {smoke.data.passed ? 'passed' : 'failed'}:{' '}
+              {smoke.data.assertions.filter((a) => a.ok).length}/{smoke.data.assertions.length}{' '}
+              checks
+            </span>
+            <span className="text-xs text-neutral-600">({fmt.ms(smoke.data.durationMs)})</span>
+            <button
+              onClick={() => navigate(`/sweeps/${smoke.data?.sweepId}`)}
+              className="text-xs text-blue-600 hover:underline ml-auto"
+            >
+              View sweep #{smoke.data.sweepId} →
+            </button>
+          </div>
+          <ul className="text-xs space-y-0.5">
+            {smoke.data.assertions.map((a) => (
+              <li key={a.name} className={a.ok ? 'text-neutral-700' : 'text-error font-medium'}>
+                {a.ok ? '✓' : '✗'} {a.name} — {a.detail}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {smoke.isError && (
+        <div className="mb-6 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-error">
+          Smoke request failed: {(smoke.error as Error)?.message ?? 'unknown error'}
+        </div>
+      )}
 
       {runSweep.isError && (
         <div className="mb-6 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-error">
