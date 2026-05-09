@@ -3,7 +3,7 @@
 ## Stack
 
 Node 22 + TS strict (NodeNext/ESM) · Postgres + Prisma · `pino` · Vitest · pnpm · Docker Compose.
-Frontend: Vite + React 18 + Tailwind v4 · API: Hono · Monitoring: Grafana.
+Frontend: Vite + React 18 + Tailwind v4 · API: Hono · Analytics: in-app (Postgres-backed).
 
 Source of truth for scope, crawl flow, politeness budget, and acceptance
 criteria: [`docs/poc-spec.md`](./docs/poc-spec.md). Read before editing `src/`.

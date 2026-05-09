@@ -34,10 +34,9 @@ describe('Dashboard', () => {
     expect(screen.getByText('By district')).toBeInTheDocument();
   });
 
-  it('exposes the Grafana action when configured', async () => {
+  it('does not show a Run sweep button on the dashboard', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockImplementation(async (path: string) => {
-      if (path === '/settings') return [{ key: 'monitoring.grafanaUrl', value: 'http://g' }];
       if (path === '/sweeps/latest') return { startedAt: new Date().toISOString() };
       if (path === '/circuit') return { open: false };
       if (path === '/stats/success-rate') return { rate: 1, n: 1 };
@@ -52,8 +51,7 @@ describe('Dashboard', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText('Open Grafana')).toBeInTheDocument();
-    // Run-sweep button intentionally lives on the Sweeps page only.
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
     expect(screen.queryByText('Run sweep now')).not.toBeInTheDocument();
   });
 

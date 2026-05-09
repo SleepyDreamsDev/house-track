@@ -39,10 +39,6 @@ interface SweepStatus {
   durationMs: number;
   startedAt: string;
 }
-interface Setting {
-  key: string;
-  value: unknown;
-}
 interface CircuitState {
   open: boolean;
 }
@@ -86,32 +82,16 @@ export const Dashboard: React.FC = () => {
     queryKey: ['avgPrice'],
     queryFn: () => apiCall('/stats/avg-price'),
   });
-  const { data: settings } = useQuery<Setting[]>({
-    queryKey: ['settings'],
-    queryFn: () => apiCall('/settings'),
-  });
 
   const totalActive = districts?.reduce((a, d) => a + d.count, 0) ?? 0;
   const successRate = successRateData?.rate ?? 0;
   const avgPrice = avgPriceData?.avgPrice ?? 0;
-  const grafanaUrl =
-    (settings?.find((s) => s.key === 'monitoring.grafanaUrl')?.value as string) ?? '';
 
   return (
     <div className="space-y-6" data-screen-label="Dashboard">
       <PageHeader
         title="Dashboard"
         subtitle={`last sweep ${latestSweep ? fmt.rel(latestSweep.startedAt) : '—'}`}
-        actions={
-          grafanaUrl ? (
-            <Button
-              variant="secondary"
-              onClick={() => window.open(grafanaUrl, '_blank', 'noopener,noreferrer')}
-            >
-              Open Grafana
-            </Button>
-          ) : null
-        }
       />
 
       <Card className="!p-0">

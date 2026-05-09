@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-The operator UI is a small web console for managing the crawler at runtime: tuning settings, reviewing sweep results, resetting the circuit breaker, and monitoring key metrics via Grafana.
+The operator UI is a small web console for managing the crawler at runtime: tuning settings, reviewing sweep results, resetting the circuit breaker, and monitoring key metrics in-app.
 
 ### First run
 
@@ -11,7 +11,7 @@ The operator UI is a small web console for managing the crawler at runtime: tuni
 cp .env.example .env
 # Edit .env: set POSTGRES_PASSWORD=<choose-a-password>
 
-# Start all services: crawler, postgres, web UI, grafana
+# Start all services: crawler, postgres, web UI
 docker compose up --build -d
 
 # Verify all services are healthy
@@ -28,8 +28,7 @@ Open http://127.0.0.1:3000 in your browser. The **Dashboard** tile will show the
 ```
 docker-compose.yml
 ├── postgres:16         (port 127.0.0.1:5432) — data store
-├── web:3000           (port 127.0.0.1:3000) — operator console
-├── grafana:3001       (port 127.0.0.1:3001) — analytics dashboard
+├── web:3000           (port 127.0.0.1:3000) — operator console (incl. analytics)
 └── crawler            (background service) — crawls every hour
 ```
 
@@ -54,16 +53,7 @@ Shows the current state at a glance:
 
 - **Last sweep tile**: when it started, how long it ran, success/failure status
 - **Circuit breaker tile**: green (closed, crawling normally) or red (open, paused for 24h after 3 consecutive failures)
-- **"Open in Grafana" button**: jumps to the analytics dashboard in a new tab
-
-Below: embedded Grafana dashboard showing key metrics:
-- Total listings captured
-- Active (not expired) listings
-- Sweep success rate (last 24h)
-- Average price (EUR)
-- New listings per day (time series)
-- Sweep duration (time series)
-- Price distribution (histogram)
+- **In-app analytics**: KPI strip and side widgets on the Dashboard page show key metrics (active listings, new today, average price, sweep success rate, new-per-day sparkline, by-district breakdown). All metrics are served by the Hono API from Postgres aggregates.
 
 ### Houses
 
@@ -154,25 +144,6 @@ A structured form to edit the filter criteria that the crawler applies to all so
 
 **Live preview** shows the resulting GraphQL-like filter shape that will be sent to the crawler on next sweep.
 
-## Grafana Dashboard
-
-Open http://127.0.0.1:3001 in a new tab (or use the Dashboard page's "Open in Grafana" button).
-
-The default dashboard is **"House-Track Overview"**. It loads anonymously and is locked to read-only (no editing).
-
-**Panels**:
-- Stats row: total listings, active, success rate, avg price
-- Time series: new listings per day, sweep duration trend
-- Histogram: price distribution (EUR)
-
-The dashboard is **provisioned as code** — see `grafana/provisioning/dashboards/house-track.json`. Edit that file to add new panels, then restart:
-
-```bash
-docker compose restart grafana
-```
-
-All metrics come from the Postgres database — no external services. The Grafana datasource is read-only, so the crawler and web UI cannot corrupt it.
-
 ## How to... (common operations)
 
 ### Pause the crawler for a day
@@ -231,10 +202,9 @@ For now, the UI shows the form fields but any non-`999md` source will be skipped
 
 - **Localhost only** — no firewall rules needed, not exposed to the internet
 - **No authentication** — assumes trusted operator console (behind NAT/firewall)
-- **Postgres read-only for Grafana** — the dashboard datasource cannot modify data
 - **Settings validation** — all form inputs are validated with zod schemas server-side before storage
 
-Do not expose the `web`, `grafana`, or `postgres` services to the public internet.
+Do not expose the `web` or `postgres` services to the public internet.
 
 ## Development
 
@@ -300,11 +270,10 @@ Tests run against a disposable Postgres testcontainer — see `vitest.setup.ts` 
 
 1. Check **Dashboard** → Circuit breaker tile. If red, the crawler paused after 3 failures. Reset it via the **Sweeps** page button.
 2. Check `docker compose logs -f crawler` for error messages.
-3. Check `docker compose ps` — all four services should be `Up`. If one isn't, check its logs:
+3. Check `docker compose ps` — all three services should be `Up`. If one isn't, check its logs:
    ```bash
    docker compose logs postgres
    docker compose logs web
-   docker compose logs grafana
    ```
 
 ### Cannot connect to database
@@ -327,13 +296,13 @@ The crawler **reads settings at the start of each sweep**. If you changed a sett
    ```
 2. Or wait for the next cron-scheduled sweep (default: every hour at `:00`)
 
-### Grafana dashboard is empty
+### Dashboard analytics are empty
 
-Grafana starts with no data. After the first sweep completes (~5–10 min), refresh the dashboard. If still empty:
+The Dashboard's analytics tiles (active listings, new today, by-district, etc.) are populated only after the first sweep completes (~5–10 min). If still empty after that:
 
-1. Check `docker compose logs grafana`
-2. Verify the Postgres datasource is configured: **Grafana → Dashboards → Data sources → "house-track-postgres"** should show a green checkmark
-3. Restart Grafana: `docker compose restart grafana`
+1. Confirm the latest sweep succeeded — Sweeps page or `curl http://127.0.0.1:3000/api/sweeps/latest`
+2. Check the API route directly: `curl http://127.0.0.1:3000/api/stats/by-district`
+3. Check `docker compose logs web` for query errors
 
 ## References
 
