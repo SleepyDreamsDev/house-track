@@ -46,19 +46,23 @@ redesign is not honest until they ship.
       /api/stats/avg-price` (mean `priceEur` over active listings) and wire
       them in, OR (b) remove the two placeholder KPIs from the strip.
       Recommend (a) — both are one-liners on existing tables.
+      _Run via `/feature`._
 - [ ] **Wire (or remove) Listings header buttons.** `web/src/pages/Listings.tsx:58-59`
       "Refresh" and "Export CSV" are UI-only with no handlers. Refresh →
       `queryClient.invalidateQueries({ queryKey: ['listings'] })`. Export CSV
       → either add `GET /api/listings.csv` streaming the same envelope, or
       drop the button until a user asks. Recommend ship Refresh, drop Export.
+      _Run via `/feature`._
 - [ ] **Populate `SweepDetail.currentlyFetching`.** `web/src/pages/SweepDetail.tsx:54-62`
       hardcodes `currentlyFetching: null`; the live banner never shows the
       in-flight URL. Set in `src/sweep.ts` when each detail fetch starts /
       clear on completion, expose via the SSE initial event payload from
       `src/web/events.ts`, and surface in the `progress` shape.
+      _Run via `/feature`._
 - [ ] **Delete stale stub comments** at `src/web/routes/sweeps.detail.ts:1-7`.
       The implementation is the real one; the "STATUS: stub" / "TODO Task 1"
       header misleads future readers.
+      _Run via `/feature`._
 
 ## Priority 2 — Acceptance criteria validation
 
