@@ -13,6 +13,7 @@ vi.mock('../lib/api.js', () => ({
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
   });
 
   it('renders the redesigned KPI strip and side widgets', async () => {
@@ -37,7 +38,11 @@ describe('Dashboard', () => {
 
   it('exposes Grafana action and run-sweep button', async () => {
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue([]);
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint === '/settings')
+        return Promise.resolve([{ key: 'monitoring.grafanaUrl', value: 'https://grafana.test' }]);
+      return Promise.resolve([]);
+    });
 
     const router = createMemoryRouter([{ path: '/', element: <Dashboard /> }]);
     render(
@@ -46,7 +51,7 @@ describe('Dashboard', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Open Grafana')).toBeInTheDocument();
+    expect(await screen.findByText('Open Grafana')).toBeInTheDocument();
     expect(screen.getByText('Run sweep now')).toBeInTheDocument();
   });
 

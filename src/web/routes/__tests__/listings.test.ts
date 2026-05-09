@@ -185,17 +185,14 @@ describe('GET /api/listings', () => {
       // h-oldest: 80k/50m² = 1600/m²
       // h-mid: 100k/60m² = 1667/m²
       // h-newest: 150k/75m² = 2000/m²
-      // However, the current implementation falls back to newest due to no dedicated column
       const res = await app.request('/api/listings?sort=eurm2');
       const body = (await res.json()) as {
         listings: Array<{ id: string }>;
       };
 
-      // Since the current implementation returns newest as fallback for eurm2,
-      // we expect the same order as newest
-      expect(body.listings[0]?.id).toBe('h-newest');
+      expect(body.listings[0]?.id).toBe('h-oldest');
       expect(body.listings[1]?.id).toBe('h-mid');
-      expect(body.listings[2]?.id).toBe('h-oldest');
+      expect(body.listings[2]?.id).toBe('h-newest');
     });
 
     it('respects explicit sort=newest', async () => {
