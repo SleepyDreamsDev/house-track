@@ -1,71 +1,13 @@
 # house-track — Backlog
 
-## Priority 1 — POC crawler completion
+## Priority 1 — Backfill quality (data correctness blockers, tracked 2026-05-01)
 
-_All items done — see Done section._
-
-## Priority 2.5 — UI redesign follow-ups (port-kit Phase 1+, tracked 2026-05-03)
-
-Parent plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). Phase 0
-(kit install + stub routes + frontend test rewrite) shipped — pages render
-end-to-end, all backend routes 200. Phases 1–4 are tracked here.
-
-- [x] **Phase 1 — co-locate crawler + web API in one Node process.** Required
-      for the kit's in-process SSE EventEmitter to work; today they're
-      separate processes. `src/index.ts` boots cron only; web API needs to
-      `serve()` alongside. Add a `127.0.0.1:3000:3000` port mapping to the
-      `property-crawler` service in `docker-compose.yml`.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Shipped in PR #17._
-- [ ] **Phase 2 Task 1 — persist sweep detail JSON columns.** Capture
-      pages/details rows + config snapshot in `runSweep`/`finishSweep` (see
-      `src/sweep.ts:42`, `src/persist.ts:150`). Then uncomment the REAL IMPL
-      in `src/web/routes/sweeps.detail.ts` and `parseInt` the `:id` param
-      (SweepRun.id is `Int`, not string).
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-- [ ] **Phase 2 Task 4 — settings metadata.** Extend `src/settings.ts` with
-      `{group, kind, unit?, options?, label?, hint?}` per row, and project
-      those fields in `GET /api/settings`.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-- [ ] **Phase 3 Task 2 — pino → EventEmitter tee for SSE.** Custom write
-      stream in `src/log.ts` emits to `sweepEvents` keyed by an
-      `activeSweepId` module variable from `src/sweep.ts`. Coerce the id
-      comparison in `src/web/routes/sweeps.stream.ts` to `String(...)`.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-- [ ] **Phase 3 Task 3 — real Prisma queries** for `/api/stats/by-district`,
-      `/api/stats/new-per-day`, `/api/listings/new-today`, and
-      `/api/listings/price-drops`. Use `ListingSnapshot` for price-drop
-      detection (≥5% over 7d).
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-- [ ] **Task 5 — `/api/listings` envelope + sort/q/flags.** Currently
-      returns a bare array; both old and new UI consume `{listings,total}`.
-      Wrap with `prisma.listing.count`, wire `sort=newest|price|eurm2`,
-      `q` (title ILIKE), `flags=priceDrop`. Update `searchListings` in
-      `src/mcp/queries.ts` to accept the new params.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-- [ ] **Sweep API gaps (manual trigger, cancel, source/trigger cols, durationMs, progress shape).**
-      Wires up: (a) `POST /api/sweeps` thin wrapper around `runSweep(deps)`
-      for the Dashboard "Run sweep now" button; (b) `POST /api/sweeps/:id/cancel`
-      with `AbortController` plumbed through `Fetcher` + `runSweep`; (c)
-      adds `source` + `trigger` columns to `SweepRun` (Phase 2 currently
-      hard-codes `'999.md'`/`'cron'`); (d) `durationMs = finishedAt -
-      startedAt` (null when running) on the `/api/sweeps` projection
-      (`src/web/routes/sweeps.ts:12`); (e) structured `progress` (phase,
-      pagesDone/Total, queued) and `currentlyFetching` shape on
-      SweepDetail. Depends on Phase 1 co-location.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-- [ ] **Task 6 — contract + BDD tests** for every new route, BDD spec
-      `specs/sweep-sse-stream.feature`, integration test that creates a
-      `SweepRun` row with populated JSON columns.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-- [ ] **CLAUDE_CODE_E2E.md cleanup.** Brief lives at repo root; once Phases
-      1–4 ship, fold the still-relevant content into `docs/operator-ui.md`
-      and delete the brief.
-      Plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). _Run via `/feature`._
-
-## Priority 1.5 — Backfill quality (newly tracked 2026-05-01)
+POC live smoke is meaningless until both GraphQL captures are refreshed —
+without them, sweeps populate sparse `ListingFilterValue` rows and `list_filters`
+returns no labels.
 
 - [ ] **Re-capture `GetAdvert` with the full feature selection set.** The
-      currently-captured query in `src/graphql.ts` (timestamp
+      currently-captured query in `src/graphql.ts:274` (timestamp
       `2026-05-01T15:16:14.864Z`) only requests `id, state, title, posted,
       reseted, expire, isExpired, owner, autoRepublish, moderation, package,
       subCategory`. It does NOT request `price`, `body`, `region`, `city`,
@@ -92,7 +34,35 @@ end-to-end, all backend routes 200. Phases 1–4 are tracked here.
       listings, filterValuesEnrichedAt populated, ~30 backfill rows per
       tick, no 403/429.
 
-## Priority 3 — Acceptance criteria validation
+## Priority 1.6 — UI polish from finalization audit (tracked 2026-05-09)
+
+Discovered while auditing the redesign for finalization. Small, but the
+redesign is not honest until they ship.
+
+- [ ] **Dashboard KPI strip — replace hardcoded `successRate` + `avgPrice`.**
+      `web/src/pages/Dashboard.tsx:70-71` hardcodes `successRate: 0.95` and
+      `avgPrice: 174_500`. Either (a) ship `GET /api/stats/success-rate`
+      (`SweepRun.status='ok'` ratio over last N runs) and `GET
+      /api/stats/avg-price` (mean `priceEur` over active listings) and wire
+      them in, OR (b) remove the two placeholder KPIs from the strip.
+      Recommend (a) — both are one-liners on existing tables.
+- [ ] **Wire (or remove) Listings header buttons.** `web/src/pages/Listings.tsx:58-59`
+      "Refresh" and "Export CSV" are UI-only with no handlers. Refresh →
+      `queryClient.invalidateQueries({ queryKey: ['listings'] })`. Export CSV
+      → either add `GET /api/listings.csv` streaming the same envelope, or
+      drop the button until a user asks. Recommend ship Refresh, drop Export.
+- [ ] **Populate `SweepDetail.currentlyFetching`.** `web/src/pages/SweepDetail.tsx:54-62`
+      hardcodes `currentlyFetching: null`; the live banner never shows the
+      in-flight URL. Set in `src/sweep.ts` when each detail fetch starts /
+      clear on completion, expose via the SSE initial event payload from
+      `src/web/events.ts`, and surface in the `progress` shape.
+- [ ] **Delete stale stub comments** at `src/web/routes/sweeps.detail.ts:1-7`.
+      The implementation is the real one; the "STATUS: stub" / "TODO Task 1"
+      header misleads future readers.
+
+## Priority 2 — Acceptance criteria validation
+
+Gate after first live smoke passes; runs over the following 7 days.
 
 - [ ] 7 consecutive days of hourly sweeps, ≥ 95% `status=ok`.
 - [ ] ≥ 200 unique listings captured.
@@ -100,7 +70,7 @@ end-to-end, all backend routes 200. Phases 1–4 are tracked here.
 - [ ] Zero 403/429 across the week.
 - [ ] At least one observed price change captured as a snapshot.
 
-## Priority 4 — Later (post-POC backlog from spec §"High-level backlog")
+## Priority 3 — Later (post-POC backlog from spec §"High-level backlog")
 
 - [ ] Phase 2: LLM scoring with Haiku 4.5 + prompt-cached rubric.
 - [ ] Phase 3: Telegram bot delivery.
@@ -113,7 +83,7 @@ end-to-end, all backend routes 200. Phases 1–4 are tracked here.
 
 ## Done
 
-### POC crawler core (Priority 1)
+### POC crawler core
 
 - [x] `src/circuit.ts` — sentinel `data/.circuit_open`, threshold + 24h cooldown (8 tests).
 - [x] `src/fetch.ts` — undici client, 8s±2s jitter, retries, 403/429 → CircuitTrippingError, politeness profile (25 tests).
@@ -131,7 +101,7 @@ end-to-end, all backend routes 200. Phases 1–4 are tracked here.
 - [x] **Verify `999.md/robots.txt`** — `pnpm verify-robots` (live + 9 unit tests). `User-agent: *` does not disallow `/graphql`, `/ro/list/...`, or `/ro/<id>` (verified 2026-05-02).
 - [x] **Local Docker compose smoke test** — `POSTGRES_PASSWORD=changeme docker compose up -d --build`. Surfaced and fixed three real bugs: (1) Dockerfile runtime stage missing `--chown=node:node` on COPY (caused Prisma engine write failures under `USER node`); (2) Slice 2 added `Setting`/`Source` to schema but never created a migration — now in `20260502192036_add_setting_source`; (3) Prisma client only generated for `linux-arm64-openssl-1.1.x`, but Bookworm-slim ships OpenSSL 3.0 — added `linux-arm64-openssl-3.0.x` and `debian-openssl-3.0.x` to `binaryTargets`. Post-fix: 6 app tables present, 2 migrations applied, crawler boots cron, Grafana `/api/health` 200.
 
-### Operator UI + Postgres + Grafana (Priority 2)
+### Operator UI + Postgres + Grafana
 
 Parent plan: [`operator-ui-postgres-grafana.md`](./operator-ui-postgres-grafana.md). All 7 slices shipped.
 
@@ -142,3 +112,18 @@ Parent plan: [`operator-ui-postgres-grafana.md`](./operator-ui-postgres-grafana.
 - [x] **Slice 5** — `frontend-design` visual pass over the 4 pages.
 - [x] **Slice 6** — Grafana provisioning + Dashboard-page iframe.
 - [x] **Slice 7** — Docs: `docs/operator-ui.md`, poc-spec append, CLAUDE.md Stack/Quick-Start update.
+
+### UI redesign port-kit Phases 1–4
+
+Parent plan: [`ui-redesign-port-kit.md`](./ui-redesign-port-kit.md). All phases shipped via `/run-backlog` between 2026-05-03 and 2026-05-09.
+
+- [x] **Phase 1 — co-locate crawler + web API in one Node process** ([PR #17](https://github.com/SleepyDreamsDev/house-track/pull/17), `b73fbc2`). `src/index.ts` boots cron + `serve()` together; `docker-compose.yml` exposes `127.0.0.1:3000:3000`.
+- [x] **Phase 2 Task 1 — persist sweep detail JSON columns** ([PR #19](https://github.com/SleepyDreamsDev/house-track/pull/19), `c890426`). `runSweep`/`finishSweep` populate `pagesDetail`, `detailsDetail`, `configSnapshot`, `eventLog` on `SweepRun`; `sweeps.detail.ts` reads them with `parseInt(:id)`.
+- [x] **Phase 2 Task 4 — settings metadata** ([PR #20](https://github.com/SleepyDreamsDev/house-track/pull/20), `c0ec340`). `src/settings.ts:44-124` ships `{group, kind, unit?, options?, label?, hint?}` per row, projected by `GET /api/settings`.
+- [x] **Phase 3 Task 2 — pino → EventEmitter tee for SSE** ([PR #21](https://github.com/SleepyDreamsDev/house-track/pull/21), `9dd9bed`). `src/log.ts:7-55` Writable tees JSON lines to `sweepEvents`; `getActiveSweepId()` exported from `src/sweep.ts`; SSE route coerces id via `String(...)`.
+- [x] **Phase 3 Task 3 — real Prisma queries** for `/api/stats/by-district`, `/api/stats/new-per-day`, `/api/listings/new-today`, `/api/listings/price-drops` ([PR #22](https://github.com/SleepyDreamsDev/house-track/pull/22), `de8e988`). Price-drop detection uses `ListingSnapshot` ≥5% over 7d.
+- [x] **Task 5 — `/api/listings` envelope + sort/q/flags** ([PR #23](https://github.com/SleepyDreamsDev/house-track/pull/23), `125c3f1`). `searchListings` in `src/mcp/queries.ts:136-225` accepts `sort=newest|price|eurm2`, `q`, `flags=priceDrop`; returns `{listings,total}`.
+- [x] **Sweep API gaps** ([PR #24](https://github.com/SleepyDreamsDev/house-track/pull/24), `aaea7c1`). `POST /api/sweeps`, `POST /api/sweeps/:id/cancel` with `AbortController`, `source`/`trigger` columns on `SweepRun`, `durationMs` projection, structured `progress` shape.
+- [x] **Task 6 — contract + BDD tests** for every new route and SSE ([PR #25](https://github.com/SleepyDreamsDev/house-track/pull/25), `2eaeb77`). 22+ test cases across `sweeps-api-*`, `listings.feed`, `stats`, `sweeps.stream`.
+- [x] **Correctness fixes across sweep, log, persist, and routes** (`cd3af85`).
+- [x] **`CLAUDE_CODE_E2E.md` cleanup** ([PR #27](https://github.com/SleepyDreamsDev/house-track/pull/27), `ea85a29`). Brief deleted; relevant content folded into `docs/operator-ui.md`.
