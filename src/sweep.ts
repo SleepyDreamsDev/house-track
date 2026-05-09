@@ -111,7 +111,16 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
 
   try {
     // Capture config snapshot at sweep start (inside try so error triggers catch → finishSweep)
-    result.configSnapshot = await deps.persist.snapshotConfig();
+    // Override with the deps actually applied to this run so smoke sweeps
+    // record their per-run caps (maxPagesPerSweep=1, targetListingsThisSweep=3)
+    // instead of the global cron defaults.
+    const settingsSnapshot = await deps.persist.snapshotConfig();
+    result.configSnapshot = {
+      ...settingsSnapshot,
+      'sweep.maxPagesPerSweep': deps.maxPagesPerSweep,
+      'sweep.targetListingsThisSweep': deps.targetListingsThisSweep ?? null,
+      'sweep.backfillPerSweep': deps.backfillPerSweep ?? 0,
+    };
     const allStubs = await collectIndexStubs(deps, result, controller.signal, sweepId);
     const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
     const diff = await deps.persist.diffAgainstDb(stubs);

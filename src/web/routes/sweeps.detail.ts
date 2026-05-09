@@ -55,7 +55,13 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
     progress: {
       phase: toUiStatus(run.status),
       pagesDone: pagesDetail.length,
-      pagesTotal: pagesDetail.length,
+      // pagesTotal = the cap this sweep was started with (smoke=1, full~8).
+      // Falls back to pagesDone for legacy rows missing the snapshot key so
+      // the bar still renders (just doesn't show "out of N" on old runs).
+      pagesTotal:
+        (run.configSnapshot && typeof run.configSnapshot === 'object'
+          ? (run.configSnapshot as Record<string, unknown>)['sweep.maxPagesPerSweep']
+          : null) ?? pagesDetail.length,
       detailsDone: run.detailsFetched,
       // detailsQueued reflects the in-memory queue depth only for the
       // currently-active sweep (process restart wipes it); finished or
