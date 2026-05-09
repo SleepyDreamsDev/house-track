@@ -205,9 +205,6 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
         return c.json({ error: 'circuit_open' }, 409);
       }
 
-      // Override sweep caps for smoke. backfillPerSweep=0 keeps the smoke
-      // strictly to fresh listings; targetListingsThisSweep=3 caps total
-      // detail fetches; maxPagesPerSweep=1 caps index pages.
       const smokeDeps: SweepDeps = {
         ...deps,
         maxPagesPerSweep: SMOKE_MAX_PAGES,
@@ -215,29 +212,55 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
         backfillPerSweep: 0,
       };
 
-      const sweepStart = new Date();
       const sweep = await deps.persist.startSweep({ source: '999.md', trigger: 'smoke' });
 
-      // Synchronous wait — caller blocks ~32s. Spec rationale:
-      // operator clicks button and waits at the screen for the result.
-      try {
-        await runSweep(smokeDeps, sweep.id);
-      } catch (err) {
-        console.error('Error in smoke runSweep:', err);
-      }
+      // Non-blocking: returns the sweep id immediately so the UI can
+      // navigate to /sweeps/:id and live-track via SSE (same UX as the
+      // full Run-sweep-now flow). Assertions are computed lazily by
+      // GET /api/sweeps/:id/smoke-assertions once the sweep is done.
+      void (async () => {
+        try {
+          await runSweep(smokeDeps, sweep.id);
+        } catch (err) {
+          console.error('Error in smoke runSweep:', err);
+        }
+      })();
 
-      const since = new Date(sweepStart.getTime() - 1000);
-      const assertions = await runSmokeAssertions(prisma, since, { minListingsTouched: 1 });
-      const passed = assertions.every((a) => a.ok);
-
-      return c.json({
-        sweepId: sweep.id,
-        durationMs: Date.now() - sweepStart.getTime(),
-        passed,
-        assertions,
-      });
+      return c.json(
+        {
+          id: sweep.id,
+          startedAt: sweep.startedAt.toISOString(),
+        },
+        201,
+      );
     } catch (error) {
       console.error('Error running smoke:', error);
+      return c.json({ error: 'Internal server error' }, 500);
+    }
+  });
+
+  // On-demand smoke assertions for a finished smoke sweep. Used by
+  // SweepDetail to render the pass/fail panel for trigger='smoke' rows.
+  // Re-runs the same DB queries the synchronous /smoke endpoint used to
+  // run inline; cheap enough to compute on each request.
+  app.get('/api/sweeps/:id/smoke-assertions', async (c) => {
+    try {
+      const id = parseInt(c.req.param('id'));
+      const sweep = await prisma.sweepRun.findUnique({ where: { id } });
+      if (!sweep) return c.json({ error: 'Sweep not found' }, 404);
+      if (sweep.trigger !== 'smoke') {
+        return c.json({ error: 'Not a smoke sweep' }, 409);
+      }
+      if (!sweep.finishedAt) {
+        return c.json({ pending: true, sweepId: id });
+      }
+      const since = new Date(sweep.startedAt.getTime() - 1000);
+      const assertions = await runSmokeAssertions(prisma, since, { minListingsTouched: 1 });
+      const passed = assertions.every((a) => a.ok);
+      const durationMs = sweep.finishedAt.getTime() - sweep.startedAt.getTime();
+      return c.json({ sweepId: id, durationMs, passed, assertions });
+    } catch (error) {
+      console.error('Error computing smoke assertions:', error);
       return c.json({ error: 'Internal server error' }, 500);
     }
   });

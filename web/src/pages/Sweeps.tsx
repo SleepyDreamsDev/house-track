@@ -31,18 +31,6 @@ interface RunSweepResponse {
   startedAt: string;
 }
 
-interface SmokeAssertion {
-  name: string;
-  ok: boolean;
-  detail: string;
-}
-interface SmokeResult {
-  sweepId: number;
-  durationMs: number;
-  passed: boolean;
-  assertions: SmokeAssertion[];
-}
-
 export const Sweeps: React.FC = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -75,13 +63,15 @@ export const Sweeps: React.FC = () => {
   });
 
   // Bounded 3-listing sweep + DB assertions for fast post-deploy validation.
-  // Stays alongside Run-sweep-now: smoke catches schema/parse regressions
-  // in ~30s without burning the politeness budget on a full 250-listing run.
-  const smoke = useMutation<SmokeResult>({
-    mutationFn: () => apiCall<SmokeResult>('/sweeps/smoke', { method: 'POST' }),
-    onSuccess: () => {
+  // Like runSweep, this is non-blocking — navigates to the detail page so
+  // the operator can watch progress live via SSE. Assertions render on the
+  // detail page once the sweep finishes (GET /sweeps/:id/smoke-assertions).
+  const smoke = useMutation<RunSweepResponse>({
+    mutationFn: () => apiCall<RunSweepResponse>('/sweeps/smoke', { method: 'POST' }),
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['sweeps'] });
       qc.invalidateQueries({ queryKey: ['circuit'] });
+      navigate(`/sweeps/${data.id}`);
     },
   });
 
@@ -116,36 +106,6 @@ export const Sweeps: React.FC = () => {
           </Button>
         </div>
       </div>
-
-      {smoke.data && (
-        <div
-          className={`mb-6 rounded-sm border p-4 ${
-            smoke.data.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-semibold">
-              Smoke {smoke.data.passed ? 'passed' : 'failed'}:{' '}
-              {smoke.data.assertions.filter((a) => a.ok).length}/{smoke.data.assertions.length}{' '}
-              checks
-            </span>
-            <span className="text-xs text-neutral-600">({fmt.ms(smoke.data.durationMs)})</span>
-            <button
-              onClick={() => navigate(`/sweeps/${smoke.data?.sweepId}`)}
-              className="text-xs text-blue-600 hover:underline ml-auto"
-            >
-              View sweep #{smoke.data.sweepId} →
-            </button>
-          </div>
-          <ul className="text-xs space-y-0.5">
-            {smoke.data.assertions.map((a) => (
-              <li key={a.name} className={a.ok ? 'text-neutral-700' : 'text-error font-medium'}>
-                {a.ok ? '✓' : '✗'} {a.name} — {a.detail}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {smoke.isError && (
         <div className="mb-6 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-error">
