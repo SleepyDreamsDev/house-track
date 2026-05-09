@@ -46,7 +46,10 @@ statsRouter.get('/stats/new-per-day', async (c) => {
     ORDER BY 1 ASC
   `;
 
-  // Build result array with 7 days, padding missing days with 0
+  // Build result array with 7 days, padding missing days with 0.
+  // Use UTC-day arithmetic on both sides — DB buckets via date_trunc('day')
+  // in UTC and Date.setDate() mutates by *local* calendar days, which would
+  // skew the window by one day at the midnight-local boundary.
   const resultMap = new Map<string, number>();
   for (const row of rows) {
     const date = row.d instanceof Date ? row.d : new Date(row.d);
@@ -59,7 +62,7 @@ statsRouter.get('/stats/new-per-day', async (c) => {
   const result: number[] = [];
   for (let i = 6; i >= 0; i--) {
     const date = new Date(now);
-    date.setDate(date.getDate() - i);
+    date.setUTCDate(date.getUTCDate() - i);
     const dayKey = date.toISOString().split('T')[0] ?? '';
     result.push(resultMap.get(dayKey) ?? 0);
   }

@@ -218,8 +218,8 @@ describe('Stats routes', () => {
 
       for (const { daysAgo, count } of dates) {
         const date = new Date(now);
-        date.setDate(date.getDate() - daysAgo);
-        date.setHours(12, 0, 0, 0); // Set to noon
+        date.setUTCDate(date.getUTCDate() - daysAgo);
+        date.setUTCHours(12, 0, 0, 0); // UTC noon — TZ-stable bucket
 
         for (let i = 0; i < count; i++) {
           await prisma.listing.create({
@@ -255,7 +255,8 @@ describe('Stats routes', () => {
 
       // Only add listings 6 days ago and today
       const sixDaysAgo = new Date(now);
-      sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
+      sixDaysAgo.setUTCDate(sixDaysAgo.getUTCDate() - 6);
+      sixDaysAgo.setUTCHours(12, 0, 0, 0);
 
       await prisma.listing.create({
         data: {

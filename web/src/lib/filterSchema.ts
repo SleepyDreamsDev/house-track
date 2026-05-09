@@ -16,6 +16,12 @@ export type Category = (typeof CATEGORIES)[number];
 export type Locality = (typeof LOCALITIES)[number];
 export type Currency = (typeof CURRENCIES)[number];
 
+export interface ExtraFilterTriple {
+  filterId: number;
+  featureId: number;
+  optionIds: number[];
+}
+
 export interface GenericFilter {
   transactionType: TransactionType;
   category: Category;
@@ -25,7 +31,14 @@ export interface GenericFilter {
   priceMax?: number | undefined;
   sqmMin?: number | undefined;
   sqmMax?: number | undefined;
+  extraFilters: ExtraFilterTriple[];
 }
+
+const extraFilterTripleSchema = z.object({
+  filterId: z.number().int(),
+  featureId: z.number().int(),
+  optionIds: z.array(z.number().int()).min(1),
+});
 
 const baseSchema = z.object({
   transactionType: z.enum(TRANSACTION_TYPES),
@@ -36,6 +49,7 @@ const baseSchema = z.object({
   priceMax: z.number().positive().optional(),
   sqmMin: z.number().nonnegative().optional(),
   sqmMax: z.number().positive().optional(),
+  extraFilters: z.array(extraFilterTripleSchema).default([]),
 });
 
 export const genericFilterSchema = baseSchema
