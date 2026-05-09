@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
@@ -13,15 +13,16 @@ import { fmt } from '@/lib/format.js';
 
 interface Listing {
   id: string;
+  url: string;
   title: string;
-  priceEur: number;
-  priceWas?: number;
-  areaSqm: number;
-  landSqm?: number;
+  priceEur: number | null;
+  priceWas?: number | null;
+  areaSqm: number | null;
+  landSqm?: number | null;
   rooms: number | null;
   floors?: number;
-  district: string;
-  street?: string;
+  district: string | null;
+  street?: string | null;
   firstSeenAt: string;
   flags?: string[];
   isNew?: boolean;
@@ -33,8 +34,13 @@ interface DistrictRow {
   eurPerSqm: number;
 }
 interface SweepStatus {
-  status: 'running' | 'success' | 'failed';
+  status: 'running' | 'success' | 'failed' | 'cancelled';
   durationMs: number;
+  startedAt: string;
+}
+interface Setting {
+  key: string;
+  value: unknown;
 }
 interface CircuitState {
   open: boolean;
@@ -78,20 +84,48 @@ export const Dashboard: React.FC = () => {
     queryKey: ['avgPrice'],
     queryFn: () => apiCall('/stats/avg-price'),
   });
+  const { data: settings } = useQuery<Setting[]>({
+    queryKey: ['settings'],
+    queryFn: () => apiCall('/settings'),
+  });
+
+  const queryClient = useQueryClient();
+  const runSweep = useMutation({
+    mutationFn: () => apiCall('/sweeps', { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sweeps'] });
+      queryClient.invalidateQueries({ queryKey: ['sweeps', 'latest'] });
+    },
+  });
 
   const totalActive = districts?.reduce((a, d) => a + d.count, 0) ?? 0;
   const successRate = successRateData?.rate ?? 0;
   const avgPrice = avgPriceData?.avgPrice ?? 0;
+  const grafanaUrl =
+    (settings?.find((s) => s.key === 'monitoring.grafanaUrl')?.value as string) ?? '';
 
   return (
     <div className="space-y-6" data-screen-label="Dashboard">
       <PageHeader
         title="Dashboard"
-        subtitle={`last sweep ${latestSweep ? fmt.rel(new Date()) : '—'}`}
+        subtitle={`last sweep ${latestSweep ? fmt.rel(latestSweep.startedAt) : '—'}`}
         actions={
           <>
-            <Button variant="secondary">Open Grafana</Button>
-            <Button variant="default">Run sweep now</Button>
+            {grafanaUrl && (
+              <Button
+                variant="secondary"
+                onClick={() => window.open(grafanaUrl, '_blank', 'noopener,noreferrer')}
+              >
+                Open Grafana
+              </Button>
+            )}
+            <Button
+              variant="default"
+              onClick={() => runSweep.mutate()}
+              disabled={runSweep.isPending || circuit?.open}
+            >
+              {runSweep.isPending ? 'Starting…' : 'Run sweep now'}
+            </Button>
           </>
         }
       />
@@ -168,7 +202,9 @@ export const Dashboard: React.FC = () => {
                         ? 'success'
                         : latestSweep?.status === 'failed'
                           ? 'error'
-                          : 'warning'
+                          : latestSweep?.status === 'cancelled'
+                            ? 'default'
+                            : 'warning'
                     }
                   >
                     {latestSweep?.status ?? '—'}
@@ -233,10 +269,17 @@ const Row: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value
 
 const LeadRow: React.FC<{ listing: Listing; kind: 'new' | 'drop' }> = ({ listing: l, kind }) => {
   const drop =
-    l.priceWas && l.priceWas > l.priceEur ? Math.round((1 - l.priceEur / l.priceWas) * 100) : null;
-  const eurPerSqm = l.areaSqm ? Math.round(l.priceEur / l.areaSqm) : 0;
+    l.priceWas && l.priceEur && l.priceWas > l.priceEur
+      ? Math.round((1 - l.priceEur / l.priceWas) * 100)
+      : null;
+  const eurPerSqm = l.areaSqm && l.priceEur ? Math.round(l.priceEur / l.areaSqm) : 0;
   return (
-    <div className="group flex items-center gap-4 rounded-sm bg-white p-3 border border-neutral-200 hover:border-neutral-400 transition-colors">
+    <a
+      href={l.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center gap-4 rounded-sm bg-white p-3 border border-neutral-200 hover:border-neutral-400 transition-colors"
+    >
       <PhotoPlaceholder id={l.id} className="h-16 w-24 shrink-0" label="999.md" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
@@ -264,6 +307,6 @@ const LeadRow: React.FC<{ listing: Listing; kind: 'new' | 'drop' }> = ({ listing
         )}
         <div className="text-xs tabular-nums text-neutral-400">€{eurPerSqm}/m²</div>
       </div>
-    </div>
+    </a>
   );
 };
