@@ -27,6 +27,16 @@ export function getActiveSweepId(): number | null {
 // page's live banner can show the in-flight URL.
 let currentlyFetching: { url: string; startedAt: number } | null = null;
 
+// Live count of detail fetches still pending in the current sweep. Surfaced via
+// GET /api/sweeps/:id so the SweepDetail page's "Queued" KStat shows real
+// remaining work. Reset at sweep start AND end so a crashed prior sweep can't
+// leak a stale value into the next one.
+let detailQueueDepth = 0;
+
+export function getQueueDepth(): number {
+  return detailQueueDepth;
+}
+
 export function getCurrentlyFetching(): { url: string; startedAt: number } | null {
   return currentlyFetching;
 }
@@ -93,6 +103,7 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
 
   const sweepId = initialSweepId || (await deps.persist.startSweep()).id;
   activeSweepId = sweepId;
+  detailQueueDepth = 0;
   const controller = new AbortController();
   sweepAbortControllers.set(sweepId, controller);
   const result: SweepResult = emptyResult('ok');
@@ -135,6 +146,7 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
     // Clear activeSweepId only after all final operations complete
     activeSweepId = null;
     setCurrentlyFetching(null);
+    detailQueueDepth = 0;
   }
 }
 
@@ -226,6 +238,8 @@ async function fetchAndPersistDetails(
 ): Promise<void> {
   if (!result.detailsDetail) result.detailsDetail = [];
 
+  detailQueueDepth += newStubs.length;
+
   // Process new listings: fetch, parse, persist, and capture details
   for (const s of newStubs) {
     if (signal.aborted) {
@@ -236,12 +250,14 @@ async function fetchAndPersistDetails(
     try {
       envelope = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
+      detailQueueDepth = Math.max(0, detailQueueDepth - 1);
       if (err instanceof CircuitTrippingError) throw err;
       record(result, { url: s.url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
     }
+    detailQueueDepth = Math.max(0, detailQueueDepth - 1);
     const { json, bytes, attempts } = envelope;
     result.detailsFetched += 1;
 

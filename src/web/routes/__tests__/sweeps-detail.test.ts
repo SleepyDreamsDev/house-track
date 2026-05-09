@@ -287,6 +287,42 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
       expect(typeof progress.pagesTotal).toBe('number');
       expect(typeof progress.queued).toBe('number');
     });
+
+    it('detailsQueued is 0 for a finished sweep (status not in_progress)', async () => {
+      const now = new Date();
+      const sweep = await prisma.sweepRun.create({
+        data: {
+          status: 'ok',
+          startedAt: now,
+          finishedAt: new Date(now.getTime() + 5000),
+        },
+      });
+
+      const res = await app.request(`/api/sweeps/${sweep.id}`);
+      const body = (await res.json()) as Record<string, unknown>;
+      const progress = body.progress as Record<string, unknown>;
+
+      expect(progress.detailsQueued).toBe(0);
+      expect(typeof progress.detailsQueued).toBe('number');
+    });
+
+    it('detailsQueued is 0 when an in_progress sweep is NOT the in-memory active sweep', async () => {
+      // Stale row left over after a process restart: status is in_progress in
+      // the DB, but no module-level activeSweepId is set, so the live counter
+      // does not apply.
+      const sweep = await prisma.sweepRun.create({
+        data: {
+          status: 'in_progress',
+          startedAt: new Date(),
+        },
+      });
+
+      const res = await app.request(`/api/sweeps/${sweep.id}`);
+      const body = (await res.json()) as Record<string, unknown>;
+      const progress = body.progress as Record<string, unknown>;
+
+      expect(progress.detailsQueued).toBe(0);
+    });
   });
 
   describe('currentlyFetching field', () => {
