@@ -429,12 +429,15 @@ async function writeArtefacts(
   console.error('· wrote advert-detail-response.json');
 
   if (taxonomy) {
+    // Lives under src/data/ (not src/__tests__/) so it ships in the
+    // production build — see taxonomy-labels.ts which imports it for
+    // human-readable filter/option labels in the operator UI.
     await writeFile(
-      join(REPO_ROOT, 'src/__tests__/fixtures/filter-taxonomy-response.json'),
+      join(REPO_ROOT, 'src/data/filter-taxonomy.json'),
       `${JSON.stringify(taxonomy.body, null, 2)}\n`,
       'utf8',
     );
-    console.error('· wrote filter-taxonomy-response.json');
+    console.error('· wrote filter-taxonomy.json');
   }
 
   const searchDiff = diffVariables(search.variables, buildSearchVariables(0));
