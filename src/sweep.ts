@@ -27,6 +27,17 @@ export function getActiveSweepId(): number | null {
 // page's live banner can show the in-flight URL.
 let currentlyFetching: { url: string; startedAt: number } | null = null;
 
+// Live count of detail fetches still pending in the current sweep. Incremented
+// upfront when we know the work, decremented per fetch. Surfaced via
+// GET /api/sweeps/:id so SweepDetail's "Queued" KStat shows real remaining
+// work. Reset at sweep start so a crashed prior sweep can't leak a stale
+// value into the next one.
+let detailQueueDepth = 0;
+
+export function getQueueDepth(): number {
+  return detailQueueDepth;
+}
+
 export function getCurrentlyFetching(): { url: string; startedAt: number } | null {
   return currentlyFetching;
 }
@@ -93,6 +104,7 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
 
   const sweepId = initialSweepId || (await deps.persist.startSweep()).id;
   activeSweepId = sweepId;
+  detailQueueDepth = 0;
   const controller = new AbortController();
   sweepAbortControllers.set(sweepId, controller);
   const result: SweepResult = emptyResult('ok');
@@ -102,7 +114,20 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
     result.configSnapshot = await deps.persist.snapshotConfig();
     const allStubs = await collectIndexStubs(deps, result, controller.signal, sweepId);
     const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
-    const { new: newStubs, seen: seenStubs } = await deps.persist.diffAgainstDb(stubs);
+    const diff = await deps.persist.diffAgainstDb(stubs);
+    // Cap detail processing to targetListingsThisSweep — pagination's cap
+    // only limits index pages, but a single page yields ~78 stubs which
+    // (with seen-stub persist) costs 78×10s. Smoke needs an actual cap on
+    // total fetches; full sweeps already have a high cap by config.
+    const cap = deps.targetListingsThisSweep;
+    let newStubs = diff.new;
+    let seenStubs = diff.seen;
+    if (cap !== undefined && newStubs.length + seenStubs.length > cap) {
+      const newSlice = newStubs.slice(0, cap);
+      const seenSlice = seenStubs.slice(0, Math.max(0, cap - newSlice.length));
+      newStubs = newSlice;
+      seenStubs = seenSlice;
+    }
     result.newListings = newStubs.length;
     await publishProgress(deps, sweepId, result);
 
@@ -110,7 +135,6 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
     await backfillUnenriched(deps, result, controller.signal, sweepId);
 
     await deps.persist.markSeen(seenStubs);
-    result.updatedListings = seenStubs.length;
     await publishProgress(deps, sweepId, result);
     // Only age out when this sweep saw a complete index. A partial sweep means
     // some listings would be missing for a reason unrelated to delisting, so
@@ -134,6 +158,7 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
     deps.log?.info({ event: 'sweep.done', ...result });
     // Clear activeSweepId only after all final operations complete
     activeSweepId = null;
+    detailQueueDepth = 0;
     setCurrentlyFetching(null);
   }
 }
@@ -155,6 +180,8 @@ async function publishProgress(
       newListings: result.newListings,
       updatedListings: result.updatedListings,
       errors: result.errors,
+      pagesDetail: result.pagesDetail,
+      detailsDetail: result.detailsDetail,
     });
   } catch (err) {
     deps.log?.warn({ event: 'sweep.progress.publish_failed', err: String(err) });
@@ -226,11 +253,16 @@ async function fetchAndPersistDetails(
 ): Promise<void> {
   if (!result.detailsDetail) result.detailsDetail = [];
 
+  // Seed the queue with total expected fetches; decrement per attempt so
+  // the SweepDetail "Queued" KStat shows a real countdown.
+  detailQueueDepth += newStubs.length + seenStubs.length;
+
   // Process new listings: fetch, parse, persist, and capture details
   for (const s of newStubs) {
     if (signal.aborted) {
       break;
     }
+    detailQueueDepth = Math.max(0, detailQueueDepth - 1);
     setCurrentlyFetching(s.url);
     let envelope: FetchEnvelope;
     try {
@@ -288,6 +320,7 @@ async function fetchAndPersistDetails(
     if (signal.aborted) {
       break;
     }
+    detailQueueDepth = Math.max(0, detailQueueDepth - 1);
     setCurrentlyFetching(s.url);
     let envelope: FetchEnvelope;
     try {
@@ -325,9 +358,11 @@ async function fetchAndPersistDetails(
       priceEur: parsed.priceEur ?? null,
     };
     result.detailsDetail.push(detailRecord);
+    result.detailsFetched += 1;
 
     try {
       await deps.persist.persistDetail(parsed);
+      result.updatedListings += 1;
     } catch (err) {
       record(result, { url: s.url, status: null, msg: `persist: ${String(err)}`, attempts });
       result.status = 'partial';

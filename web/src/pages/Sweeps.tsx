@@ -37,6 +37,9 @@ export const Sweeps: React.FC = () => {
   const { data: sweeps } = useQuery<SweepRun[]>({
     queryKey: ['sweeps'],
     queryFn: () => apiCall('/sweeps?limit=20'),
+    // Poll every 2s while any sweep is running so durationMs + counter
+    // columns stay live; idle list never repolls.
+    refetchInterval: (q) => (q.state.data?.some((s) => s.status === 'running') ? 2000 : false),
   });
   const { data: circuit } = useQuery<CircuitState>({
     queryKey: ['circuit'],
