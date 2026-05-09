@@ -34,9 +34,16 @@ describe('Dashboard', () => {
     expect(screen.getByText('By district')).toBeInTheDocument();
   });
 
-  it('exposes Grafana action and run-sweep button', async () => {
+  it('exposes the Grafana action when configured', async () => {
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue([]);
+    (apiCall as any).mockImplementation(async (path: string) => {
+      if (path === '/settings') return [{ key: 'monitoring.grafanaUrl', value: 'http://g' }];
+      if (path === '/sweeps/latest') return { startedAt: new Date().toISOString() };
+      if (path === '/circuit') return { open: false };
+      if (path === '/stats/success-rate') return { rate: 1, n: 1 };
+      if (path === '/stats/avg-price') return { avgPrice: 0, count: 0 };
+      return [];
+    });
 
     const router = createMemoryRouter([{ path: '/', element: <Dashboard /> }]);
     render(
@@ -45,8 +52,9 @@ describe('Dashboard', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Open Grafana')).toBeInTheDocument();
-    expect(screen.getByText('Run sweep now')).toBeInTheDocument();
+    expect(await screen.findByText('Open Grafana')).toBeInTheDocument();
+    // Run-sweep button intentionally lives on the Sweeps page only.
+    expect(screen.queryByText('Run sweep now')).not.toBeInTheDocument();
   });
 
   it('renders title even while queries are pending', async () => {

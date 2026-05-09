@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
@@ -91,15 +91,6 @@ export const Dashboard: React.FC = () => {
     queryFn: () => apiCall('/settings'),
   });
 
-  const queryClient = useQueryClient();
-  const runSweep = useMutation({
-    mutationFn: () => apiCall('/sweeps', { method: 'POST' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sweeps'] });
-      queryClient.invalidateQueries({ queryKey: ['sweeps', 'latest'] });
-    },
-  });
-
   const totalActive = districts?.reduce((a, d) => a + d.count, 0) ?? 0;
   const successRate = successRateData?.rate ?? 0;
   const avgPrice = avgPriceData?.avgPrice ?? 0;
@@ -112,23 +103,14 @@ export const Dashboard: React.FC = () => {
         title="Dashboard"
         subtitle={`last sweep ${latestSweep ? fmt.rel(latestSweep.startedAt) : '—'}`}
         actions={
-          <>
-            {grafanaUrl && (
-              <Button
-                variant="secondary"
-                onClick={() => window.open(grafanaUrl, '_blank', 'noopener,noreferrer')}
-              >
-                Open Grafana
-              </Button>
-            )}
+          grafanaUrl ? (
             <Button
-              variant="default"
-              onClick={() => runSweep.mutate()}
-              disabled={runSweep.isPending || circuit?.open}
+              variant="secondary"
+              onClick={() => window.open(grafanaUrl, '_blank', 'noopener,noreferrer')}
             >
-              {runSweep.isPending ? 'Starting…' : 'Run sweep now'}
+              Open Grafana
             </Button>
-          </>
+          ) : null
         }
       />
 
