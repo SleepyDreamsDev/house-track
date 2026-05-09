@@ -13,8 +13,8 @@ export interface ListingStub {
 }
 
 // One filter triple observed on a listing detail. Mirrors ListingFilterValue
-// in Prisma. filterId is 0 until 999.md's taxonomy query is captured —
-// queries match on (featureId, optionId) for now.
+// in Prisma. The parser emits filterId=0; Persistence resolves it from the
+// taxonomy LUT (src/parse-taxonomy.ts) before write.
 export interface FilterValueTriple {
   filterId: number;
   featureId: number;

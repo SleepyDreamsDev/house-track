@@ -4,6 +4,7 @@
 
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { bootstrapLutFromConfig, type TaxonomyLut } from './parse-taxonomy.js';
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
 
 export interface DiffResult {
@@ -41,7 +42,14 @@ export interface SweepResult {
 }
 
 export class Persistence {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly taxonomyLut: TaxonomyLut;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    taxonomyLut?: TaxonomyLut,
+  ) {
+    this.taxonomyLut = taxonomyLut ?? bootstrapLutFromConfig();
+  }
 
   async diffAgainstDb(stubs: ListingStub[]): Promise<DiffResult> {
     if (stubs.length === 0) return { new: [], seen: [] };
@@ -116,7 +124,7 @@ export class Persistence {
         await tx.listingFilterValue.createMany({
           data: detail.filterValues.map((t) => ({
             listingId: detail.id,
-            filterId: t.filterId,
+            filterId: this.taxonomyLut.get(t.featureId) ?? t.filterId,
             featureId: t.featureId,
             optionId: t.optionId,
             textValue: t.textValue,

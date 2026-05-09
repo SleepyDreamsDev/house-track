@@ -20,6 +20,7 @@
     "verify-robots": "tsx scripts/verify-robots.ts",
     "setup:mcp": "tsx scripts/setup-mcp.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "backfill:filters": "tsx scripts/backfill-filter-ids.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",

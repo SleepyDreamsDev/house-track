@@ -227,6 +227,27 @@ describe('Persistence', () => {
     expect(row.filterValuesEnrichedAt!.getTime()).toBeGreaterThanOrEqual(before);
   });
 
+  it('persistDetail resolves filterId from the bootstrap LUT (anchors from src/config.ts)', async () => {
+    await persist.persistDetail(
+      detail('LUT', {
+        filterValues: [
+          triple({ featureId: 1, optionId: 776 }), // offer-type → filterId 41
+          triple({ featureId: 7, optionId: 12900 }), // region → filterId 40
+          triple({ featureId: 999, optionId: 1 }), // unknown — stays at 0
+        ],
+      }),
+    );
+
+    const fvs = await prisma.listingFilterValue.findMany({
+      where: { listingId: 'LUT' },
+      orderBy: { featureId: 'asc' },
+    });
+    expect(fvs).toHaveLength(3);
+    expect(fvs[0]).toMatchObject({ featureId: 1, filterId: 41 });
+    expect(fvs[1]).toMatchObject({ featureId: 7, filterId: 40 });
+    expect(fvs[2]).toMatchObject({ featureId: 999, filterId: 0 });
+  });
+
   it('persistDetail replaces filter values on re-fetch (no duplicates accumulate)', async () => {
     await persist.persistDetail(
       detail('REPLACE', {
