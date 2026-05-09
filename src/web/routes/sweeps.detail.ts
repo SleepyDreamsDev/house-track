@@ -56,7 +56,16 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
       phase: toUiStatus(run.status),
       pagesDone: pagesDetail.length,
       pagesTotal: pagesDetail.length,
-      queued: 0,
+      // Frontend SweepDetail.tsx renders Queued/Updated/New KStats from these
+      // four fields during live runs. detailsDone tracks completed detail
+      // fetches; detailsQueued is left at 0 because the crawler doesn't
+      // currently expose its in-memory queue depth — surface it later when
+      // we add a per-tick queueSize counter.
+      detailsDone: run.detailsFetched,
+      detailsQueued: 0,
+      newCount: run.newListings,
+      updatedCount: run.updatedListings,
+      queued: 0, // legacy field kept for backward-compat with existing tests
     },
     // Only the truly-active sweep (in_progress AND matches in-memory state)
     // surfaces the current in-flight URL. After process restart the in-memory

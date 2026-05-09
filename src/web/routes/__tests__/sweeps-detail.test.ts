@@ -243,13 +243,15 @@ describe('GET /api/sweeps/:id SweepDetail response contract', () => {
 
     it('progress.phase reflects the sweep status (translated to UI)', async () => {
       // DB status → UI status mapping at the API boundary (toUiStatus):
-      //   in_progress → running, ok → success, everything else → failed
+      //   in_progress → running, ok → success, cancelled → cancelled,
+      //   partial / failed / circuit_open → failed
       const cases: Array<[string, string]> = [
         ['ok', 'success'],
         ['partial', 'failed'],
         ['failed', 'failed'],
         ['circuit_open', 'failed'],
         ['in_progress', 'running'],
+        ['cancelled', 'cancelled'],
       ];
 
       for (const [dbStatus, uiPhase] of cases) {

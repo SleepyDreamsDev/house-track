@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
@@ -37,7 +37,7 @@ interface DetailRow {
 }
 interface SweepDetailDto {
   id: string;
-  status: 'running' | 'success' | 'failed';
+  status: 'running' | 'success' | 'failed' | 'cancelled';
   startedAt: string;
   finishedAt?: string;
   source: string;
@@ -87,6 +87,11 @@ export const SweepDetail: React.FC = () => {
     if (liveEvents.length) refetch();
   }, [liveEvents.length, refetch]);
 
+  const cancel = useMutation({
+    mutationFn: () => apiCall(`/sweeps/${id}/cancel`, { method: 'POST' }),
+    onSuccess: () => refetch(),
+  });
+
   if (!detail) return <p className="text-sm text-neutral-400">Loading…</p>;
 
   return (
@@ -115,12 +120,21 @@ export const SweepDetail: React.FC = () => {
             )}
             {detail.status === 'success' && <Badge variant="success">success</Badge>}
             {detail.status === 'failed' && <Badge variant="error">failed</Badge>}
+            {detail.status === 'cancelled' && <Badge variant="default">cancelled</Badge>}
           </span>
         }
         subtitle={`${detail.source} · ${detail.trigger} · started ${fmt.rel(detail.startedAt)}`}
         actions={
           <>
-            {live && <Button variant="destructive">Cancel sweep</Button>}
+            {live && (
+              <Button
+                variant="destructive"
+                onClick={() => cancel.mutate()}
+                disabled={cancel.isPending}
+              >
+                {cancel.isPending ? 'Cancelling…' : 'Cancel sweep'}
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => nav('/sweeps')}>
               ← Back
             </Button>
