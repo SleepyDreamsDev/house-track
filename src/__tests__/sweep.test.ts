@@ -85,7 +85,6 @@ function makeEnv(): MockEnv {
   const snapshotConfig = vi.fn().mockResolvedValue({
     'politeness.baseDelayMs': 8000,
     'politeness.jitterMs': 2000,
-    'filter.maxPriceEur': 250000,
   });
   const recordSweepProgress = vi.fn().mockResolvedValue(undefined);
   const parseIndex = vi.fn<(json: unknown) => ListingStub[]>();

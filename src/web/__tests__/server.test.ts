@@ -149,9 +149,9 @@ describe('Hono API Server', () => {
     expect(politenessDelay).toBeDefined();
     expect(politenessDelay?.unit).toBe('ms');
 
-    const maxArea = body.find((s) => s.key === 'filter.maxAreaSqm');
-    expect(maxArea).toBeDefined();
-    expect(maxArea?.unit).toBe('m²');
+    const failureThreshold = body.find((s) => s.key === 'circuit.consecutiveFailureThreshold');
+    expect(failureThreshold).toBeDefined();
+    expect(failureThreshold?.unit).toBe('failures');
   });
 
   it('GET /api/settings includes options for log.level select', async () => {
