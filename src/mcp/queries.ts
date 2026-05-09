@@ -216,8 +216,12 @@ export async function searchListings(
 
   const now = Date.now();
   const projected: SearchListingsRow[] = rows.map((r) => {
+    // priceWas = the most recent snapshot whose priceEur differs from the
+    // current listing.priceEur. The crawler writes a snapshot every time
+    // rawHtmlHash changes, including the one that records the current price,
+    // so naively taking the most recent snapshot would always equal priceEur.
     const prior = [...r.snapshots]
-      .filter((s) => s.capturedAt.getTime() < now)
+      .filter((s) => s.capturedAt.getTime() < now && s.priceEur !== r.priceEur)
       .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())[0];
     return {
       id: r.id,

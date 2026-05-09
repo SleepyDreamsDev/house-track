@@ -456,6 +456,41 @@ describe('searchListings extended projection', () => {
     expect(listings[0]?.priceWas).toBeNull();
   });
 
+  it('priceWas ignores snapshots whose priceEur equals current (production seeding)', async () => {
+    // The crawler writes a new snapshot every time rawHtmlHash changes,
+    // including one that records the current price. priceWas should be
+    // the prior different price, not the current price.
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    await seed({
+      id: 'PROD',
+      priceEur: 90000,
+      areaSqm: 50,
+      snapshots: [
+        { capturedAt: fiveDaysAgo, priceEur: 100000 },
+        { capturedAt: oneDayAgo, priceEur: 90000 },
+      ],
+    });
+
+    const { listings } = await searchListings(prisma, {});
+
+    expect(listings[0]?.priceWas).toBe(100000);
+  });
+
+  it('priceWas is null when every snapshot equals current price', async () => {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await seed({
+      id: 'NODROP',
+      priceEur: 100000,
+      areaSqm: 50,
+      snapshots: [{ capturedAt: oneDayAgo, priceEur: 100000 }],
+    });
+
+    const { listings } = await searchListings(prisma, {});
+
+    expect(listings[0]?.priceWas).toBeNull();
+  });
+
   it('isNew is true when firstSeenAt is within last 24h', async () => {
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
     await seed({ id: 'FRESH', priceEur: 90000, areaSqm: 50, firstSeenAt: sixHoursAgo });
