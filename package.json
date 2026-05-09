@@ -18,6 +18,8 @@
     "mcp:start": "node dist/mcp/server.js",
     "capture-session": "tsx scripts/capture-session.ts",
     "verify-robots": "tsx scripts/verify-robots.ts",
+    "setup:mcp": "tsx scripts/setup-mcp.ts",
+    "smoke": "tsx scripts/smoke.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",

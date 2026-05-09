@@ -28,24 +28,37 @@ will execute.
 
 ## Configure Claude Desktop
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
-(macOS — adjust per platform) and add:
+```bash
+pnpm setup:mcp           # write the config; merges, doesn't clobber other servers
+pnpm setup:mcp --dry-run # preview the merged file without writing
+```
+
+The script writes `~/Library/Application Support/Claude/claude_desktop_config.json`
+on macOS, reads `DATABASE_URL` from your `.env` (falling back to
+`.env.example`), and points `args[0]` at `dist/mcp/server.js`. It is
+idempotent — re-running just overwrites the `house-track` entry and leaves
+any other MCP servers untouched.
+
+Restart Claude Desktop. The three tools should appear under the MCP picker.
+
+### Manual fallback (Linux/Windows or no pnpm)
+
+Edit the config by hand. macOS path is shown above; on Linux/Windows, see
+the Anthropic docs for the OS-specific path. Add:
 
 ```json
 {
   "mcpServers": {
     "house-track": {
       "command": "node",
-      "args": ["/Users/egorg/Dev/house-track/house-track/dist/mcp/server.js"],
+      "args": ["/absolute/path/to/house-track/dist/mcp/server.js"],
       "env": {
-        "DATABASE_URL": "file:/Users/egorg/Dev/house-track/house-track/data/dev.db"
+        "DATABASE_URL": "postgresql://house_track:changeme@127.0.0.1:5432/house_track"
       }
     }
   }
 }
 ```
-
-Restart Claude Desktop. The three tools should appear under the MCP picker.
 
 ## Local iteration without rebuilding
 
