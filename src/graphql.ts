@@ -8,7 +8,7 @@
 
 import { FILTER } from './config.js';
 
-// CAPTURED 2026-05-01T15:16:14.864Z by scripts/capture-session.ts
+// CAPTURED 2026-05-09T10:55:05.773Z by scripts/capture-session.ts
 export const SEARCH_ADS_QUERY = `query SearchAds($input: Ads_SearchInput!, $isWorkCategory: Boolean = false, $includeCarsFeatures: Boolean = false, $includeBody: Boolean = false, $includeOwner: Boolean = false, $includeBoost: Boolean = false, $locale: Common_Locale) {
   searchAds(input: $input) {
     ads {
@@ -270,7 +270,7 @@ fragment WorkCategoryFeatures on Advert {
   __typename
 }`;
 
-// CAPTURED 2026-05-01T15:16:14.864Z by scripts/capture-session.ts
+// CAPTURED 2026-05-09T10:55:05.773Z by scripts/capture-session.ts
 export const GET_ADVERT_QUERY = `query GetAdvert($input: AdvertInput!) {
   advert(input: $input) {
     id
@@ -292,7 +292,105 @@ export const GET_ADVERT_QUERY = `query GetAdvert($input: AdvertInput!) {
 // 999.md's filter taxonomy operation name is unknown a priori; the script
 // discovers it at run time. Until populated, parseTaxonomy() falls back to
 // the known anchor IDs in src/config.ts (filterId 40 region, 41 offer type).
-export const FILTER_TAXONOMY_QUERY = `query FilterTaxonomy { __typename }`;
+export const FILTER_TAXONOMY_QUERY = `query GetFilters($input: GetCategoryRequestInput!) {
+  category(input: $input) {
+    filters {
+      ...FilterFragment
+      features {
+        ...FeatureFragment
+        options {
+          ...OptionFragment
+          feature {
+            ...FeatureFragment
+            options {
+              ...OptionFragment
+              feature {
+                ...FeatureFragment
+                options {
+                  ...OptionFragment
+                  __typename
+                }
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment FilterFragment on Filter {
+  id
+  type
+  title {
+    ...TranslationFragment
+    __typename
+  }
+  collapsed
+  units
+  hasSearch
+  onlyFixedPrice
+  __typename
+}
+
+fragment TranslationFragment on I18NTr {
+  translated
+  __typename
+}
+
+fragment FeatureFragment on Feature {
+  id
+  fid
+  type
+  parentId
+  childId
+  title {
+    ...TranslationFragment
+    __typename
+  }
+  seoAlias {
+    ...TranslationFragment
+    __typename
+  }
+  presentInDynamicFilters
+  __typename
+}
+
+fragment OptionFragment on Option {
+  id
+  title {
+    i18n {
+      ...i18NKeyFragment
+      __typename
+    }
+    ...TranslationFragment
+    __typename
+  }
+  parentId
+  hasChildren
+  isTop
+  seoAlias {
+    ...TranslationFragment
+    __typename
+  }
+  presentInDynamicFilters
+  checked
+  __typename
+}
+
+fragment i18NKeyFragment on I18NKey {
+  key
+  ro
+  ru
+  __typename
+}`;
 
 export function buildSearchVariables(pageIdx: number): Record<string, unknown> {
   return {

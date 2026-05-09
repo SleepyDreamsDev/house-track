@@ -1,18 +1,20 @@
 // Filter taxonomy resolver.
 //
-// 999.md groups features under filters: filterId is the parent group
-// (e.g. 40 = "Region", 41 = "Offer type"); featureId is the leaf filter
-// (e.g. 7 = region picker, 1 = offer-type picker). The crawler observes
-// (featureId, optionId) directly on each FeatureValue but has to resolve
-// filterId from a separate taxonomy.
+// 999.md groups features under filters: filterId is the parent group;
+// featureId is the leaf filter. The crawler observes (featureId, optionId)
+// directly on each FeatureValue but has to resolve filterId from a separate
+// taxonomy.
 //
-// Until the taxonomy GraphQL operation is captured, this module bootstraps
-// the LUT from src/config.ts's hardcoded anchors — these were verified
-// against real 999.md responses on 2026-04-26 and are the same anchors the
-// crawler already uses to construct SearchAds queries. Once the taxonomy
-// fixture lands at src/__tests__/fixtures/filter-taxonomy-response.json,
-// `parseTaxonomyResponse` should be extended to merge the captured tree
-// into the bootstrap LUT.
+// Two LUT sources:
+//   - bootstrapLutFromConfig() — derives anchors from src/config.ts. Stale:
+//     999.md's redesign (2026-05-09 capture) showed offer-type now uses
+//     filterId 16 and region uses 32, vs config.ts's 41 and 40. Bootstrap
+//     is preserved as a fallback only.
+//   - parseTaxonomyResponse(json) — walks a captured filter-taxonomy
+//     response. Authoritative once the fixture is available at
+//     src/__tests__/fixtures/filter-taxonomy-response.json.
+//
+// Use mergeLuts(bootstrap, captured) — captured wins on conflict.
 
 import { FILTER } from './config.js';
 

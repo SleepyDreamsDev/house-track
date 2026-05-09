@@ -1,6 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { bootstrapLutFromConfig, mergeLuts, parseTaxonomyResponse } from '../parse-taxonomy.js';
+
+const FIXTURE_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  'fixtures/filter-taxonomy-response.json',
+);
 
 describe('bootstrapLutFromConfig', () => {
   it('Includes the offer-type anchor (filterId 41, featureId 1)', () => {
@@ -55,6 +64,30 @@ describe('parseTaxonomyResponse', () => {
     expect(parseTaxonomyResponse({ unrelated: { foo: 1 } }).size).toBe(0);
     expect(parseTaxonomyResponse(null).size).toBe(0);
     expect(parseTaxonomyResponse('not an object').size).toBe(0);
+  });
+});
+
+describe('parseTaxonomyResponse against the real captured fixture', () => {
+  const captured = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as unknown;
+  const lut = parseTaxonomyResponse(captured);
+
+  it('Resolves featureId 1 (offer type) to filterId 16 — diverges from src/config.ts', () => {
+    expect(lut.get(1)).toBe(16);
+  });
+
+  it('Resolves featureId 7 (region) to filterId 32 — diverges from src/config.ts', () => {
+    expect(lut.get(7)).toBe(32);
+  });
+
+  it('Captures multiple features that share the same filter group', () => {
+    // filterId 32 (Regiune) groups several features: 7 (Region), 8 (City), 9 (Sector).
+    expect(lut.get(7)).toBe(32);
+    expect(lut.get(8)).toBe(32);
+    expect(lut.get(9)).toBe(32);
+  });
+
+  it('Captures at least 10 distinct featureId → filterId edges from the live response', () => {
+    expect(lut.size).toBeGreaterThanOrEqual(10);
   });
 });
 
