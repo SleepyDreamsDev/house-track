@@ -16,6 +16,11 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
   const idParam = c.req.param('id');
   const id = parseInt(idParam, 10);
 
+  // Validate: id must be a positive integer
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: 'Invalid sweep ID' }, 400);
+  }
+
   // Real implementation: fetch from database
   const prisma = getPrisma();
   const run = await prisma.sweepRun.findUnique({ where: { id } });

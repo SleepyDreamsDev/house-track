@@ -13,10 +13,8 @@ import { getActiveSweepId } from './sweep.js';
 // Custom write stream that tees to both stdout and the sweepEvents EventEmitter.
 const teeStream = new Writable({
   write(chunk, _, cb) {
-    // Always write to stdout verbatim (preserve JSON formatting)
-    process.stdout.write(chunk);
-
     // Try to parse as JSON and emit to EventEmitter if a sweep is active
+    // Do this before stdout write to avoid blocking on backpressure
     try {
       const line = JSON.parse(chunk.toString());
       const sweepId = getActiveSweepId();
@@ -33,11 +31,15 @@ const teeStream = new Writable({
         };
         const lvl = levelMap[levelNum] || 'info';
 
+        const date = new Date(line.time ?? Date.now());
+        const hh = String(date.getHours()).padStart(2, '0');
+        const mm = String(date.getMinutes()).padStart(2, '0');
+        const ss = String(date.getSeconds()).padStart(2, '0');
+        const time = `${hh}:${mm}:${ss}`;
+
         sweepEvents.emitEvent({
           sweepId: String(sweepId),
-          t: new Date(line.time ?? Date.now()).toLocaleTimeString('en-GB', {
-            hour12: false,
-          }),
+          t: time,
           lvl,
           msg: line.event ?? line.msg ?? '',
           meta: line.meta ? JSON.stringify(line.meta) : JSON.stringify(line),
@@ -47,7 +49,8 @@ const teeStream = new Writable({
       // Non-JSON line or parse error — just skip EventEmitter emission
     }
 
-    cb();
+    // Write to stdout and honor backpressure by passing callback
+    process.stdout.write(chunk, cb);
   },
 });
 

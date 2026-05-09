@@ -70,10 +70,9 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
   sweepAbortControllers.set(sweepId, controller);
   const result: SweepResult = emptyResult('ok');
 
-  // Capture config snapshot at sweep start
-  result.configSnapshot = await deps.persist.snapshotConfig();
-
   try {
+    // Capture config snapshot at sweep start (inside try so error triggers catch → finishSweep)
+    result.configSnapshot = await deps.persist.snapshotConfig();
     const allStubs = await collectIndexStubs(deps, result, controller.signal);
     const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
     const { new: newStubs, seen: seenStubs } = await deps.persist.diffAgainstDb(stubs);
@@ -100,10 +99,12 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
       result.errors.push({ url: '<sweep>', status: null, msg: String(err) });
     }
   } finally {
-    activeSweepId = null;
+    // Keep activeSweepId set until after finishSweep + final log so SSE subscribers get final events
     sweepAbortControllers.delete(sweepId);
     await deps.persist.finishSweep(sweepId, result);
     deps.log?.info({ event: 'sweep.done', ...result });
+    // Clear activeSweepId only after all final operations complete
+    activeSweepId = null;
   }
 }
 
@@ -139,12 +140,12 @@ async function collectIndexStubs(
     const parseMs = Date.now() - parseStart;
 
     // Capture page detail
-    const jsonBytes = JSON.stringify(json).length;
+    // Note: rawText is not available here; using JSON.stringify for now.
+    // TODO: Pass rawText from fetchSearchPage to measure actual bytes.
     const pageDetail = {
       n: page,
       url: `<search-page-${page}>`,
       status: 200,
-      bytes: jsonBytes,
       parseMs,
       found: stubs.length,
       took: Date.now() - pageStart,
@@ -195,12 +196,12 @@ async function fetchAndPersistDetails(
     const parseMs = Date.now() - parseStart;
 
     // Capture detail info for new listing
-    const jsonBytes = JSON.stringify(json).length;
+    // Note: rawText is not available here; using response size estimation.
+    // TODO: Pass rawText from fetchAdvert to measure actual bytes.
     const detailRecord = {
       id: s.id,
       url: s.url,
       status: 200,
-      bytes: jsonBytes,
       parseMs,
       action: 'new' as const,
       priceEur: parsed.priceEur ?? null,
@@ -243,12 +244,12 @@ async function fetchAndPersistDetails(
     const parseMs = Date.now() - parseStart;
 
     // Capture detail info for seen listing
-    const jsonBytes = JSON.stringify(json).length;
+    // Note: rawText is not available here; using response size estimation.
+    // TODO: Pass rawText from fetchAdvert to measure actual bytes.
     const detailRecord = {
       id: s.id,
       url: s.url,
       status: 200,
-      bytes: jsonBytes,
       parseMs,
       action: 'updated' as const,
       priceEur: parsed.priceEur ?? null,

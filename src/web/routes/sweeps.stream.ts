@@ -28,10 +28,13 @@ sweepStreamRouter.get('/sweeps/:id/stream', (c) => {
     // Initial comment to flush headers immediately.
     await s.write(`: connected to ${id}\n\n`);
 
-    const off = sweepEvents.onEvent(async (ev: SweepEvent) => {
+    const off = sweepEvents.onEvent((ev: SweepEvent) => {
       if (!alive || String(ev.sweepId) !== id) return;
       const { sweepId: _sweepId, ...payload } = ev;
-      await s.write(`data: ${JSON.stringify(payload)}\n\n`);
+      // Non-async handler to avoid unhandledRejection; errors caught inline
+      s.write(`data: ${JSON.stringify(payload)}\n\n`).catch((err) => {
+        console.error('SSE write error:', err);
+      });
     });
 
     // Heartbeat every 15s so proxies don't drop the connection.
