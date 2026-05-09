@@ -59,15 +59,15 @@ describe('Settings', () => {
   it('updates an existing setting via setSetting', async () => {
     // Arrange
     await prisma.setting.create({
-      data: { key: 'filter.maxPriceEur', valueJson: 300000 },
+      data: { key: 'politeness.baseDelayMs', valueJson: 9000 },
     });
 
     // Act
-    await setSetting('filter.maxPriceEur', 200000);
-    const result = await getSetting('filter.maxPriceEur');
+    await setSetting('politeness.baseDelayMs', 12000);
+    const result = await getSetting('politeness.baseDelayMs');
 
     // Assert
-    expect(result).toBe(200000);
+    expect(result).toBe(12000);
   });
 
   it('validates setting writes against zod schemas', async () => {
@@ -156,18 +156,14 @@ describe('Settings', () => {
     });
   });
 
-  it('assigns correct group to filter settings', async () => {
+  it('hides filter.* keys from listSettings (edited via dedicated /filter page)', async () => {
     // Act
     const results = await listSettings();
 
-    // Assert
-    const filterSettings = results.filter(
-      (s) => s.key.startsWith('filter.') && s.key !== 'filter.searchInputJson',
-    );
-    filterSettings.forEach((setting) => {
-      expect(setting.group).toBe('Filter');
-      expect(setting.kind).toBe('number');
-    });
+    // Assert: no filter.* row leaks into the generic Settings list — the
+    // dedicated /filter page owns these now.
+    const filterSettings = results.filter((s) => s.key.startsWith('filter.'));
+    expect(filterSettings).toEqual([]);
   });
 
   it('assigns correct metadata to log.level (select with options)', async () => {

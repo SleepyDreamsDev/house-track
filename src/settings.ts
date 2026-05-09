@@ -18,9 +18,6 @@ const settingSchemas = {
   'sweep.expectedPerDay': z.number().int().positive(),
   'circuit.consecutiveFailureThreshold': z.number().int().positive(),
   'circuit.pauseDurationMs': z.number().int().positive(),
-  'filter.maxPriceEur': z.number().int().positive(),
-  'filter.maxAreaSqm': z.number().positive(),
-  'filter.searchInputJson': z.any(),
   'filter.generic': genericFilterSchema,
   'log.level': z.union([
     z.literal('debug'),
@@ -46,9 +43,6 @@ const defaultValues: Record<string, unknown> = {
   'sweep.expectedPerDay': SWEEP.expectedPerDay,
   'circuit.consecutiveFailureThreshold': CIRCUIT.consecutiveFailureThreshold,
   'circuit.pauseDurationMs': CIRCUIT.pauseDurationMs,
-  'filter.maxPriceEur': FILTER.postFilter.maxPriceEur,
-  'filter.maxAreaSqm': FILTER.postFilter.maxAreaSqm,
-  'filter.searchInputJson': FILTER.searchInput,
   'filter.generic': defaultGenericFilter,
   'log.level': 'info',
   'stats.successRateWindow': 100,
@@ -146,18 +140,6 @@ export const settingMeta: Record<
     unit: 'ms',
     label: 'Pause Duration',
   },
-  'filter.maxPriceEur': {
-    group: 'Filter',
-    kind: 'number',
-    unit: '€',
-    label: 'Max Price',
-  },
-  'filter.maxAreaSqm': {
-    group: 'Filter',
-    kind: 'number',
-    unit: 'm²',
-    label: 'Max Area',
-  },
   'log.level': {
     group: 'Logging',
     kind: 'select',
@@ -243,9 +225,8 @@ export async function listSettings(): Promise<
   const settingMap = new Map(allSettings.map((s) => [s.key, s.valueJson]));
 
   // filter.generic is edited via the dedicated /filter page — its JSON
-  // shape has no flat-row UI in the generic Settings list. filter.searchInputJson
-  // is similarly opaque and predates the generic filter; keep it hidden too.
-  const HIDDEN_FROM_LIST = new Set(['filter.generic', 'filter.searchInputJson']);
+  // shape has no flat-row UI in the generic Settings list.
+  const HIDDEN_FROM_LIST = new Set(['filter.generic']);
 
   return Object.entries(settingSchemas)
     .filter(([key]) => !HIDDEN_FROM_LIST.has(key))
