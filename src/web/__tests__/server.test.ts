@@ -192,6 +192,53 @@ describe('Hono API Server', () => {
     expect(res.status).toBe(200);
   });
 
+  it('GET /api/sources marks 999md adapter as placeholder=false', async () => {
+    const res = await app.request('/api/sources');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+    const item = body.find((s) => s.adapterKey === '999md');
+    expect(item).toBeDefined();
+    expect(item?.placeholder).toBe(false);
+  });
+
+  it('GET /api/sources marks non-999md adapters as placeholder=true', async () => {
+    await prisma.source.create({
+      data: {
+        slug: 'lara',
+        name: 'lara.md',
+        baseUrl: 'https://lara.md',
+        adapterKey: 'lara',
+        enabled: true,
+      },
+    });
+
+    const res = await app.request('/api/sources');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+    const item = body.find((s) => s.adapterKey === 'lara');
+    expect(item).toBeDefined();
+    expect(item?.placeholder).toBe(true);
+  });
+
+  it('GET /api/sources preserves all existing fields', async () => {
+    const res = await app.request('/api/sources');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+    expect(body.length).toBeGreaterThan(0);
+    for (const item of body) {
+      expect(item).toHaveProperty('id');
+      expect(item).toHaveProperty('slug');
+      expect(item).toHaveProperty('name');
+      expect(item).toHaveProperty('baseUrl');
+      expect(item).toHaveProperty('adapterKey');
+      expect(item).toHaveProperty('enabled');
+      expect(item).toHaveProperty('politenessOverridesJson');
+      expect(item).toHaveProperty('filterOverridesJson');
+      expect(item).toHaveProperty('createdAt');
+      expect(item).toHaveProperty('updatedAt');
+    }
+  });
+
   it('PATCH /api/sources/:id updates source', async () => {
     const source = await prisma.source.findFirst();
     if (!source) {
