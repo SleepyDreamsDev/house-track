@@ -75,6 +75,7 @@ export interface SweepDeps {
     | 'startSweep'
     | 'finishSweep'
     | 'findUnenrichedListings'
+    | 'findStaleListings'
     | 'snapshotConfig'
     | 'recordSweepProgress'
   >;
@@ -87,6 +88,10 @@ export interface SweepDeps {
   missingThresholdMs: number;
   /** Cap on per-sweep backfill of listings with NULL filterValuesEnrichedAt. 0 disables. */
   backfillPerSweep?: number;
+  /** Cap on per-sweep stale-refresh rotation (watchlist + oldest lastFetchedAt).
+   *  Beyond `targetListingsThisSweep`, this is the second knob the operator
+   *  uses to keep the long tail from going indefinitely stale at large DB sizes. */
+  staleRefreshPerSweep?: number;
   /** If accumulated listings cross this, stop paginating early. Computed
    *  per-tick (in index.ts) so each sweep varies in size. Defaults to a
    *  high value if absent — preserves prior behavior in tests. */
@@ -148,6 +153,7 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
 
     await fetchAndPersistDetails(deps, newStubs, seenStubs, result, controller.signal, sweepId);
     await backfillUnenriched(deps, result, controller.signal, sweepId);
+    await staleRefresh(deps, result, controller.signal, sweepId);
 
     await deps.persist.markSeen(seenStubs);
     await publishProgress(deps, sweepId, result);
@@ -406,6 +412,58 @@ async function backfillUnenriched(
       break;
     }
     const url = `<backfill:${id}>`;
+    let envelope: FetchEnvelope;
+    try {
+      envelope = await deps.fetchAdvert(id, signal);
+    } catch (err) {
+      if (err instanceof CircuitTrippingError) throw err;
+      record(result, { url, status: null, msg: String(err), attempts: attemptsOf(err) });
+      result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
+      continue;
+    }
+    const { json, attempts } = envelope;
+    result.detailsFetched += 1;
+
+    let parsed: ParsedDetail;
+    try {
+      parsed = deps.parseDetail(id, json);
+    } catch (err) {
+      if (err instanceof AdvertNotFoundError) continue;
+      record(result, { url, status: null, msg: `parseDetail: ${String(err)}`, attempts });
+      result.status = 'partial';
+      await publishProgress(deps, sweepId, result);
+      continue;
+    }
+
+    try {
+      await deps.persist.persistDetail(parsed);
+    } catch (err) {
+      record(result, { url, status: null, msg: `persist: ${String(err)}`, attempts });
+      result.status = 'partial';
+    }
+    await publishProgress(deps, sweepId, result);
+  }
+}
+
+// Watchlist + warm/cold rotation: pick listings whose lastFetchedAt is
+// older than this sweep's start (so we don't double-fetch what the index
+// path already covered) and re-fetch them. Watchlist always wins ties.
+// This is what keeps the long tail from going stale at large DB sizes —
+// every listing eventually rotates through, oldest-first.
+async function staleRefresh(
+  deps: SweepDeps,
+  result: SweepResult,
+  signal: AbortSignal,
+  sweepId: number,
+): Promise<void> {
+  const limit = deps.staleRefreshPerSweep ?? 0;
+  if (limit <= 0) return;
+  const sinceFetched = new Date(Date.now() - 60_000); // 1-minute fudge: skip listings already touched in this very sweep
+  const ids = await deps.persist.findStaleListings({ limit, sinceFetched });
+  for (const id of ids) {
+    if (signal.aborted) break;
+    const url = `<stale:${id}>`;
     let envelope: FetchEnvelope;
     try {
       envelope = await deps.fetchAdvert(id, signal);

@@ -22,6 +22,7 @@ model Listing {
   lastSeenAt    DateTime
   lastFetchedAt DateTime
   active        Boolean  @default(true) // false when no longer in index sweeps
+  watchlist     Boolean  @default(false) // operator-flagged "always refresh me first"
 
   // Set when persistDetail has captured the typed filter-value triples below.
   // Null on legacy rows + on listings that have only ever been seen in the index.
@@ -53,6 +54,8 @@ model Listing {
 
   @@index([active, lastSeenAt])
   @@index([priceEur])
+  @@index([watchlist, lastFetchedAt]) // tiered-refresh rotation key
+  @@index([active, lastFetchedAt]) // stale-rotation picker
 }
 
 // One row per filter triple observed on a listing's detail response.

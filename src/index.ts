@@ -46,6 +46,10 @@ async function buildDeps(): Promise<SweepDeps> {
   const detailDelayMs = await getSetting('politeness.detailDelayMs', POLITENESS.detailDelayMs);
   const maxPagesPerSweep = await getSetting('sweep.maxPagesPerSweep', FILTER.maxPagesPerSweep);
   const backfillPerSweep = await getSetting('sweep.backfillPerSweep', SWEEP.backfillPerSweep);
+  const staleRefreshPerSweep = await getSetting(
+    'sweep.staleRefreshPerSweep',
+    SWEEP.staleRefreshPerSweep,
+  );
   const targetMean = await getSetting('sweep.targetListingsPerSweep', SWEEP.targetListingsPerSweep);
   const targetJitter = await getSetting('sweep.targetListingsJitter', SWEEP.targetListingsJitter);
   const expectedPerDay = await getSetting('sweep.expectedPerDay', SWEEP.expectedPerDay);
@@ -109,12 +113,38 @@ async function buildDeps(): Promise<SweepDeps> {
     maxPagesPerSweep,
     missingThresholdMs,
     backfillPerSweep,
+    staleRefreshPerSweep,
     targetListingsThisSweep,
     log,
   };
 }
 
+// Hours [start, end) in Europe/Chisinau when the cron is suppressed —
+// browsing 999.md from the same IP overnight looks suspicious. Manual
+// triggers (POST /api/sweeps) deliberately bypass this so the operator
+// can still kick a sweep at any time.
+async function inQuietHours(): Promise<boolean> {
+  const startHour: number = await getSetting('sweep.quietHoursStart', SWEEP.quietHoursStart);
+  const endHour: number = await getSetting('sweep.quietHoursEnd', SWEEP.quietHoursEnd);
+  if (startHour === endHour) return false;
+  const hour = Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Chisinau',
+      hour: 'numeric',
+      hour12: false,
+    }).format(new Date()),
+  );
+  // Range may wrap midnight (e.g. 22..6). Treat as set membership in that case.
+  return startHour < endHour
+    ? hour >= startHour && hour < endHour
+    : hour >= startHour || hour < endHour;
+}
+
 async function tick(): Promise<void> {
+  if (await inQuietHours()) {
+    log.info({ event: 'tick.skipped', reason: 'quiet_hours' });
+    return;
+  }
   const deps = await buildDeps();
   try {
     await runSweep(deps);

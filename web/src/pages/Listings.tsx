@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
@@ -24,6 +24,8 @@ interface Listing {
   district: string | null;
   street?: string;
   firstSeenAt: string;
+  lastFetchedAt?: string;
+  watchlist?: boolean;
   snapshots?: number;
   flags?: string[];
   isNew?: boolean;
@@ -269,6 +271,15 @@ export const Listings: React.FC = () => {
 const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
   const drop = l.priceWas && l.priceEur ? Math.round((1 - l.priceEur / l.priceWas) * 100) : null;
   const eurm2 = l.areaSqm && l.priceEur ? Math.round(l.priceEur / l.areaSqm) : 0;
+  const queryClient = useQueryClient();
+  const toggleWatch = useMutation({
+    mutationFn: () =>
+      apiCall(`/listings/${l.id}/watchlist`, {
+        method: 'PUT',
+        body: JSON.stringify({ watchlist: !l.watchlist }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['listings'] }),
+  });
   return (
     <a
       href={l.url}
@@ -281,6 +292,19 @@ const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
         <div className="flex items-center gap-1.5 mb-1">
           {l.isNew && <Badge variant="default">NEW</Badge>}
           {drop && <Badge variant="warning">−{drop}%</Badge>}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleWatch.mutate();
+            }}
+            disabled={toggleWatch.isPending}
+            title={l.watchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+            className={`text-base leading-none -mt-0.5 ${l.watchlist ? 'text-amber-500' : 'text-neutral-300 hover:text-neutral-500'}`}
+          >
+            {l.watchlist ? '★' : '☆'}
+          </button>
         </div>
         <h3 className="truncate text-sm font-semibold text-neutral-900">{l.title}</h3>
         <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-neutral-600 tabular-nums">
@@ -314,6 +338,12 @@ const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
             <span className="text-neutral-400">first seen </span>
             {fmt.rel(l.firstSeenAt)}
           </span>
+          {l.lastFetchedAt && (
+            <span>
+              <span className="text-neutral-400">refreshed </span>
+              {fmt.rel(l.lastFetchedAt)}
+            </span>
+          )}
         </div>
       </div>
       <div className="flex flex-col items-end justify-between text-right">
