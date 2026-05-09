@@ -11,6 +11,7 @@ export function registerSourcesRoutes(app: Hono, prisma: PrismaClient): void {
       baseUrl: s.baseUrl,
       adapterKey: s.adapterKey,
       enabled: s.enabled,
+      placeholder: s.adapterKey !== '999md',
       politenessOverridesJson: s.politenessOverridesJson,
       filterOverridesJson: s.filterOverridesJson,
       createdAt: s.createdAt.toISOString(),
