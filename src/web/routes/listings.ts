@@ -44,6 +44,35 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     return c.json(results);
   });
 
+  // Observed-data facets for the Listings page filter rail. Districts come
+  // from distinct Listing.district values; price/rooms/area ranges come from
+  // min/max over active listings. Hardcoding these in the UI drifts as the
+  // catalog evolves — sourcing from the DB keeps the rail accurate.
+  app.get('/api/listings/facets', async (c) => {
+    const districtRows = await prisma.listing.findMany({
+      where: { active: true, district: { not: null } },
+      distinct: ['district'],
+      select: { district: true },
+      orderBy: { district: 'asc' },
+    });
+    const districts = districtRows.map((r) => r.district).filter((d): d is string => d !== null);
+
+    const aggregates = await prisma.listing.aggregate({
+      where: { active: true },
+      _min: { priceEur: true, rooms: true, areaSqm: true },
+      _max: { priceEur: true, rooms: true, areaSqm: true },
+      _count: true,
+    });
+
+    return c.json({
+      total: aggregates._count,
+      districts,
+      price: { min: aggregates._min.priceEur, max: aggregates._max.priceEur },
+      rooms: { min: aggregates._min.rooms, max: aggregates._max.rooms },
+      areaSqm: { min: aggregates._min.areaSqm, max: aggregates._max.areaSqm },
+    });
+  });
+
   app.get('/api/listings/:id', async (c) => {
     const id = c.req.param('id');
     const result = await getListing(prisma, id);

@@ -29,19 +29,47 @@ interface Listing {
   isNew?: boolean;
 }
 
-const PRICE_MAX = 250000;
 const PAGE_SIZE = 50;
 
-const DISTRICTS = ['all', 'Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
+// Fallback bounds while facets are loading; server-derived bounds replace
+// these once /api/listings/facets responds. Slightly generous so the rail
+// renders sensibly on a fresh DB before any sweep has run.
+const PRICE_MAX_FALLBACK = 250000;
+const PRICE_MIN_FALLBACK = 0;
+
+interface ListingsFacets {
+  total: number;
+  districts: string[];
+  price: { min: number | null; max: number | null };
+  rooms: { min: number | null; max: number | null };
+  areaSqm: { min: number | null; max: number | null };
+}
 
 export const Listings: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState('');
-  const [maxPrice, setMaxPrice] = useState(PRICE_MAX);
+  const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
   const [district, setDistrict] = useState('all');
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
+
+  // Observed-data facets — districts and price bounds come from the actual
+  // catalog rather than hardcoded values. Once loaded, the slider snaps to
+  // the data's max if the user hasn't already moved it past it.
+  const { data: facets } = useQuery<ListingsFacets>({
+    queryKey: ['listings-facets'],
+    queryFn: () => apiCall('/listings/facets'),
+  });
+  const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
+  const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
+  const districts = facets?.districts ?? [];
+  // If the server's max is below the slider's current position, clamp down.
+  useEffect(() => {
+    if (facets && maxPrice > priceMax) setMaxPrice(priceMax);
+    // initial-only clamp; intentionally exclude maxPrice
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facets]);
 
   // Sweep-row links set ?firstSeenAfter (new only) or ?lastFetchedAfter
   // (touched by sweep) plus ?fromSweep=<id> for the breadcrumb chip.
@@ -61,7 +89,7 @@ export const Listings: React.FC = () => {
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
-      if (maxPrice < PRICE_MAX) p.append('maxPrice', String(maxPrice));
+      if (maxPrice < priceMax) p.append('maxPrice', String(maxPrice));
       if (district !== 'all') p.append('district', district);
       if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       if (lastFetchedAfter) p.append('lastFetchedAfter', lastFetchedAfter);
@@ -88,7 +116,7 @@ export const Listings: React.FC = () => {
     <div data-screen-label="Listings">
       <PageHeader
         title="Listings"
-        subtitle={`${data?.total ?? '…'} listings · ${maxPrice < PRICE_MAX ? `€${maxPrice.toLocaleString()} max` : 'any price'}`}
+        subtitle={`${data?.total ?? '…'} listings · ${maxPrice < priceMax ? `€${maxPrice.toLocaleString()} max` : 'any price'}`}
         actions={
           <Button
             variant="secondary"
@@ -149,9 +177,9 @@ export const Listings: React.FC = () => {
               </div>
               <input
                 type="range"
-                min={50000}
-                max={250000}
-                step={5000}
+                min={Math.max(0, priceMin)}
+                max={priceMax}
+                step={Math.max(1000, Math.round((priceMax - priceMin) / 50))}
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(Number(e.target.value))}
                 className="w-full accent-accent"
@@ -162,15 +190,24 @@ export const Listings: React.FC = () => {
                 District
               </div>
               <div className="space-y-0.5">
-                {DISTRICTS.map((d) => (
+                <button
+                  onClick={() => setDistrict('all')}
+                  className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${district === 'all' ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                >
+                  All districts
+                </button>
+                {districts.map((d) => (
                   <button
                     key={d}
                     onClick={() => setDistrict(d)}
                     className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${district === d ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
                   >
-                    {d === 'all' ? 'All districts' : d}
+                    {d}
                   </button>
                 ))}
+                {!facets && (
+                  <p className="px-2 py-1.5 text-xs text-neutral-400">Loading districts…</p>
+                )}
               </div>
             </div>
           </div>
