@@ -385,9 +385,11 @@ const HttpTab: React.FC<{ detail: SweepDetailDto }> = ({ detail }) => {
               <td className="px-3 py-2 font-mono">
                 {r.listingId ? (
                   <button
-                    onClick={() => nav(listingsHref)}
+                    onClick={() =>
+                      nav(`${listingsHref}&highlight=${encodeURIComponent(r.listingId!)}`)
+                    }
                     className="text-blue-600 hover:underline"
-                    title="View this sweep's listings on the Listings page"
+                    title="View this sweep's listings on the Listings page (highlight this one)"
                   >
                     {r.identifier}
                   </button>
