@@ -9,6 +9,7 @@ export const AppShell: React.FC = () => {
     { label: 'Dashboard', path: '/' },
     { label: 'Listings', path: '/listings' },
     { label: 'Sweeps', path: '/sweeps' },
+    { label: 'Filter', path: '/filter' },
     { label: 'Settings', path: '/settings' },
   ];
 
