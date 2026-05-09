@@ -64,6 +64,8 @@ Detailed rules live in dedicated files:
 - Update `.claude/progress.md` at end of each session (≤30 lines).
 - `/compact` after each phase (RED/GREEN/REFACTOR) — don't wait for the warning.
 - Do NOT edit `CLAUDE.md` or `progress.md` mid-session (breaks cache).
+- **Run parallel sessions in isolated worktrees**: `./scripts/session-new.sh <slug>` creates one. See [docs/parallel-sessions.md](./docs/parallel-sessions.md). Avoids cross-session WIP destruction.
+- **Never `git reset --hard` in this repo.** Working tree is shared across sessions; destructive ops cascade. Use `--soft` or `git pull --rebase`.
 
 ## Skills
 
@@ -76,6 +78,7 @@ Detailed rules live in dedicated files:
 
 - [POC spec](./docs/poc-spec.md) — source of truth
 - [Operator UI](./docs/operator-ui.md) — how to run and configure
+- [Parallel sessions](./docs/parallel-sessions.md) — worktree pattern for safe concurrency
 - [Framework architecture](./docs/framework-architecture.md)
 - [TDD guide](./docs/tdd-guide.md)
 - [Solo-dev SDLC blueprint](./docs/solo-dev-sdlc-blueprint.md)
