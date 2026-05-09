@@ -5,6 +5,7 @@ import {
   diffVariables,
   formatCookieEnv,
   headersMarkdownTable,
+  looksLikeTaxonomyOpName,
   parseArgs,
   replaceQueryBody,
   trimSearchAdsResponse,
@@ -12,7 +13,7 @@ import {
 
 describe('parseArgs', () => {
   it('Defaults to headed browser with 30s challenge timeout', () => {
-    expect(parseArgs([])).toEqual({ headless: false, timeoutMs: 30_000 });
+    expect(parseArgs([])).toEqual({ headless: false, timeoutMs: 30_000, taxonomyOp: null });
   });
 
   it('--headless flag flips browser to headless mode', () => {
@@ -23,12 +24,41 @@ describe('parseArgs', () => {
     expect(parseArgs(['--timeout', '60000']).timeoutMs).toBe(60_000);
   });
 
+  it('--taxonomy-op pins which operationName counts as the taxonomy capture', () => {
+    expect(parseArgs(['--taxonomy-op', 'SearchFilters']).taxonomyOp).toBe('SearchFilters');
+  });
+
+  it('--taxonomy-op rejects non-alphanumeric names', () => {
+    expect(() => parseArgs(['--taxonomy-op', 'Bad-Name'])).toThrow(/taxonomy-op/i);
+  });
+
   it('Unknown flag aborts with a helpful error', () => {
     expect(() => parseArgs(['--nope'])).toThrow(/--nope/);
   });
 
   it('Numeric --timeout values must be positive integers', () => {
     expect(() => parseArgs(['--timeout', 'abc'])).toThrow(/timeout/i);
+  });
+});
+
+describe('looksLikeTaxonomyOpName', () => {
+  it.each([
+    ['SearchFilters', true],
+    ['GetFilters', true],
+    ['CategoryFilters', true],
+    ['Filters', true],
+    ['Taxonomy', true],
+  ] as const)('%s is treated as a taxonomy candidate', (name, expected) => {
+    expect(looksLikeTaxonomyOpName(name)).toBe(expected);
+  });
+
+  it.each([
+    ['SearchAds', false],
+    ['GetAdvert', false],
+    ['SearchSuggestions', false],
+    ['Login', false],
+  ] as const)('%s is rejected as a candidate', (name, expected) => {
+    expect(looksLikeTaxonomyOpName(name)).toBe(expected);
   });
 });
 
@@ -64,6 +94,9 @@ export const SEARCH_ADS_QUERY = \`query SearchAds($input: SearchInput!) {
 export const GET_ADVERT_QUERY = \`query GetAdvert($input: AdvertInput!) {
   advert(input: $input) { id title }
 }\`;
+
+// REPLACE-ME — populated by capture-session.
+export const FILTER_TAXONOMY_QUERY = \`query FilterTaxonomy { __typename }\`;
 `;
 
 const NEW_SEARCH_QUERY =
@@ -107,6 +140,20 @@ describe('replaceQueryBody', () => {
     expect(() =>
       replaceQueryBody('export const OTHER = `x`;', 'SEARCH_ADS_QUERY', NEW_SEARCH_QUERY, ts),
     ).toThrow(/SEARCH_ADS_QUERY/);
+  });
+
+  it('FILTER_TAXONOMY_QUERY accepts any `query <Name>(` body (op name unknown a priori)', () => {
+    const TAXONOMY_BODY =
+      'query SearchFilters($input: FilterInput!) {\n  searchFilters(input: $input) { id label }\n}';
+    const out = replaceQueryBody(SAMPLE_GRAPHQL_TS, 'FILTER_TAXONOMY_QUERY', TAXONOMY_BODY, ts);
+    expect(out).toContain(TAXONOMY_BODY);
+    expect(out).not.toContain('query FilterTaxonomy { __typename }');
+  });
+
+  it('FILTER_TAXONOMY_QUERY refuses bodies that do not start with `query <Name>(`', () => {
+    expect(() =>
+      replaceQueryBody(SAMPLE_GRAPHQL_TS, 'FILTER_TAXONOMY_QUERY', 'mutation Foo { x }', ts),
+    ).toThrow(/FILTER_TAXONOMY_QUERY/);
   });
 
   it('Re-running replacement is idempotent (CAPTURED marker not duplicated)', () => {

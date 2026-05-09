@@ -288,6 +288,12 @@ export const GET_ADVERT_QUERY = `query GetAdvert($input: AdvertInput!) {
   }
 }`;
 
+// REPLACE-ME — populated by scripts/capture-session.ts after a live capture.
+// 999.md's filter taxonomy operation name is unknown a priori; the script
+// discovers it at run time. Until populated, parseTaxonomy() falls back to
+// the known anchor IDs in src/config.ts (filterId 40 region, 41 offer type).
+export const FILTER_TAXONOMY_QUERY = `query FilterTaxonomy { __typename }`;
+
 export function buildSearchVariables(pageIdx: number): Record<string, unknown> {
   return {
     input: {

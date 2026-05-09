@@ -7,12 +7,13 @@
 export interface ParsedArgs {
   headless: boolean;
   timeoutMs: number;
+  taxonomyOp: string | null;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
-  const result: ParsedArgs = { headless: false, timeoutMs: DEFAULT_TIMEOUT_MS };
+  const result: ParsedArgs = { headless: false, timeoutMs: DEFAULT_TIMEOUT_MS, taxonomyOp: null };
 
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -30,10 +31,38 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       i += 1;
       continue;
     }
+    if (flag === '--taxonomy-op') {
+      const next = argv[i + 1];
+      if (!next || !/^\w+$/.test(next)) {
+        throw new Error(
+          `--taxonomy-op requires an alphanumeric operation name, got: ${String(next)}`,
+        );
+      }
+      result.taxonomyOp = next;
+      i += 1;
+      continue;
+    }
     throw new Error(`Unknown flag: ${String(flag)}`);
   }
 
   return result;
+}
+
+const TAXONOMY_NAME_HINTS: readonly RegExp[] = [
+  /^Search.*Filter/i,
+  /^Get.*Filter/i,
+  /Filter(s)?$/i,
+  /Taxonomy$/i,
+  /Categor(y|ies).*Filter/i,
+  /Filter.*Categor(y|ies)/i,
+];
+
+// Heuristic: does this operation name look like a filter taxonomy query?
+// Used to auto-pick a candidate from the discovery log when --taxonomy-op
+// isn't provided.
+export function looksLikeTaxonomyOpName(opName: string): boolean {
+  if (opName === 'SearchAds' || opName === 'GetAdvert') return false;
+  return TAXONOMY_NAME_HINTS.some((re) => re.test(opName));
 }
 
 export type HeaderClass = 'static' | 'per-request';
@@ -54,23 +83,38 @@ export function classifyHeader(name: string): HeaderClass {
   return PER_REQUEST_HEADER_PATTERNS.some((re) => re.test(name)) ? 'per-request' : 'static';
 }
 
-const QUERY_OPERATIONS: Record<string, string> = {
+const QUERY_OPERATIONS: Record<string, string | null> = {
   SEARCH_ADS_QUERY: 'SearchAds',
   GET_ADVERT_QUERY: 'GetAdvert',
+  // 999.md's filter taxonomy operation name is not known a priori — discovered
+  // at capture time. Only validate that the body parses as a `query`.
+  FILTER_TAXONOMY_QUERY: null,
 };
+
+export type CapturedExportName = 'SEARCH_ADS_QUERY' | 'GET_ADVERT_QUERY' | 'FILTER_TAXONOMY_QUERY';
 
 export function replaceQueryBody(
   source: string,
-  exportName: 'SEARCH_ADS_QUERY' | 'GET_ADVERT_QUERY',
+  exportName: CapturedExportName,
   capturedQuery: string,
   isoTimestamp: string,
 ): string {
+  if (!(exportName in QUERY_OPERATIONS)) throw new Error(`Unknown export: ${exportName}`);
   const expectedOp = QUERY_OPERATIONS[exportName];
-  if (!expectedOp) throw new Error(`Unknown export: ${exportName}`);
-  if (!capturedQuery.trimStart().startsWith(`query ${expectedOp}(`)) {
-    throw new Error(
-      `Captured query is not a "${expectedOp}" operation — refusing to write it into ${exportName}`,
-    );
+  const trimmed = capturedQuery.trimStart();
+  if (expectedOp !== null) {
+    if (!trimmed.startsWith(`query ${expectedOp}(`)) {
+      throw new Error(
+        `Captured query is not a "${expectedOp}" operation — refusing to write it into ${exportName}`,
+      );
+    }
+  } else {
+    // Permissive: any `query <Name>(...)` body is acceptable.
+    if (!/^query\s+\w+\s*[({]/.test(trimmed)) {
+      throw new Error(
+        `Captured query body does not start with \`query <Name>(\` — refusing to write it into ${exportName}`,
+      );
+    }
   }
 
   const exportRe = new RegExp(`(export const ${exportName} = \`)([\\s\\S]*?)(\`;)`, 'm');

@@ -30,6 +30,7 @@ import {
   diffVariables,
   formatCookieEnv,
   headersMarkdownTable,
+  looksLikeTaxonomyOpName,
   parseArgs,
   replaceQueryBody,
   trimSearchAdsResponse,
@@ -68,7 +69,10 @@ async function main(): Promise<void> {
   });
   const page = await context.newPage();
 
-  const captures: { search?: CapturedOp; advert?: CapturedOp } = {};
+  const captures: { search?: CapturedOp; advert?: CapturedOp; taxonomy?: CapturedOp } = {};
+  // operationName → number of POSTs observed. Surfaced at end of capture so we
+  // can identify the filter taxonomy op even when our heuristics miss.
+  const operationLog = new Map<string, number>();
   // Intercept GraphQL POSTs so we can read the response body before the page
   // consumes it (Firefox loses the body otherwise — NS_ERROR_FAILURE on
   // response.json() if read after dispatch).
@@ -81,8 +85,9 @@ async function main(): Promise<void> {
     const postData = req.postData();
     const parsed = parsePostData(postData);
     const op = parsed?.operationName;
+    if (op) operationLog.set(op, (operationLog.get(op) ?? 0) + 1);
     const fetched = await route.fetch();
-    if ((op === 'SearchAds' || op === 'GetAdvert') && parsed && parsed.query && parsed.variables) {
+    if (op && parsed && parsed.query && parsed.variables) {
       const body = (await fetched.json().catch(() => null)) as unknown;
       if (body !== null) {
         const captured: CapturedOp = {
@@ -94,10 +99,15 @@ async function main(): Promise<void> {
         if (op === 'SearchAds' && !captures.search) {
           captures.search = captured;
           console.error(`  ✓ captured SearchAds (${parsed.query.length} chars)`);
-        }
-        if (op === 'GetAdvert' && !captures.advert) {
+        } else if (op === 'GetAdvert' && !captures.advert) {
           captures.advert = captured;
           console.error(`  ✓ captured GetAdvert (${parsed.query.length} chars)`);
+        } else if (
+          !captures.taxonomy &&
+          (args.taxonomyOp ? op === args.taxonomyOp : looksLikeTaxonomyOpName(op))
+        ) {
+          captures.taxonomy = captured;
+          console.error(`  ✓ captured ${op} as taxonomy (${parsed.query.length} chars)`);
         }
       }
     }
@@ -141,9 +151,11 @@ async function main(): Promise<void> {
   }
 
   if (captureError) {
+    printOperationLog(operationLog);
     throw captureError;
   }
   if (!captures.search || !captures.advert) {
+    printOperationLog(operationLog);
     console.error('\n✗ Capture incomplete — aborting without writing files.');
     console.error(`  SearchAds: ${captures.search ? 'captured' : 'MISSING'}`);
     console.error(`  GetAdvert: ${captures.advert ? 'captured' : 'MISSING'}`);
@@ -152,9 +164,30 @@ async function main(): Promise<void> {
 
   const search = captures.search;
   const advert = captures.advert;
+  const taxonomy = captures.taxonomy;
 
-  await writeArtefacts(search, advert, cookies);
+  await writeArtefacts(search, advert, taxonomy, cookies);
+  printOperationLog(operationLog);
+  if (!taxonomy) {
+    console.error(
+      '\n⚠ Taxonomy not auto-captured. Pick the right operation name from the log above\n' +
+        '  and re-run with `pnpm capture-session --taxonomy-op=<Name>` to add it.\n' +
+        '  search + advert artefacts were still written.',
+    );
+    console.error('\n✓ Partial capture done. Review `git diff` and re-run `pnpm test`.');
+    return;
+  }
   console.error('\n✓ Done. Review `git diff` and re-run `pnpm test`.');
+}
+
+function printOperationLog(log: Map<string, number>): void {
+  if (log.size === 0) return;
+  console.error('\n── observed GraphQL operations ──');
+  const rows = [...log.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  for (const [op, count] of rows) {
+    const tag = looksLikeTaxonomyOpName(op) ? '  (taxonomy?)' : '';
+    console.error(`  ${op} × ${count}${tag}`);
+  }
 }
 
 async function openFirstListing(page: Page, timeoutMs: number): Promise<string> {
@@ -358,6 +391,7 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, label: strin
 async function writeArtefacts(
   search: CapturedOp,
   advert: CapturedOp,
+  taxonomy: CapturedOp | undefined,
   cookies: readonly { name: string; value: string }[],
 ): Promise<void> {
   const ts = new Date().toISOString();
@@ -367,6 +401,9 @@ async function writeArtefacts(
   await copyFile(graphqlPath, `${graphqlPath}.bak`);
   let updated = replaceQueryBody(original, 'SEARCH_ADS_QUERY', search.query, ts);
   updated = replaceQueryBody(updated, 'GET_ADVERT_QUERY', advert.query, ts);
+  if (taxonomy) {
+    updated = replaceQueryBody(updated, 'FILTER_TAXONOMY_QUERY', taxonomy.query, ts);
+  }
   await writeFile(graphqlPath, updated, 'utf8');
   console.error('· wrote src/graphql.ts');
 
@@ -390,6 +427,15 @@ async function writeArtefacts(
     'utf8',
   );
   console.error('· wrote advert-detail-response.json');
+
+  if (taxonomy) {
+    await writeFile(
+      join(REPO_ROOT, 'src/__tests__/fixtures/filter-taxonomy-response.json'),
+      `${JSON.stringify(taxonomy.body, null, 2)}\n`,
+      'utf8',
+    );
+    console.error('· wrote filter-taxonomy-response.json');
+  }
 
   const searchDiff = diffVariables(search.variables, buildSearchVariables(0));
   const advertDiff = diffVariables(
