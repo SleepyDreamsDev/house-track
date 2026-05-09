@@ -168,6 +168,42 @@ export class Persistence {
     return rows.map((r) => r.id);
   }
 
+  /**
+   * Tiered-refresh rotation picker. Order of precedence:
+   *   1. Watchlist (always refreshed first regardless of recency)
+   *   2. Oldest lastFetchedAt — implicitly captures hot/warm/cold tiering
+   *      since hot listings already get touched via the index sweep, so
+   *      the oldest-lastFetched bucket naturally drains to the cold tail.
+   * Excludes listings touched in the current sweep window so we don't
+   * re-fetch what the index path already covered.
+   */
+  async findStaleListings(opts: { limit: number; sinceFetched: Date }): Promise<string[]> {
+    if (opts.limit <= 0) return [];
+    const watchlist = await this.prisma.listing.findMany({
+      where: { active: true, watchlist: true, lastFetchedAt: { lt: opts.sinceFetched } },
+      orderBy: { lastFetchedAt: 'asc' },
+      select: { id: true },
+      take: opts.limit,
+    });
+    if (watchlist.length >= opts.limit) return watchlist.map((r) => r.id);
+    const remaining = opts.limit - watchlist.length;
+    const stale = await this.prisma.listing.findMany({
+      where: {
+        active: true,
+        watchlist: false,
+        lastFetchedAt: { lt: opts.sinceFetched },
+      },
+      orderBy: { lastFetchedAt: 'asc' },
+      select: { id: true },
+      take: remaining,
+    });
+    return [...watchlist.map((r) => r.id), ...stale.map((r) => r.id)];
+  }
+
+  async setWatchlist(id: string, watchlist: boolean): Promise<void> {
+    await this.prisma.listing.update({ where: { id }, data: { watchlist } });
+  }
+
   async startSweep(opts?: {
     source?: string;
     trigger?: string;

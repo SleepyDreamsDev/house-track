@@ -91,6 +91,16 @@ export const SWEEP = {
   // 0 disables backfill. Each backfill request shares the same 8s±2s gap so
   // the request shape is indistinguishable from a sweep with extra new listings.
   backfillPerSweep: 30,
+  // Per-tick cap on stale-refresh rotation (watchlist + oldest lastFetchedAt).
+  // 50/sweep × 24/day = 1200/day stale rotations → keeps a 10k DB on a roughly
+  // 8-day cycle, with watchlist always priority. 0 disables.
+  staleRefreshPerSweep: 50,
+  // Cron quiet hours [start, end) in Europe/Chisinau local time. Sweeps
+  // fired by cron are suppressed during this window — browsing 999.md
+  // from the same IP overnight is suspicious. Manual triggers bypass.
+  // Set start == end to disable.
+  quietHoursStart: 2,
+  quietHoursEnd: 6,
   // Variable sweep size: each tick targets a random draw from
   // [mean - jitter, mean + jitter] listings; pagination stops once
   // accumulated listings cross the draw. Set jitter to 0 to disable.

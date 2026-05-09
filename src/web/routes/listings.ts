@@ -1,6 +1,7 @@
 import type { Hono } from 'hono';
 import type { PrismaClient } from '@prisma/client';
 import { searchListings, getListing } from '../../mcp/queries.js';
+import { Persistence } from '../../persist.js';
 
 export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   app.get('/api/listings', async (c) => {
@@ -82,5 +83,24 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     }
 
     return c.json(result);
+  });
+
+  // Toggle the operator's "always refresh me first" flag for one listing.
+  // Body: { watchlist: boolean }. The crawler reads Listing.watchlist in
+  // findStaleListings, prioritizing flagged rows in every sweep regardless
+  // of how recently lastFetchedAt was bumped.
+  app.put('/api/listings/:id/watchlist', async (c) => {
+    const id = c.req.param('id');
+    const body = (await c.req.json().catch(() => null)) as { watchlist?: unknown } | null;
+    if (!body || typeof body.watchlist !== 'boolean') {
+      return c.json({ error: 'Body must be { watchlist: boolean }' }, 400);
+    }
+    const persist = new Persistence(prisma);
+    try {
+      await persist.setWatchlist(id, body.watchlist);
+    } catch {
+      return c.json({ error: 'Listing not found' }, 404);
+    }
+    return c.json({ id, watchlist: body.watchlist });
   });
 }

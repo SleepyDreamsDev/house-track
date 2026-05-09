@@ -259,6 +259,8 @@ export async function searchListings(
       district: r.district,
       firstSeenAt: r.firstSeenAt.toISOString(),
       lastSeenAt: r.lastSeenAt.toISOString(),
+      lastFetchedAt: r.lastFetchedAt.toISOString(),
+      watchlist: r.watchlist,
     })),
     total,
   };

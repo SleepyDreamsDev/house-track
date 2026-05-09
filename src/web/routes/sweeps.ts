@@ -40,6 +40,10 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
     const detailDelayMs = await getSetting('politeness.detailDelayMs', POLITENESS.detailDelayMs);
     const maxPagesPerSweep = await getSetting('sweep.maxPagesPerSweep', FILTER.maxPagesPerSweep);
     const backfillPerSweep = await getSetting('sweep.backfillPerSweep', SWEEP.backfillPerSweep);
+    const staleRefreshPerSweep = await getSetting(
+      'sweep.staleRefreshPerSweep',
+      SWEEP.staleRefreshPerSweep,
+    );
     const targetMean = await getSetting(
       'sweep.targetListingsPerSweep',
       SWEEP.targetListingsPerSweep,
@@ -102,6 +106,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
       maxPagesPerSweep,
       missingThresholdMs,
       backfillPerSweep,
+      staleRefreshPerSweep,
       targetListingsThisSweep,
       log,
     };
@@ -222,6 +227,7 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
         maxPagesPerSweep: SMOKE_MAX_PAGES,
         targetListingsThisSweep: SMOKE_TARGET_LISTINGS,
         backfillPerSweep: 0,
+        staleRefreshPerSweep: 0,
       };
 
       const sweep = await deps.persist.startSweep({ source: '999.md', trigger: 'smoke' });
