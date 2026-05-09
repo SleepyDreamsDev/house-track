@@ -5,9 +5,14 @@ description: >
   (types | components | data | tests) or a domain name and returns a
   structured summary the orchestrator can synthesize.
 tools: Read, Grep, Glob
+model: claude-haiku-4-5
 ---
 
-<!-- Model: inherits CLAUDE_CODE_SUBAGENT_MODEL (haiku by default). Read-and-summarize task with fixed output template — Haiku handles this fine. Pin to sonnet/opus only if discovery briefs start missing cross-cutting dependencies. -->
+<!-- Pinned to Haiku explicitly. The starter's project-default subagent model
+     is Sonnet (since most agents need it), so an inherit-mode pin would land
+     on Sonnet and waste the Haiku price tier. Read-and-summarize with a
+     fixed output template — Haiku handles this fine. Re-pin to sonnet/opus
+     only if discovery briefs start missing cross-cutting dependencies. -->
 
 You are a read-only codebase explorer. Your job is to produce a compact,
 structured summary that the orchestrator can use to plan parallel implementation.

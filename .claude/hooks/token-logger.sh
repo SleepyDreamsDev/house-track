@@ -124,3 +124,18 @@ if [ "$TOTAL_CACHE" -gt "$CACHE_BREAKPOINT" ]; then
       "⚠ cache break at turn \(.turn) (created \(.created) new cache tokens). Likely cause: edited CLAUDE.md/progress.md, switched model, or tool set changed."'
   fi
 fi
+
+# ── Haiku-no-op warning ───────────────────────────────────────────────────────
+# If a /feature session dispatches agents but `claude-haiku-4-5` does not appear
+# in by_model, the inherit-mode subagent default isn't reaching its consumer
+# (`discovery-explorer`). Catches the cycle-1 regression class — env var set,
+# every dispatched agent pinned, lever silently dead.
+if [ "$AGENTS" -gt 0 ] && [[ "$PHASE" == PHASE_* ]]; then
+  HAS_HAIKU=$(echo "$STATS" | jq -r '
+    [ .by_model[]?.model // empty
+      | select(test("haiku"; "i")) ] | length
+  ')
+  if [ "$HAS_HAIKU" = "0" ]; then
+    echo "⚠ /feature dispatched ${AGENTS} agent(s) but no Haiku entry in by_model. CLAUDE_CODE_SUBAGENT_MODEL is set in .claude/settings.json, yet the inherit-mode consumer (discovery-explorer in PHASE 1) is not landing on Haiku. Check .claude/agents/discovery-explorer.md model frontmatter and PHASE 1 dispatch site in .claude/skills/feature/SKILL.md."
+  fi
+fi
