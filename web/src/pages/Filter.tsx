@@ -31,6 +31,9 @@ interface FilterFacet {
   optionIds: number[];
   listingCount: number;
   sampleListingIds: string[];
+  filterLabel?: string | null;
+  featureLabel?: string | null;
+  optionLabels?: Record<number, string>;
 }
 
 const NUMERIC_FIELDS = ['priceMin', 'priceMax', 'sqmMin', 'sqmMax'] as const;
@@ -330,9 +333,11 @@ export const Filter: React.FC = () => {
           <Card id="Dynamic">
             <SectionHeader title={`Source filters · ${data.sourceSlug}`} />
             <p className="mb-3 mt-1 text-xs text-neutral-500">
-              Filter triples observed in detail-fetched listings. Selections AND across triples and
-              OR within optionIds. Option IDs are 999.md-internal numbers (labels arrive once filter
-              taxonomy is captured — see <code>FILTER_TAXONOMY_QUERY</code>).
+              Filter triples observed in detail-fetched listings. Labels come from the captured
+              999.md taxonomy (<code>src/data/filter-taxonomy.json</code>); chips that fall back to
+              numbers are values 999.md added since the last capture — re-run{' '}
+              <code>scripts/capture-session.ts</code> to refresh. Selections AND across groups, OR
+              within optionIds.
             </p>
             {!facets ? (
               <div className="py-3 text-xs text-neutral-400">Loading facets…</div>
@@ -354,8 +359,11 @@ export const Filter: React.FC = () => {
                       open={selectedCount > 0}
                     >
                       <summary className="flex cursor-pointer items-center gap-2 text-sm">
-                        <span className="font-mono text-xs text-neutral-700">
-                          filter {f.filterId} · feature {f.featureId}
+                        <span className="text-neutral-900 font-medium">
+                          {f.featureLabel ?? f.filterLabel ?? `filter ${f.filterId}`}
+                        </span>
+                        <span className="font-mono text-[10px] text-neutral-400">
+                          #{f.filterId}/{f.featureId}
                         </span>
                         <span className="text-xs text-neutral-400">
                           {f.optionIds.length} options · {f.listingCount} listings
@@ -372,18 +380,22 @@ export const Filter: React.FC = () => {
                           .sort((a, b) => a - b)
                           .map((opt) => {
                             const active = isExtraSelected(f.filterId, f.featureId, opt);
+                            const label = f.optionLabels?.[opt];
                             return (
                               <button
                                 key={opt}
                                 type="button"
                                 onClick={() => toggleExtraOption(f.filterId, f.featureId, opt)}
-                                className={`rounded-sm px-2 py-0.5 font-mono text-[11px] tabular-nums border transition-colors ${
+                                title={label ? `optionId ${opt}` : undefined}
+                                className={`rounded-sm px-2 py-0.5 text-[11px] border transition-colors ${
+                                  label ? '' : 'font-mono tabular-nums'
+                                } ${
                                   active
                                     ? 'bg-neutral-900 text-white border-neutral-900'
                                     : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
                                 }`}
                               >
-                                {opt}
+                                {label ?? opt}
                               </button>
                             );
                           })}

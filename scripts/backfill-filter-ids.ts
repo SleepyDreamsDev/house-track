@@ -7,9 +7,9 @@
 // Usage:
 //   pnpm backfill:filters [--dry-run]
 //
-// Reads bootstrap LUT from src/config.ts. When the captured taxonomy fixture
-// lands at src/__tests__/fixtures/filter-taxonomy-response.json, the script
-// merges its parsed LUT on top of the bootstrap.
+// Reads bootstrap LUT from src/config.ts. The captured taxonomy fixture at
+// src/data/filter-taxonomy.json (when present) is merged on top of the
+// bootstrap to resolve any (featureId → filterId) edges the bootstrap missed.
 
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -26,7 +26,7 @@ import {
 } from '../src/parse-taxonomy.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TAXONOMY_FIXTURE = join(REPO_ROOT, 'src/__tests__/fixtures/filter-taxonomy-response.json');
+const TAXONOMY_FIXTURE = join(REPO_ROOT, 'src/data/filter-taxonomy.json');
 
 async function main(): Promise<void> {
   const dryRun = process.argv.includes('--dry-run');

@@ -12,7 +12,7 @@
 //     is preserved as a fallback only.
 //   - parseTaxonomyResponse(json) — walks a captured filter-taxonomy
 //     response. Authoritative once the fixture is available at
-//     src/__tests__/fixtures/filter-taxonomy-response.json.
+//     src/data/filter-taxonomy.json.
 //
 // Use mergeLuts(bootstrap, captured) — captured wins on conflict.
 
