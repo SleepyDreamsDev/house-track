@@ -29,7 +29,6 @@ const settingSchemas = {
     z.literal('error'),
   ]),
   'stats.successRateWindow': z.number().int().positive(),
-  'monitoring.grafanaUrl': z.union([z.literal(''), z.string().regex(/^https?:\/\//)]),
 } as const;
 
 // Map of setting keys to their default values from config.ts
@@ -52,7 +51,6 @@ const defaultValues: Record<string, unknown> = {
   'filter.generic': defaultGenericFilter,
   'log.level': 'info',
   'stats.successRateWindow': 100,
-  'monitoring.grafanaUrl': '',
 };
 
 // Metadata for settings UI rendering
@@ -179,12 +177,6 @@ export const settingMeta: Record<
     unit: 'sweeps',
     label: 'Success Rate Window',
     hint: 'Last N finished sweeps used to compute Dashboard success rate',
-  },
-  'monitoring.grafanaUrl': {
-    group: 'Monitoring',
-    kind: 'text',
-    label: 'Grafana URL',
-    hint: 'Base URL for the Grafana dashboard. Leave empty to hide the "Open Grafana" button.',
   },
 };
 

@@ -298,7 +298,7 @@ The UI shipped earlier than planned, consolidating work from slices 2–6:
 - **Settings layer** (slice 2): `getSetting`/`setSetting` API. Crawler reads politeness, filter, cron, circuit breaker, and logging settings at sweep-start. Defaults in `src/config.ts`, overrides in Postgres. Keys namespaced: `politeness.baseDelayMs`, `sweep.maxPagesPerSweep`, etc.
 - **Hono API** (slice 3): `/api/sweeps`, `/api/listings`, `/api/filters`, `/api/settings`, `/api/sources`, `/api/circuit`. Integration tests for each route.
 - **Vite SPA** (slice 4): React 18 + TS strict + Tailwind v4 + shadcn/ui. Four pages: Dashboard, Houses, Sweeps, Settings. TanStack Query + react-hook-form + zod. Server-side pagination, optimistic updates.
-- **Grafana provisioning** (slice 6): Postgres datasource, dashboard JSON (stats, time series, histogram). Embedded iframe on Dashboard page. Read-only, anonymously accessible on `127.0.0.1:3001`.
+- **Analytics** (slice 6): in-app analytics on the Dashboard page (stats, time series, histogram), backed by Postgres aggregates served through the Hono API.
 
 **Not in this slice:**
 
