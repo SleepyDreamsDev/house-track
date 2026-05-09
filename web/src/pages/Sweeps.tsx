@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
@@ -31,16 +31,31 @@ interface RunSweepResponse {
   startedAt: string;
 }
 
+interface SweepsEnvelope {
+  sweeps: SweepRun[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+const PAGE_SIZE = 20;
+
 export const Sweeps: React.FC = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { data: sweeps } = useQuery<SweepRun[]>({
-    queryKey: ['sweeps'],
-    queryFn: () => apiCall('/sweeps?limit=20'),
+  const [page, setPage] = useState(0);
+  const { data: envelope } = useQuery<SweepsEnvelope>({
+    queryKey: ['sweeps', { page }],
+    queryFn: () => apiCall(`/sweeps?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`),
     // Poll every 2s while any sweep is running so durationMs + counter
     // columns stay live; idle list never repolls.
-    refetchInterval: (q) => (q.state.data?.some((s) => s.status === 'running') ? 2000 : false),
+    refetchInterval: (q) =>
+      q.state.data?.sweeps?.some((s) => s.status === 'running') ? 2000 : false,
   });
+  const sweeps = envelope?.sweeps;
+  const total = envelope?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const onLastPage = page >= pageCount - 1;
   const { data: circuit } = useQuery<CircuitState>({
     queryKey: ['circuit'],
     queryFn: () => apiCall('/circuit'),
@@ -78,6 +93,9 @@ export const Sweeps: React.FC = () => {
     },
   });
 
+  // Success rate is computed over the *current page* only — same behavior as
+  // before pagination, just relabeled in the subtitle so the operator knows
+  // it's a window, not a lifetime metric.
   const successRate = sweeps?.length
     ? sweeps.filter((s) => s.status === 'success').length / sweeps.length
     : 0;
@@ -87,7 +105,7 @@ export const Sweeps: React.FC = () => {
       <div className="flex items-start justify-between mb-2">
         <PageHeader
           title="Sweeps"
-          subtitle={`${sweeps?.length ?? 0} runs · ${Math.round(successRate * 100)}% success`}
+          subtitle={`${total} runs · ${Math.round(successRate * 100)}% success on page ${page + 1}`}
         />
         <div className="flex items-center gap-2">
           <Button
@@ -218,6 +236,31 @@ export const Sweeps: React.FC = () => {
           </tbody>
         </table>
       </Card>
+
+      {total > PAGE_SIZE && (
+        <div className="mt-3 flex items-center justify-between">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+          >
+            ← Prev
+          </Button>
+          <span className="text-xs tabular-nums text-neutral-500">
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total} · page{' '}
+            {page + 1} of {pageCount}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={onLastPage}
+          >
+            Next →
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

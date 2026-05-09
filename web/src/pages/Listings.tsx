@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
@@ -29,6 +29,7 @@ interface Listing {
 }
 
 const PRICE_MAX = 250000;
+const PAGE_SIZE = 50;
 
 const DISTRICTS = ['all', 'Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
 
@@ -37,25 +38,38 @@ export const Listings: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX);
   const [district, setDistrict] = useState('all');
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
+  const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
 
+  // Reset to page 0 whenever any filter changes — page N may not exist for the
+  // new query (smaller result set) and showing an empty list is worse than
+  // jumping to the first matching page.
+  useEffect(() => {
+    setPage(0);
+  }, [q, maxPrice, district, sort]);
+
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
-    queryKey: ['listings', { q, maxPrice, district, sort }],
+    queryKey: ['listings', { q, maxPrice, district, sort, page }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
       if (maxPrice < PRICE_MAX) p.append('maxPrice', String(maxPrice));
       if (district !== 'all') p.append('district', district);
       p.append('sort', sort);
-      p.append('limit', '50');
+      p.append('limit', String(PAGE_SIZE));
+      p.append('offset', String(page * PAGE_SIZE));
       return apiCall(`/listings?${p}`);
     },
   });
 
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const onLastPage = page >= pageCount - 1;
+
   return (
-    <div data-screen-label="Houses">
+    <div data-screen-label="Listings">
       <PageHeader
-        title="Houses"
+        title="Listings"
         subtitle={`${data?.total ?? '…'} listings · ${maxPrice < PRICE_MAX ? `€${maxPrice.toLocaleString()} max` : 'any price'}`}
         actions={
           <Button
@@ -129,7 +143,9 @@ export const Listings: React.FC = () => {
                 </button>
               ))}
             </div>
-            <span className="text-xs text-neutral-400">{data?.listings?.length ?? 0} results</span>
+            <span className="text-xs text-neutral-400">
+              {data?.listings?.length ?? 0} of {total} · page {page + 1} of {pageCount}
+            </span>
           </div>
 
           {isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
@@ -137,6 +153,30 @@ export const Listings: React.FC = () => {
           {data?.listings?.map((l) => (
             <ListingCard key={l.id} l={l} />
           ))}
+
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0 || isLoading}
+              >
+                ← Prev
+              </Button>
+              <span className="text-xs tabular-nums text-neutral-500">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={onLastPage || isLoading}
+              >
+                Next →
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
