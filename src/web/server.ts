@@ -13,6 +13,7 @@ import { sweepDetailRouter } from './routes/sweeps.detail.js';
 import { sweepStreamRouter } from './routes/sweeps.stream.js';
 import { statsRouter } from './routes/stats.js';
 import { listingsFeedRouter } from './routes/listings.feed.js';
+import { analyticsRouter } from './routes/analytics.js';
 
 const app = new Hono();
 
@@ -30,6 +31,7 @@ export function createApiApp(): Hono {
   app.route('/api', sweepStreamRouter);
   app.route('/api', statsRouter);
   app.route('/api', listingsFeedRouter);
+  app.route('/api', analyticsRouter);
 
   registerListingsRoutes(app, prisma);
   registerFiltersRoutes(app, prisma);
