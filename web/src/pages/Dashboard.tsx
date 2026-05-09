@@ -65,10 +65,23 @@ export const Dashboard: React.FC = () => {
     queryKey: ['circuit'],
     queryFn: () => apiCall('/circuit'),
   });
+  const { data: successRateData } = useQuery<{
+    rate: number;
+    ok: number;
+    total: number;
+    window: number;
+  }>({
+    queryKey: ['successRate'],
+    queryFn: () => apiCall('/stats/success-rate'),
+  });
+  const { data: avgPriceData } = useQuery<{ avgPrice: number; count: number }>({
+    queryKey: ['avgPrice'],
+    queryFn: () => apiCall('/stats/avg-price'),
+  });
 
   const totalActive = districts?.reduce((a, d) => a + d.count, 0) ?? 0;
-  const successRate = 0.95; // TODO: /api/stats/success-rate
-  const avgPrice = 174_500; // TODO: /api/stats/avg-price
+  const successRate = successRateData?.rate ?? 0;
+  const avgPrice = avgPriceData?.avgPrice ?? 0;
 
   return (
     <div className="space-y-6" data-screen-label="Dashboard">

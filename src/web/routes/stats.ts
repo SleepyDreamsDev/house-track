@@ -2,6 +2,7 @@
 
 import { Hono } from 'hono';
 import { getPrisma } from '../../db.js';
+import { getSetting } from '../../settings.js';
 
 export const statsRouter = new Hono();
 
@@ -64,4 +65,37 @@ statsRouter.get('/stats/new-per-day', async (c) => {
   }
 
   return c.json(result);
+});
+
+// GET /api/stats/success-rate
+// Returns the fraction of finished SweepRuns with status='ok' over the most
+// recent `stats.successRateWindow` finished runs (default 100). Powers the
+// Dashboard "Sweep success" KPI tile.
+statsRouter.get('/stats/success-rate', async (c) => {
+  const window = await getSetting<number>('stats.successRateWindow', 100);
+  const prisma = getPrisma();
+  const recent = await prisma.sweepRun.findMany({
+    where: { finishedAt: { not: null } },
+    orderBy: { startedAt: 'desc' },
+    take: window,
+    select: { status: true },
+  });
+  const total = recent.length;
+  const ok = recent.filter((r) => r.status === 'ok').length;
+  const rate = total > 0 ? ok / total : 0;
+  return c.json({ rate, ok, total, window });
+});
+
+// GET /api/stats/avg-price
+// Returns the mean priceEur across active listings with non-null priceEur.
+// Powers the Dashboard "Avg price" KPI tile.
+statsRouter.get('/stats/avg-price', async (c) => {
+  const prisma = getPrisma();
+  const result = await prisma.listing.aggregate({
+    where: { active: true, priceEur: { not: null } },
+    _avg: { priceEur: true },
+    _count: { _all: true },
+  });
+  const avgPrice = result._avg.priceEur != null ? Math.round(result._avg.priceEur) : 0;
+  return c.json({ avgPrice, count: result._count._all });
 });

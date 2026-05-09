@@ -1,14 +1,9 @@
-// GET /api/sweeps/:id — full sweep detail including pages/details/errors/config
-//
-// STATUS: stub returning realistic shape so the UI can render today.
-// TODO (Claude Code, Task 1): replace stub with Prisma read. After the
-// migration runs, fields are: SweepRun + JSON columns
-//   configSnapshot, pagesDetail, detailsDetail, eventLog
-//
-// Hono handler — adapt the import if the project uses Express.
+// GET /api/sweeps/:id — full sweep detail including pages/details/errors/config.
+// Powers the SweepDetail page's overview/HTTP/events/errors/config tabs.
 
 import { Hono } from 'hono';
 import { getPrisma } from '../../db.js';
+import { getActiveSweepId, getCurrentlyFetching } from '../../sweep.js';
 
 export const sweepDetailRouter = new Hono();
 
@@ -57,6 +52,10 @@ sweepDetailRouter.get('/sweeps/:id', async (c) => {
       pagesTotal: pagesDetail.length,
       queued: 0,
     },
-    currentlyFetching: null,
+    // Only the truly-active sweep (in_progress AND matches in-memory state)
+    // surfaces the current in-flight URL. After process restart the in-memory
+    // state is gone even if the DB row is still in_progress, so we return null.
+    currentlyFetching:
+      run.status === 'in_progress' && getActiveSweepId() === run.id ? getCurrentlyFetching() : null,
   });
 });

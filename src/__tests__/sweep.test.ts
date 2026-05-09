@@ -4,7 +4,13 @@ import type { Circuit } from '../circuit.js';
 import { CircuitTrippingError } from '../fetch.js';
 import { AdvertNotFoundError } from '../parse-detail.js';
 import type { Persistence } from '../persist.js';
-import { runSweep, getActiveSweepId, type SweepDeps } from '../sweep.js';
+import {
+  runSweep,
+  getActiveSweepId,
+  getCurrentlyFetching,
+  setCurrentlyFetching,
+  type SweepDeps,
+} from '../sweep.js';
 import type { ListingStub, ParsedDetail } from '../types.js';
 
 const HOUR = 60 * 60 * 1000;
@@ -505,6 +511,62 @@ describe('runSweep', () => {
       // Bug: if it's null, SSE subscribers miss the final event
       expect(activeSweepIdWhenFinishCalled).not.toBeNull();
       expect(activeSweepIdWhenFinishCalled).toBe(42);
+    });
+  });
+
+  describe('currentlyFetching state', () => {
+    it('setCurrentlyFetching(url) records url and a numeric startedAt', () => {
+      setCurrentlyFetching('https://999.md/ro/abc');
+      const state = getCurrentlyFetching();
+      expect(state).not.toBeNull();
+      expect(state?.url).toBe('https://999.md/ro/abc');
+      expect(typeof state?.startedAt).toBe('number');
+      expect(state?.startedAt).toBeGreaterThan(0);
+      setCurrentlyFetching(null);
+    });
+
+    it('setCurrentlyFetching(null) clears the state', () => {
+      setCurrentlyFetching('https://999.md/ro/xyz');
+      expect(getCurrentlyFetching()).not.toBeNull();
+      setCurrentlyFetching(null);
+      expect(getCurrentlyFetching()).toBeNull();
+    });
+
+    it('runSweep clears currentlyFetching in its finally block', async () => {
+      setCurrentlyFetching('https://leak-from-prior-run.example/');
+      const env = makeEnv();
+      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.parseIndex.mockReturnValueOnce([]);
+
+      await runSweep(env.deps);
+
+      expect(getCurrentlyFetching()).toBeNull();
+    });
+
+    it('runSweep tracks each detail fetch and clears at end', async () => {
+      const env = makeEnv();
+      // First page returns the two stubs; subsequent pages return empty so the
+      // pagination loop exits cleanly without hitting an undefined parseIndex result.
+      env.fetchSearchPage.mockResolvedValue({});
+      const stubA = stub('a');
+      const stubB = stub('b');
+      env.parseIndex.mockReturnValueOnce([stubA, stubB]).mockReturnValue([]);
+      env.diffAgainstDb.mockResolvedValueOnce({ new: [stubA, stubB], seen: [] });
+      env.parseDetail.mockImplementation((id: string) => detail(id));
+
+      const fetchedUrls: (string | null)[] = [];
+      env.fetchAdvert.mockImplementation(async () => {
+        // Snapshot the in-flight URL just before we return — should match the stub we're processing
+        fetchedUrls.push(getCurrentlyFetching()?.url ?? null);
+        return {};
+      });
+
+      await runSweep(env.deps);
+
+      // setCurrentlyFetching should have fired before each fetchAdvert call,
+      // and getCurrentlyFetching should have been clear once the sweep finished.
+      expect(fetchedUrls).toEqual([stubA.url, stubB.url]);
+      expect(getCurrentlyFetching()).toBeNull();
     });
   });
 });

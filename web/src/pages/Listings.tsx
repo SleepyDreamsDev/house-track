@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
@@ -34,6 +34,7 @@ export const Listings: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState(250000);
   const [district, setDistrict] = useState('all');
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
     queryKey: ['listings', { q, maxPrice, district, sort }],
@@ -54,10 +55,12 @@ export const Listings: React.FC = () => {
         title="Houses"
         subtitle={`${data?.total ?? '…'} listings · €${maxPrice.toLocaleString()} max`}
         actions={
-          <>
-            <Button variant="secondary">Refresh</Button>
-            <Button variant="secondary">Export CSV</Button>
-          </>
+          <Button
+            variant="secondary"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['listings'] })}
+          >
+            Refresh
+          </Button>
         }
       />
 
