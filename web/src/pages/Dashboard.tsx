@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
@@ -47,6 +48,7 @@ interface CircuitState {
 }
 
 export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { data: newToday } = useQuery<Listing[]>({
     queryKey: ['newToday'],
     queryFn: () => apiCall('/listings/new-today'),
@@ -108,7 +110,7 @@ export const Dashboard: React.FC = () => {
     <div className="space-y-6" data-screen-label="Dashboard">
       <PageHeader
         title="Dashboard"
-        subtitle={`last sweep ${latestSweep ? fmt.rel(latestSweep.startedAt) : '—'}`}
+        subtitle={`last sweep ${latestSweep?.startedAt ? fmt.rel(latestSweep.startedAt) : '—'}`}
         actions={
           <>
             {grafanaUrl && (
@@ -163,7 +165,7 @@ export const Dashboard: React.FC = () => {
               title="New today"
               hint={`${newToday?.length ?? 0} listings`}
               right={
-                <Button size="sm" variant="ghost">
+                <Button size="sm" variant="ghost" onClick={() => navigate('/listings')}>
                   View all houses →
                 </Button>
               }
