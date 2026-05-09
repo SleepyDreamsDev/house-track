@@ -279,7 +279,11 @@ async function fetchAndPersistDetails(
     await publishProgress(deps, sweepId, result);
   }
 
-  // Capture detail records for seen listings (fetch + parse only, no persist)
+  // Re-fetch + persist seen listings so price/description changes accumulate
+  // in ListingSnapshot. persistDetail is content-addressed (snapshot only on
+  // rawHtmlHash change), so unchanged listings cost a row in detailsDetail
+  // but no DB write — and the politeness budget paid for the fetch buys
+  // actual price-history signal instead of being thrown away.
   for (const s of seenStubs) {
     if (signal.aborted) {
       break;
@@ -310,7 +314,6 @@ async function fetchAndPersistDetails(
     }
     const parseMs = Date.now() - parseStart;
 
-    // Capture detail info for seen listing
     const detailRecord = {
       id: s.id,
       url: s.url,
@@ -322,6 +325,14 @@ async function fetchAndPersistDetails(
       priceEur: parsed.priceEur ?? null,
     };
     result.detailsDetail.push(detailRecord);
+
+    try {
+      await deps.persist.persistDetail(parsed);
+    } catch (err) {
+      record(result, { url: s.url, status: null, msg: `persist: ${String(err)}`, attempts });
+      result.status = 'partial';
+    }
+    await publishProgress(deps, sweepId, result);
   }
   setCurrentlyFetching(null);
 }

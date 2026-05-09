@@ -26,16 +26,9 @@ interface CircuitState {
   openedAt?: string;
 }
 
-interface SmokeAssertion {
-  name: string;
-  ok: boolean;
-  detail: string;
-}
-interface SmokeResult {
-  sweepId: number;
-  durationMs: number;
-  passed: boolean;
-  assertions: SmokeAssertion[];
+interface RunSweepResponse {
+  id: number;
+  startedAt: string;
 }
 
 export const Sweeps: React.FC = () => {
@@ -55,11 +48,17 @@ export const Sweeps: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['circuit'] }),
   });
 
-  const smoke = useMutation<SmokeResult>({
-    mutationFn: () => apiCall<SmokeResult>('/sweeps/smoke', { method: 'POST' }),
-    onSuccess: () => {
+  // Triggers a real sweep — same code path as the hourly cron (politeness,
+  // circuit breaker, full pagination, persistDetail on new + seen stubs so
+  // existing rows get price-history snapshots). Returns the id immediately
+  // and runs in the background; we navigate to the detail page so the user
+  // can watch progress via the live banner + queue depth.
+  const runSweep = useMutation<RunSweepResponse>({
+    mutationFn: () => apiCall<RunSweepResponse>('/sweeps', { method: 'POST' }),
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['sweeps'] });
       qc.invalidateQueries({ queryKey: ['circuit'] });
+      navigate(`/sweeps/${data.id}`);
     },
   });
 
@@ -75,47 +74,17 @@ export const Sweeps: React.FC = () => {
           subtitle={`${sweeps?.length ?? 0} runs · ${Math.round(successRate * 100)}% success`}
         />
         <Button
-          onClick={() => smoke.mutate()}
-          disabled={smoke.isPending || circuit?.open}
-          title={circuit?.open ? 'Circuit breaker open — reset before running smoke' : undefined}
+          onClick={() => runSweep.mutate()}
+          disabled={runSweep.isPending || circuit?.open}
+          title={circuit?.open ? 'Circuit breaker open — reset before running a sweep' : undefined}
         >
-          {smoke.isPending ? 'Running smoke… ~30s' : 'Run smoke'}
+          {runSweep.isPending ? 'Starting…' : 'Run sweep now'}
         </Button>
       </div>
 
-      {smoke.data && (
-        <div
-          className={`mb-6 rounded-sm border p-4 ${
-            smoke.data.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-semibold">
-              Smoke {smoke.data.passed ? 'passed' : 'failed'}:{' '}
-              {smoke.data.assertions.filter((a) => a.ok).length}/{smoke.data.assertions.length}{' '}
-              checks
-            </span>
-            <span className="text-xs text-neutral-600">({fmt.ms(smoke.data.durationMs)})</span>
-            <button
-              onClick={() => navigate(`/sweeps/${smoke.data?.sweepId}`)}
-              className="text-xs text-blue-600 hover:underline ml-auto"
-            >
-              View sweep #{smoke.data.sweepId} →
-            </button>
-          </div>
-          <ul className="text-xs space-y-0.5">
-            {smoke.data.assertions.map((a) => (
-              <li key={a.name} className={a.ok ? 'text-neutral-700' : 'text-error font-medium'}>
-                {a.ok ? '✓' : '✗'} {a.name} — {a.detail}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {smoke.isError && (
+      {runSweep.isError && (
         <div className="mb-6 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-error">
-          Smoke request failed: {(smoke.error as Error)?.message ?? 'unknown error'}
+          Sweep trigger failed: {(runSweep.error as Error)?.message ?? 'unknown error'}
         </div>
       )}
 

@@ -8,7 +8,7 @@
 
 import { FILTER } from './config.js';
 
-// CAPTURED 2026-05-09T10:55:05.773Z by scripts/capture-session.ts
+// CAPTURED 2026-05-09T19:52:03.372Z by scripts/capture-session.ts
 export const SEARCH_ADS_QUERY = `query SearchAds($input: Ads_SearchInput!, $isWorkCategory: Boolean = false, $includeCarsFeatures: Boolean = false, $includeBody: Boolean = false, $includeOwner: Boolean = false, $includeBoost: Boolean = false, $locale: Common_Locale) {
   searchAds(input: $input) {
     ads {
@@ -270,7 +270,12 @@ fragment WorkCategoryFeatures on Advert {
   __typename
 }`;
 
-// CAPTURED 2026-05-09T10:55:05.773Z by scripts/capture-session.ts
+// 999.md's Advert type doesn't expose price/region/city/etc as direct fields
+// — they're all served via a generic `feature(id: N)` resolver returning a
+// FeatureValue. The id-to-name mapping below mirrors what SEARCH_ADS_QUERY
+// uses (PriceAndImages fragment) plus the additional ids parseDetail reads
+// from the captured fixture. FeatureValueFragment is redeclared here because
+// fragment definitions are scoped per-query-string.
 export const GET_ADVERT_QUERY = `query GetAdvert($input: AdvertInput!) {
   advert(input: $input) {
     id
@@ -280,12 +285,29 @@ export const GET_ADVERT_QUERY = `query GetAdvert($input: AdvertInput!) {
     reseted
     expire
     isExpired
+    price: feature(id: 2) { ...AdvertFeatureValue __typename }
+    pricePerMeter: feature(id: 1385) { ...AdvertFeatureValue __typename }
+    oldPrice: feature(id: 1640) { ...AdvertFeatureValue __typename }
+    body: feature(id: 13) { ...AdvertFeatureValue __typename }
+    region: feature(id: 7) { ...AdvertFeatureValue __typename }
+    city: feature(id: 8) { ...AdvertFeatureValue __typename }
+    street: feature(id: 10) { ...AdvertFeatureValue __typename }
+    mapPoint: feature(id: 3) { ...AdvertFeatureValue __typename }
+    images: feature(id: 14) { ...AdvertFeatureValue __typename }
+    offerType: feature(id: 1) { ...AdvertFeatureValue __typename }
     owner { __typename }
     autoRepublish { __typename }
     moderation { __typename }
     package { __typename }
     subCategory { __typename }
   }
+}
+
+fragment AdvertFeatureValue on FeatureValue {
+  id
+  type
+  value
+  __typename
 }`;
 
 // REPLACE-ME — populated by scripts/capture-session.ts after a live capture.
