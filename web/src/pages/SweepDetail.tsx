@@ -67,6 +67,19 @@ interface SweepDetailDto {
   logTail: SweepEvent[];
 }
 
+interface SmokeAssertion {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+interface SmokeAssertions {
+  sweepId: number;
+  durationMs: number;
+  passed: boolean;
+  assertions: SmokeAssertion[];
+  pending?: boolean;
+}
+
 type Tab = 'overview' | 'http' | 'events' | 'errors' | 'config';
 
 export const SweepDetail: React.FC = () => {
@@ -86,6 +99,16 @@ export const SweepDetail: React.FC = () => {
   useEffect(() => {
     if (liveEvents.length) refetch();
   }, [liveEvents.length, refetch]);
+
+  // Smoke assertions — only fetched when this sweep was triggered as smoke.
+  // Server returns { pending: true } until finishedAt is set; once done we
+  // get the full pass/fail panel.
+  const smokeAssertions = useQuery<SmokeAssertions>({
+    queryKey: ['sweep', id, 'smoke-assertions'],
+    queryFn: () => apiCall(`/sweeps/${id}/smoke-assertions`),
+    enabled: detail?.trigger === 'smoke',
+    refetchInterval: (q) => (q.state.data?.pending || live ? 2000 : false),
+  });
 
   const cancel = useMutation({
     mutationFn: () => apiCall(`/sweeps/${id}/cancel`, { method: 'POST' }),
@@ -179,6 +202,34 @@ export const SweepDetail: React.FC = () => {
             </div>
           )}
         </Card>
+      )}
+
+      {detail.trigger === 'smoke' && smokeAssertions.data && !smokeAssertions.data.pending && (
+        <div
+          className={`mb-6 rounded-sm border p-4 ${
+            smokeAssertions.data.passed
+              ? 'bg-green-50 border-green-200'
+              : 'bg-red-50 border-red-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold">
+              Smoke {smokeAssertions.data.passed ? 'passed' : 'failed'}:{' '}
+              {smokeAssertions.data.assertions.filter((a) => a.ok).length}/
+              {smokeAssertions.data.assertions.length} checks
+            </span>
+            <span className="text-xs text-neutral-600">
+              ({fmt.ms(smokeAssertions.data.durationMs)})
+            </span>
+          </div>
+          <ul className="text-xs space-y-0.5">
+            {smokeAssertions.data.assertions.map((a) => (
+              <li key={a.name} className={a.ok ? 'text-neutral-700' : 'text-error font-medium'}>
+                {a.ok ? '✓' : '✗'} {a.name} — {a.detail}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {!live && detail.summary && (

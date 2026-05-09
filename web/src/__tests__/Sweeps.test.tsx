@@ -88,23 +88,21 @@ describe('Sweeps', () => {
     expect(await screen.findByText('SweepDetail 42')).toBeInTheDocument();
   });
 
-  it('Run smoke button POSTs to /sweeps/smoke and shows assertions', async () => {
+  it('Run smoke button POSTs to /sweeps/smoke and navigates to the new sweep', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockImplementation(async (path: string, opts?: { method?: string }) => {
       if (path === '/sweeps/smoke' && opts?.method === 'POST') {
-        return {
-          sweepId: 7,
-          durationMs: 28_000,
-          passed: true,
-          assertions: [{ name: 'sweep recorded', ok: true, detail: 'id=7' }],
-        };
+        return { id: 7, startedAt: new Date().toISOString() };
       }
       if (path.startsWith('/sweeps')) return [];
       if (path === '/circuit') return { open: false };
       return [];
     });
 
-    const router = createMemoryRouter([{ path: '/', element: <Sweeps /> }]);
+    const router = createMemoryRouter([
+      { path: '/', element: <Sweeps /> },
+      { path: '/sweeps/:id', element: <div>SweepDetail 7</div> },
+    ]);
     render(
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
@@ -116,7 +114,7 @@ describe('Sweeps', () => {
     await waitFor(() => {
       expect(apiCall).toHaveBeenCalledWith('/sweeps/smoke', { method: 'POST' });
     });
-    expect(await screen.findByText(/Smoke passed/i)).toBeInTheDocument();
+    expect(await screen.findByText('SweepDetail 7')).toBeInTheDocument();
   });
 
   it('Run sweep now button is disabled when the circuit is open', async () => {
