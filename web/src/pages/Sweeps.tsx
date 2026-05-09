@@ -13,7 +13,8 @@ interface SweepRun {
   id: string;
   startedAt: string;
   durationMs: number;
-  status: 'running' | 'success' | 'failed';
+  status: 'running' | 'success' | 'failed' | 'cancelled';
+  trigger?: string;
   pagesFetched: number;
   detailsFetched: number;
   newListings: number;
@@ -23,6 +24,18 @@ interface SweepRun {
 interface CircuitState {
   open: boolean;
   openedAt?: string;
+}
+
+interface SmokeAssertion {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+interface SmokeResult {
+  sweepId: number;
+  durationMs: number;
+  passed: boolean;
+  assertions: SmokeAssertion[];
 }
 
 export const Sweeps: React.FC = () => {
@@ -42,16 +55,69 @@ export const Sweeps: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['circuit'] }),
   });
 
+  const smoke = useMutation<SmokeResult>({
+    mutationFn: () => apiCall<SmokeResult>('/sweeps/smoke', { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sweeps'] });
+      qc.invalidateQueries({ queryKey: ['circuit'] });
+    },
+  });
+
   const successRate = sweeps?.length
     ? sweeps.filter((s) => s.status === 'success').length / sweeps.length
     : 0;
 
   return (
     <div data-screen-label="Sweeps">
-      <PageHeader
-        title="Sweeps"
-        subtitle={`${sweeps?.length ?? 0} runs · ${Math.round(successRate * 100)}% success`}
-      />
+      <div className="flex items-start justify-between mb-2">
+        <PageHeader
+          title="Sweeps"
+          subtitle={`${sweeps?.length ?? 0} runs · ${Math.round(successRate * 100)}% success`}
+        />
+        <Button
+          onClick={() => smoke.mutate()}
+          disabled={smoke.isPending || circuit?.open}
+          title={circuit?.open ? 'Circuit breaker open — reset before running smoke' : undefined}
+        >
+          {smoke.isPending ? 'Running smoke… ~30s' : 'Run smoke'}
+        </Button>
+      </div>
+
+      {smoke.data && (
+        <div
+          className={`mb-6 rounded-sm border p-4 ${
+            smoke.data.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold">
+              Smoke {smoke.data.passed ? 'passed' : 'failed'}:{' '}
+              {smoke.data.assertions.filter((a) => a.ok).length}/{smoke.data.assertions.length}{' '}
+              checks
+            </span>
+            <span className="text-xs text-neutral-600">({fmt.ms(smoke.data.durationMs)})</span>
+            <button
+              onClick={() => navigate(`/sweeps/${smoke.data?.sweepId}`)}
+              className="text-xs text-blue-600 hover:underline ml-auto"
+            >
+              View sweep #{smoke.data.sweepId} →
+            </button>
+          </div>
+          <ul className="text-xs space-y-0.5">
+            {smoke.data.assertions.map((a) => (
+              <li key={a.name} className={a.ok ? 'text-neutral-700' : 'text-error font-medium'}>
+                {a.ok ? '✓' : '✗'} {a.name} — {a.detail}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {smoke.isError && (
+        <div className="mb-6 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-error">
+          Smoke request failed: {(smoke.error as Error)?.message ?? 'unknown error'}
+        </div>
+      )}
 
       <div
         className={`mb-6 rounded-sm border p-4 flex items-center gap-4 ${circuit?.open ? 'bg-red-50 border-red-200' : 'bg-white border-neutral-200'}`}
@@ -102,7 +168,14 @@ export const Sweeps: React.FC = () => {
                 className="hover:bg-neutral-50 cursor-pointer"
               >
                 <td className="px-5 py-2.5">
-                  <div className="text-neutral-900">{fmt.date(s.startedAt)}</div>
+                  <div className="text-neutral-900 flex items-center gap-1.5">
+                    {fmt.date(s.startedAt)}
+                    {s.trigger === 'smoke' && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-700 text-[10px] font-medium uppercase tracking-wider">
+                        smoke
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-neutral-400">
                     {fmt.rel(s.startedAt)} · <span className="font-mono">{s.id}</span>
                   </div>
@@ -110,6 +183,7 @@ export const Sweeps: React.FC = () => {
                 <td className="px-3 py-2.5">
                   {s.status === 'success' && <Badge variant="success">success</Badge>}
                   {s.status === 'failed' && <Badge variant="error">failed</Badge>}
+                  {s.status === 'cancelled' && <Badge variant="default">cancelled</Badge>}
                   {s.status === 'running' && (
                     <Badge variant="warning">
                       <span className="inline-flex items-center gap-1">

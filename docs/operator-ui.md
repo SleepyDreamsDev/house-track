@@ -99,6 +99,11 @@ Table of crawl jobs (SweepRun history):
   - Confirms before running
   - If breaker is already closed: shows "Already closed" toast
   - If breaker is open: deletes the sentinel file and restarts the crawler on next cron cycle
+- Top-right **"Run smoke"** button:
+  - Runs a 1-page + 3-listing sweep against live 999.md (~30s wall clock)
+  - Disabled when the circuit breaker is open (server also enforces with 409)
+  - Recorded as a `SweepRun` with `trigger='smoke'` (visible in the table with a "smoke" chip)
+  - On completion: shows pass/fail panel with assertion details + link to the sweep
 
 ### Settings
 
