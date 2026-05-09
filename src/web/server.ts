@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { getPrisma } from '../db.js';
@@ -43,8 +44,9 @@ export function createApiApp(): Hono {
   return app;
 }
 
-// Start server when run directly
-if (import.meta.main) {
+// Start server when run directly. `import.meta.main` is Bun-only; Node 22
+// needs the argv[1]-vs-module-URL comparison.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const app = createApiApp();
   const port = 3000;
   const host = '127.0.0.1';

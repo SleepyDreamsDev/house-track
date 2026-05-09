@@ -11,15 +11,16 @@ import { fmt } from '@/lib/format.js';
 
 interface Listing {
   id: string;
+  url: string;
   title: string;
-  priceEur: number;
+  priceEur: number | null;
   priceWas?: number;
-  areaSqm: number;
+  areaSqm: number | null;
   landSqm?: number;
   rooms: number | null;
   floors?: number;
   yearBuilt?: number;
-  district: string;
+  district: string | null;
   street?: string;
   firstSeenAt: string;
   snapshots?: number;
@@ -27,11 +28,13 @@ interface Listing {
   isNew?: boolean;
 }
 
+const PRICE_MAX = 250000;
+
 const DISTRICTS = ['all', 'Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
 
 export const Listings: React.FC = () => {
   const [q, setQ] = useState('');
-  const [maxPrice, setMaxPrice] = useState(250000);
+  const [maxPrice, setMaxPrice] = useState(PRICE_MAX);
   const [district, setDistrict] = useState('all');
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const queryClient = useQueryClient();
@@ -41,7 +44,7 @@ export const Listings: React.FC = () => {
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
-      if (maxPrice) p.append('maxPrice', String(maxPrice));
+      if (maxPrice < PRICE_MAX) p.append('maxPrice', String(maxPrice));
       if (district !== 'all') p.append('district', district);
       p.append('sort', sort);
       p.append('limit', '50');
@@ -53,7 +56,7 @@ export const Listings: React.FC = () => {
     <div data-screen-label="Houses">
       <PageHeader
         title="Houses"
-        subtitle={`${data?.total ?? '…'} listings · €${maxPrice.toLocaleString()} max`}
+        subtitle={`${data?.total ?? '…'} listings · ${maxPrice < PRICE_MAX ? `€${maxPrice.toLocaleString()} max` : 'any price'}`}
         actions={
           <Button
             variant="secondary"
@@ -141,10 +144,15 @@ export const Listings: React.FC = () => {
 };
 
 const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
-  const drop = l.priceWas ? Math.round((1 - l.priceEur / l.priceWas) * 100) : null;
-  const eurm2 = l.areaSqm ? Math.round(l.priceEur / l.areaSqm) : 0;
+  const drop = l.priceWas && l.priceEur ? Math.round((1 - l.priceEur / l.priceWas) * 100) : null;
+  const eurm2 = l.areaSqm && l.priceEur ? Math.round(l.priceEur / l.areaSqm) : 0;
   return (
-    <div className="grid grid-cols-[120px_1fr_auto] gap-4 rounded-sm bg-white p-3 border border-neutral-200">
+    <a
+      href={l.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="grid grid-cols-[120px_1fr_auto] gap-4 rounded-sm bg-white p-3 border border-neutral-200 hover:border-neutral-400 transition-colors"
+    >
       <PhotoPlaceholder id={l.id} className="h-[88px]" label={`#${String(l.id).slice(-4)}`} />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 mb-1">
@@ -197,10 +205,10 @@ const ListingCard: React.FC<{ l: Listing }> = ({ l }) => {
           )}
           <div className="text-xs tabular-nums text-neutral-400">€{eurm2}/m²</div>
         </div>
-        <Button size="sm" variant="secondary">
-          Open
-        </Button>
+        <span className="rounded-sm border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700">
+          Open ↗
+        </span>
       </div>
-    </div>
+    </a>
   );
 };

@@ -1,8 +1,9 @@
 // Tiny formatting helpers shared across pages.
 
 export const fmt = {
-  eur: (n: number) => '€' + Math.round(n).toLocaleString('en-US'),
-  num: (n: number) => n.toLocaleString('en-US'),
+  eur: (n: number | null | undefined) =>
+    n == null ? '—' : '€' + Math.round(n).toLocaleString('en-US'),
+  num: (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US')),
   ms: (ms: number) => {
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
