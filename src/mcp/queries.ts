@@ -172,8 +172,18 @@ export async function searchListings(
   const limit = input.limit ?? DEFAULT_LIMIT;
   const isEurm2 = input.sort === 'eurm2' || input.sort === 'pricePerSqmAsc';
 
+  // Narrow the snapshot relation to only the fields we actually consume
+  // (priceWas + priceDrop window calc) and order by capturedAt desc at the
+  // DB so we can scan-once instead of sorting in memory per row.
+  const snapshotInclude = {
+    snapshots: {
+      select: { capturedAt: true, priceEur: true },
+      orderBy: { capturedAt: 'desc' as const },
+    },
+  };
+
   type ListingWithSnapshots = Awaited<
-    ReturnType<typeof prisma.listing.findMany<{ include: { snapshots: true } }>>
+    ReturnType<typeof prisma.listing.findMany<{ include: typeof snapshotInclude }>>
   >[number];
 
   const rows: ListingWithSnapshots[] = [];
@@ -183,7 +193,7 @@ export async function searchListings(
       where,
       orderBy: orderBy(input.sort),
       ...(isEurm2 ? {} : { take: limit }),
-      include: { snapshots: true },
+      include: snapshotInclude,
     });
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -191,11 +201,10 @@ export async function searchListings(
       const relevantSnapshots = r.snapshots.filter((s) => s.capturedAt >= sevenDaysAgo);
       if (relevantSnapshots.length < 2) continue;
 
-      const sorted = relevantSnapshots.sort(
-        (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime(),
-      );
-      const oldest = sorted[0];
-      const newest = sorted[relevantSnapshots.length - 1];
+      // r.snapshots is desc, so the first element of the filtered subset is newest
+      // and the last element is oldest within the 7-day window.
+      const newest = relevantSnapshots[0];
+      const oldest = relevantSnapshots[relevantSnapshots.length - 1];
 
       if (oldest?.priceEur && newest?.priceEur) {
         const drop = ((oldest.priceEur - newest.priceEur) / oldest.priceEur) * 100;
@@ -207,7 +216,7 @@ export async function searchListings(
       where,
       orderBy: orderBy(input.sort),
       ...(isEurm2 ? {} : { take: limit }),
-      include: { snapshots: true },
+      include: snapshotInclude,
     });
     rows.push(...allRows);
   }
@@ -219,10 +228,11 @@ export async function searchListings(
     // priceWas = the most recent snapshot whose priceEur differs from the
     // current listing.priceEur. The crawler writes a snapshot every time
     // rawHtmlHash changes, including the one that records the current price,
-    // so naively taking the most recent snapshot would always equal priceEur.
-    const prior = [...r.snapshots]
-      .filter((s) => s.capturedAt.getTime() < now && s.priceEur !== r.priceEur)
-      .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())[0];
+    // so we have to skip same-price snapshots. snapshots is pre-sorted desc,
+    // so .find() returns the newest qualifying entry.
+    const prior = r.snapshots.find(
+      (s) => s.capturedAt.getTime() < now && s.priceEur !== r.priceEur,
+    );
     return {
       id: r.id,
       url: r.url,
