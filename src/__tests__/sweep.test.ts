@@ -68,8 +68,10 @@ interface MockEnv {
 }
 
 function makeEnv(): MockEnv {
-  const fetchSearchPage = vi.fn<(pageIdx: number) => Promise<unknown>>();
-  const fetchAdvert = vi.fn<(id: string) => Promise<unknown>>();
+  const fetchSearchPage =
+    vi.fn<(pageIdx: number) => Promise<{ json: unknown; bytes: number; attempts: number }>>();
+  const fetchAdvert =
+    vi.fn<(id: string) => Promise<{ json: unknown; bytes: number; attempts: number }>>();
   const isOpen = vi.fn().mockResolvedValue(false);
   const diffAgainstDb = vi
     .fn()
@@ -129,6 +131,8 @@ function makeEnv(): MockEnv {
   };
 }
 
+const envelope = (json: unknown) => ({ json, bytes: 0, attempts: 1 });
+
 describe('runSweep', () => {
   it('Pre-flight short-circuits when the breaker is already open', async () => {
     const env = makeEnv();
@@ -145,11 +149,13 @@ describe('runSweep', () => {
 
   it('Happy path: 1 page with 2 stubs, both new and persisted', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({ page: 0 });
-    env.fetchSearchPage.mockResolvedValueOnce({ page: 1 });
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({ page: 0 }));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({ page: 1 }));
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]); // page 1 empty → stop pagination
-    env.fetchAdvert.mockResolvedValueOnce({ id: 'A' }).mockResolvedValueOnce({ id: 'B' });
+    env.fetchAdvert
+      .mockResolvedValueOnce(envelope({ id: 'A' }))
+      .mockResolvedValueOnce(envelope({ id: 'B' }));
     env.parseDetail.mockReturnValueOnce(detail('A')).mockReturnValueOnce(detail('B'));
 
     await runSweep(env.deps);
@@ -160,7 +166,7 @@ describe('runSweep', () => {
 
   it('Empty index page stops pagination', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockReturnValueOnce([]);
 
     await runSweep(env.deps);
@@ -171,8 +177,8 @@ describe('runSweep', () => {
 
   it('A CircuitTrippingError mid-sweep aborts and marks status circuit_open', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({});
-    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockReturnValueOnce([stub('A')]);
     env.parseIndex.mockReturnValueOnce([]);
     env.fetchAdvert.mockRejectedValueOnce(new CircuitTrippingError(429, 'detA'));
@@ -184,11 +190,13 @@ describe('runSweep', () => {
 
   it('parseDetail throwing on one listing does not kill the sweep', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({});
-    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchAdvert.mockResolvedValueOnce({ id: 'A' }).mockResolvedValueOnce({ id: 'B' });
+    env.fetchAdvert
+      .mockResolvedValueOnce(envelope({ id: 'A' }))
+      .mockResolvedValueOnce(envelope({ id: 'B' }));
     env.parseDetail
       .mockImplementationOnce(() => {
         throw new Error('schema drift');
@@ -207,11 +215,11 @@ describe('runSweep', () => {
 
   it('AdvertNotFoundError on a detail is silent (delisted between index and detail)', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({});
-    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockReturnValueOnce([stub('A')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchAdvert.mockResolvedValueOnce({ data: { advert: null } });
+    env.fetchAdvert.mockResolvedValueOnce(envelope({ data: { advert: null } }));
     env.parseDetail.mockImplementationOnce(() => {
       throw new AdvertNotFoundError('A');
     });
@@ -226,7 +234,7 @@ describe('runSweep', () => {
 
   it('Does NOT age out listings when the sweep is partial (incomplete index → stale data risk)', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockImplementationOnce(() => {
       throw new Error('schema drift on index');
     });
@@ -239,12 +247,12 @@ describe('runSweep', () => {
 
   it('Seen ids get markSeen and stale ids get aged out', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({});
-    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]);
     // Need to fetch and parse for both new (B) and seen (A)
-    env.fetchAdvert.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+    env.fetchAdvert.mockResolvedValueOnce(envelope({})).mockResolvedValueOnce(envelope({}));
     env.parseDetail.mockReturnValueOnce(detail('B')).mockReturnValueOnce(detail('A'));
     env.diffAgainstDb.mockResolvedValueOnce({ new: [stub('B')], seen: [stub('A')] });
 
@@ -258,10 +266,13 @@ describe('runSweep', () => {
   describe('backfillPerSweep', () => {
     it('Re-fetches up to N listings with NULL filterValuesEnrichedAt after new-detail fetches', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
       env.findUnenrichedListings.mockResolvedValueOnce(['B1', 'B2', 'B3']);
-      env.fetchAdvert.mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockResolvedValueOnce({});
+      env.fetchAdvert
+        .mockResolvedValueOnce(envelope({}))
+        .mockResolvedValueOnce(envelope({}))
+        .mockResolvedValueOnce(envelope({}));
       env.parseDetail
         .mockReturnValueOnce(detail('B1'))
         .mockReturnValueOnce(detail('B2'))
@@ -279,7 +290,7 @@ describe('runSweep', () => {
 
     it('backfillPerSweep=0 disables backfill entirely', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
       env.deps.backfillPerSweep = 0;
 
@@ -291,7 +302,7 @@ describe('runSweep', () => {
 
     it('Undefined backfillPerSweep means no backfill', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
 
       await runSweep(env.deps);
@@ -301,13 +312,13 @@ describe('runSweep', () => {
 
     it('A backfill fetch failure does not abort the sweep but flips status to partial', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
       env.findUnenrichedListings.mockResolvedValueOnce(['B1', 'B2', 'B3']);
       env.fetchAdvert
-        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce(envelope({}))
         .mockRejectedValueOnce(new Error('socket hang up'))
-        .mockResolvedValueOnce({});
+        .mockResolvedValueOnce(envelope({}));
       env.parseDetail.mockReturnValueOnce(detail('B1')).mockReturnValueOnce(detail('B3'));
       env.deps.backfillPerSweep = 30;
 
@@ -321,7 +332,7 @@ describe('runSweep', () => {
 
     it('A backfill CircuitTrippingError aborts the sweep and marks circuit_open', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
       env.findUnenrichedListings.mockResolvedValueOnce(['B1']);
       env.fetchAdvert.mockRejectedValueOnce(new CircuitTrippingError(429, 'B1'));
@@ -335,11 +346,11 @@ describe('runSweep', () => {
 
   it('applyPostFilter callback runs before diffAgainstDb', async () => {
     const env = makeEnv();
-    env.fetchSearchPage.mockResolvedValueOnce({});
-    env.fetchSearchPage.mockResolvedValueOnce({});
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchAdvert.mockResolvedValueOnce({});
+    env.fetchAdvert.mockResolvedValueOnce(envelope({}));
     env.parseDetail.mockReturnValueOnce(detail('A'));
     env.deps.applyPostFilter = (s) => s.filter((x) => x.id === 'A');
 
@@ -352,11 +363,11 @@ describe('runSweep', () => {
   describe('JSON column persistence (pagesDetail, detailsDetail, configSnapshot)', () => {
     it('Captures pagesDetail with timing and found count during collectIndexStubs', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({}); // page 0
-      env.fetchSearchPage.mockResolvedValueOnce({}); // page 1
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({})); // page 0
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({})); // page 1
       env.parseIndex.mockReturnValueOnce([stub('A')]); // page 0 has 1 result
       env.parseIndex.mockReturnValueOnce([]); // page 1 empty → stops pagination
-      env.fetchAdvert.mockResolvedValueOnce({});
+      env.fetchAdvert.mockResolvedValueOnce(envelope({}));
       env.parseDetail.mockReturnValueOnce(detail('A'));
 
       await runSweep(env.deps);
@@ -377,11 +388,11 @@ describe('runSweep', () => {
 
     it('Captures detailsDetail with action (new|updated) during fetchAndPersistDetails', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
       env.parseIndex.mockReturnValueOnce([]);
-      env.fetchAdvert.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+      env.fetchAdvert.mockResolvedValueOnce(envelope({})).mockResolvedValueOnce(envelope({}));
       env.parseDetail.mockReturnValueOnce(detail('A')).mockReturnValueOnce(detail('B'));
       env.diffAgainstDb.mockResolvedValueOnce({ new: [stub('A')], seen: [stub('B')] });
 
@@ -405,7 +416,7 @@ describe('runSweep', () => {
 
     it('Captures configSnapshot from listSettings at sweep start', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
 
       await runSweep(env.deps);
@@ -417,7 +428,7 @@ describe('runSweep', () => {
 
     it('All JSON columns are present in SweepResult returned to finishSweep', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
 
       await runSweep(env.deps);
@@ -431,11 +442,11 @@ describe('runSweep', () => {
 
     it('JSON columns are arrays or objects, not undefined', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([stub('A')]);
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
-      env.fetchAdvert.mockResolvedValueOnce({});
+      env.fetchAdvert.mockResolvedValueOnce(envelope({}));
       env.parseDetail.mockReturnValueOnce(detail('A'));
 
       await runSweep(env.deps);
@@ -450,7 +461,7 @@ describe('runSweep', () => {
 
     it('Sets activeSweepId after startSweep and clears in finally', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
 
       expect(getActiveSweepId()).toBeNull();
@@ -473,7 +484,7 @@ describe('runSweep', () => {
     it('Bug#2: snapshotConfig() throws → finishSweep still runs (try-finally correctness)', async () => {
       const env = makeEnv();
       env.snapshotConfig.mockRejectedValueOnce(new Error('snapshot failed'));
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
 
       await runSweep(env.deps);
@@ -487,9 +498,9 @@ describe('runSweep', () => {
 
     it('Bug#9: concurrent runSweep overlaps should not cause split-brain (activeSweepId safety)', async () => {
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
-      env.startSweep.mockResolvedValueOnce({ id: 1 });
+      env.startSweep.mockResolvedValueOnce(envelope({ id: 1 }));
 
       await runSweep(env.deps);
 
@@ -501,7 +512,7 @@ describe('runSweep', () => {
       const env = makeEnv();
       let activeSweepIdWhenFinishCalled: number | null = null;
 
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
       env.finishSweep.mockImplementationOnce(async () => {
         // Capture activeSweepId when finishSweep is called
@@ -539,7 +550,7 @@ describe('runSweep', () => {
     it('runSweep clears currentlyFetching in its finally block', async () => {
       setCurrentlyFetching('https://leak-from-prior-run.example/');
       const env = makeEnv();
-      env.fetchSearchPage.mockResolvedValueOnce({});
+      env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
       env.parseIndex.mockReturnValueOnce([]);
 
       await runSweep(env.deps);
@@ -551,7 +562,7 @@ describe('runSweep', () => {
       const env = makeEnv();
       // First page returns the two stubs; subsequent pages return empty so the
       // pagination loop exits cleanly without hitting an undefined parseIndex result.
-      env.fetchSearchPage.mockResolvedValue({});
+      env.fetchSearchPage.mockResolvedValue(envelope({}));
       const stubA = stub('a');
       const stubB = stub('b');
       env.parseIndex.mockReturnValueOnce([stubA, stubB]).mockReturnValue([]);
@@ -562,7 +573,7 @@ describe('runSweep', () => {
       env.fetchAdvert.mockImplementation(async () => {
         // Snapshot the in-flight URL just before we return — should match the stub we're processing
         fetchedUrls.push(getCurrentlyFetching()?.url ?? null);
-        return {};
+        return envelope({});
       });
 
       await runSweep(env.deps);

@@ -43,9 +43,18 @@ export function getSweepAbortControllers(): Map<number, AbortController> {
   return sweepAbortControllers;
 }
 
+/** Result envelope from the network callbacks. The crawler captures bytes
+ *  for HTTP-forensics columns and attempts so the SweepDetail Errors tab
+ *  can surface "this took 3 retries before giving up." */
+export interface FetchEnvelope {
+  json: unknown;
+  bytes: number;
+  attempts: number;
+}
+
 export interface SweepDeps {
-  fetchSearchPage: (pageIdx: number, signal?: AbortSignal) => Promise<unknown>;
-  fetchAdvert: (id: string, signal?: AbortSignal) => Promise<unknown>;
+  fetchSearchPage: (pageIdx: number, signal?: AbortSignal) => Promise<FetchEnvelope>;
+  fetchAdvert: (id: string, signal?: AbortSignal) => Promise<FetchEnvelope>;
   persist: Pick<
     Persistence,
     | 'diffAgainstDb'
@@ -166,7 +175,7 @@ async function collectIndexStubs(
       break;
     }
     const pageStart = Date.now();
-    const json = await deps.fetchSearchPage(page, signal); // CircuitTrippingError bubbles
+    const { json, bytes, attempts } = await deps.fetchSearchPage(page, signal); // CircuitTrippingError bubbles
     result.pagesFetched += 1;
     await publishProgress(deps, sweepId, result);
 
@@ -179,19 +188,19 @@ async function collectIndexStubs(
         url: `<search-page-${page}>`,
         status: null,
         msg: `parseIndex: ${String(err)}`,
+        attempts,
       });
       result.status = 'partial';
       break;
     }
     const parseMs = Date.now() - parseStart;
 
-    // Capture page detail
-    // Note: rawText is not available here; using JSON.stringify for now.
-    // TODO: Pass rawText from fetchSearchPage to measure actual bytes.
     const pageDetail = {
       n: page,
       url: `<search-page-${page}>`,
       status: 200,
+      bytes,
+      attempts,
       parseMs,
       found: stubs.length,
       took: Date.now() - pageStart,
@@ -223,16 +232,17 @@ async function fetchAndPersistDetails(
       break;
     }
     setCurrentlyFetching(s.url);
-    let json: unknown;
+    let envelope: FetchEnvelope;
     try {
-      json = await deps.fetchAdvert(s.id, signal);
+      envelope = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
       if (err instanceof CircuitTrippingError) throw err;
-      record(result, { url: s.url, status: null, msg: String(err) });
+      record(result, { url: s.url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
     }
+    const { json, bytes, attempts } = envelope;
     result.detailsFetched += 1;
 
     let parsed: ParsedDetail;
@@ -241,20 +251,19 @@ async function fetchAndPersistDetails(
       parsed = deps.parseDetail(s.id, json);
     } catch (err) {
       if (err instanceof AdvertNotFoundError) continue; // delisted between index and detail — not an error
-      record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}` });
+      record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}`, attempts });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
     }
     const parseMs = Date.now() - parseStart;
 
-    // Capture detail info for new listing
-    // Note: rawText is not available here; using response size estimation.
-    // TODO: Pass rawText from fetchAdvert to measure actual bytes.
     const detailRecord = {
       id: s.id,
       url: s.url,
       status: 200,
+      bytes,
+      attempts,
       parseMs,
       action: 'new' as const,
       priceEur: parsed.priceEur ?? null,
@@ -264,7 +273,7 @@ async function fetchAndPersistDetails(
     try {
       await deps.persist.persistDetail(parsed);
     } catch (err) {
-      record(result, { url: s.url, status: null, msg: `persist: ${String(err)}` });
+      record(result, { url: s.url, status: null, msg: `persist: ${String(err)}`, attempts });
       result.status = 'partial';
     }
     await publishProgress(deps, sweepId, result);
@@ -276,16 +285,17 @@ async function fetchAndPersistDetails(
       break;
     }
     setCurrentlyFetching(s.url);
-    let json: unknown;
+    let envelope: FetchEnvelope;
     try {
-      json = await deps.fetchAdvert(s.id, signal);
+      envelope = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
       if (err instanceof CircuitTrippingError) throw err;
-      record(result, { url: s.url, status: null, msg: String(err) });
+      record(result, { url: s.url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
     }
+    const { json, bytes, attempts } = envelope;
 
     let parsed: ParsedDetail;
     const parseStart = Date.now();
@@ -293,7 +303,7 @@ async function fetchAndPersistDetails(
       parsed = deps.parseDetail(s.id, json);
     } catch (err) {
       if (err instanceof AdvertNotFoundError) continue; // delisted between index and detail — not an error
-      record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}` });
+      record(result, { url: s.url, status: null, msg: `parseDetail: ${String(err)}`, attempts });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
@@ -301,12 +311,12 @@ async function fetchAndPersistDetails(
     const parseMs = Date.now() - parseStart;
 
     // Capture detail info for seen listing
-    // Note: rawText is not available here; using response size estimation.
-    // TODO: Pass rawText from fetchAdvert to measure actual bytes.
     const detailRecord = {
       id: s.id,
       url: s.url,
       status: 200,
+      bytes,
+      attempts,
       parseMs,
       action: 'updated' as const,
       priceEur: parsed.priceEur ?? null,
@@ -334,16 +344,17 @@ async function backfillUnenriched(
       break;
     }
     const url = `<backfill:${id}>`;
-    let json: unknown;
+    let envelope: FetchEnvelope;
     try {
-      json = await deps.fetchAdvert(id, signal);
+      envelope = await deps.fetchAdvert(id, signal);
     } catch (err) {
       if (err instanceof CircuitTrippingError) throw err;
-      record(result, { url, status: null, msg: String(err) });
+      record(result, { url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
     }
+    const { json, attempts } = envelope;
     result.detailsFetched += 1;
 
     let parsed: ParsedDetail;
@@ -351,7 +362,7 @@ async function backfillUnenriched(
       parsed = deps.parseDetail(id, json);
     } catch (err) {
       if (err instanceof AdvertNotFoundError) continue;
-      record(result, { url, status: null, msg: `parseDetail: ${String(err)}` });
+      record(result, { url, status: null, msg: `parseDetail: ${String(err)}`, attempts });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
       continue;
@@ -360,11 +371,27 @@ async function backfillUnenriched(
     try {
       await deps.persist.persistDetail(parsed);
     } catch (err) {
-      record(result, { url, status: null, msg: `persist: ${String(err)}` });
+      record(result, { url, status: null, msg: `persist: ${String(err)}`, attempts });
       result.status = 'partial';
     }
     await publishProgress(deps, sweepId, result);
   }
+}
+
+// Fetcher annotates thrown errors with `.attempts`. Pull the value off
+// without coupling sweep.ts to the Fetcher's specific error class. Falls
+// back to 1 (single try) when the property is absent — matches the
+// pre-instrumentation behavior.
+function attemptsOf(err: unknown): number {
+  if (
+    err &&
+    typeof err === 'object' &&
+    typeof (err as { attempts?: unknown }).attempts === 'number'
+  ) {
+    return (err as { attempts: number }).attempts;
+  }
+  if (err instanceof CircuitTrippingError) return err.attempts;
+  return 1;
 }
 
 function record(result: SweepResult, error: SweepError): void {
