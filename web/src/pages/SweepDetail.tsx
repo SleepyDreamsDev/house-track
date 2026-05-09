@@ -149,6 +149,18 @@ export const SweepDetail: React.FC = () => {
         subtitle={`${detail.source} · ${detail.trigger} · started ${fmt.rel(detail.startedAt)}`}
         actions={
           <>
+            {!live && detail.summary && detail.summary.newListings > 0 && (
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  nav(
+                    `/listings?firstSeenAfter=${encodeURIComponent(detail.startedAt)}&fromSweep=${detail.id}&sort=newest`,
+                  )
+                }
+              >
+                View listings (+{detail.summary.newListings})
+              </Button>
+            )}
             {live && (
               <Button
                 variant="destructive"
@@ -329,21 +341,25 @@ const OverviewTab: React.FC<{ detail: SweepDetailDto }> = ({ detail }) => (
 );
 
 const HttpTab: React.FC<{ detail: SweepDetailDto }> = ({ detail }) => {
+  const nav = useNavigate();
   const all = [
     ...(detail.pages ?? []).map((p) => ({
       kind: 'index' as const,
       ...p,
       identifier: `page=${p.n}`,
+      listingId: null as string | null,
     })),
     ...(detail.details ?? []).map((d) => ({
       kind: 'detail' as const,
       ...d,
       identifier: `id=${d.id}`,
+      listingId: d.id,
       took: d.parseMs,
       found: 0,
       n: 0,
     })),
   ];
+  const listingsHref = `/listings?firstSeenAfter=${encodeURIComponent(detail.startedAt)}&fromSweep=${detail.id}&sort=newest`;
   return (
     <Card className="!p-0">
       <table className="w-full text-xs">
@@ -363,7 +379,19 @@ const HttpTab: React.FC<{ detail: SweepDetailDto }> = ({ detail }) => {
               <td className="px-4 py-2">
                 <Badge variant="default">{r.kind}</Badge>
               </td>
-              <td className="px-3 py-2 font-mono">{r.identifier}</td>
+              <td className="px-3 py-2 font-mono">
+                {r.listingId ? (
+                  <button
+                    onClick={() => nav(listingsHref)}
+                    className="text-blue-600 hover:underline"
+                    title="View this sweep's listings on the Listings page"
+                  >
+                    {r.identifier}
+                  </button>
+                ) : (
+                  r.identifier
+                )}
+              </td>
               <td className="px-3 py-2">
                 {r.kind === 'detail' && r.url ? (
                   <a
