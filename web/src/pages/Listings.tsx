@@ -43,25 +43,28 @@ export const Listings: React.FC = () => {
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
 
-  // Sweep-row links set ?firstSeenAfter=<sweep.startedAt>&fromSweep=<id>;
-  // read from URL so the filter survives reload + the chip can clear them.
+  // Sweep-row links set ?firstSeenAfter (new only) or ?lastFetchedAfter
+  // (touched by sweep) plus ?fromSweep=<id> for the breadcrumb chip.
   const firstSeenAfter = searchParams.get('firstSeenAfter') ?? undefined;
+  const lastFetchedAfter = searchParams.get('lastFetchedAfter') ?? undefined;
   const fromSweep = searchParams.get('fromSweep');
+  const sweepFilterActive = firstSeenAfter || lastFetchedAfter;
 
   // Reset to page 0 whenever any filter changes — page N may not exist for the
   // new query (smaller result set).
   useEffect(() => {
     setPage(0);
-  }, [q, maxPrice, district, sort, firstSeenAfter]);
+  }, [q, maxPrice, district, sort, firstSeenAfter, lastFetchedAfter]);
 
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
-    queryKey: ['listings', { q, maxPrice, district, sort, page, firstSeenAfter }],
+    queryKey: ['listings', { q, maxPrice, district, sort, page, firstSeenAfter, lastFetchedAfter }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
       if (maxPrice < PRICE_MAX) p.append('maxPrice', String(maxPrice));
       if (district !== 'all') p.append('district', district);
       if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
+      if (lastFetchedAfter) p.append('lastFetchedAfter', lastFetchedAfter);
       p.append('sort', sort);
       p.append('limit', String(PAGE_SIZE));
       p.append('offset', String(page * PAGE_SIZE));
@@ -72,6 +75,7 @@ export const Listings: React.FC = () => {
   const clearSweepFilter = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('firstSeenAfter');
+    next.delete('lastFetchedAfter');
     next.delete('fromSweep');
     setSearchParams(next);
   };
@@ -95,11 +99,21 @@ export const Listings: React.FC = () => {
         }
       />
 
-      {firstSeenAfter && (
+      {sweepFilterActive && (
         <div className="mb-4 flex items-center gap-2 rounded-sm border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
           <span className="text-neutral-700">
-            Filtered to listings first seen after{' '}
-            <span className="font-mono">{new Date(firstSeenAfter).toLocaleString()}</span>
+            {firstSeenAfter && (
+              <>
+                Filtered to listings first seen after{' '}
+                <span className="font-mono">{new Date(firstSeenAfter).toLocaleString()}</span>
+              </>
+            )}
+            {lastFetchedAfter && (
+              <>
+                Filtered to listings fetched after{' '}
+                <span className="font-mono">{new Date(lastFetchedAfter).toLocaleString()}</span>
+              </>
+            )}
             {fromSweep && (
               <>
                 {' '}
