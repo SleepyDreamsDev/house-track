@@ -26,7 +26,11 @@ interface SeedListing {
   priceEur?: number | null;
   rooms?: number | null;
   areaSqm?: number | null;
+  landSqm?: number | null;
   district?: string | null;
+  street?: string | null;
+  floors?: number | null;
+  yearBuilt?: number | null;
   active?: boolean;
   firstSeenAt?: Date;
   filterValues?: Array<{
@@ -36,6 +40,7 @@ interface SeedListing {
     textValue?: string | null;
     numericValue?: number | null;
   }>;
+  snapshots?: Array<{ capturedAt: Date; priceEur: number | null }>;
 }
 
 async function seed(s: SeedListing) {
@@ -52,7 +57,11 @@ async function seed(s: SeedListing) {
       priceEur: s.priceEur ?? null,
       rooms: s.rooms ?? null,
       areaSqm: s.areaSqm ?? null,
+      landSqm: s.landSqm ?? null,
       district: s.district ?? null,
+      street: s.street ?? null,
+      floors: s.floors ?? null,
+      yearBuilt: s.yearBuilt ?? null,
       ...(s.filterValues
         ? {
             filterValues: {
@@ -62,6 +71,17 @@ async function seed(s: SeedListing) {
                 optionId: fv.optionId ?? null,
                 textValue: fv.textValue ?? null,
                 numericValue: fv.numericValue ?? null,
+              })),
+            },
+          }
+        : {}),
+      ...(s.snapshots
+        ? {
+            snapshots: {
+              create: s.snapshots.map((sn, i) => ({
+                capturedAt: sn.capturedAt,
+                priceEur: sn.priceEur,
+                rawHtmlHash: `hash-${s.id}-${i}`,
               })),
             },
           }
@@ -300,5 +320,198 @@ describe('getListing', () => {
     const r = await getListing(prisma, 'BAD_IMG');
 
     expect(r?.imageUrls).toEqual([]);
+  });
+});
+
+describe('searchListings sort=eurm2', () => {
+  it('orders ascending by priceEur / areaSqm', async () => {
+    await seed({ id: 'A', priceEur: 100000, areaSqm: 50 });
+    await seed({ id: 'B', priceEur: 120000, areaSqm: 80 });
+    await seed({ id: 'C', priceEur: 90000, areaSqm: 30 });
+
+    const { listings } = await searchListings(prisma, { sort: 'eurm2' });
+
+    expect(listings.map((l) => l.id)).toEqual(['B', 'A', 'C']);
+  });
+
+  it('pushes rows with null/zero areaSqm to the end', async () => {
+    await seed({ id: 'X', priceEur: 100000, areaSqm: null });
+    await seed({ id: 'Y', priceEur: 200000, areaSqm: 0 });
+    await seed({ id: 'Z', priceEur: 150000, areaSqm: 50 });
+
+    const { listings } = await searchListings(prisma, { sort: 'eurm2' });
+
+    expect(listings[0]?.id).toBe('Z');
+    expect(
+      listings
+        .slice(1)
+        .map((l) => l.id)
+        .sort(),
+    ).toEqual(['X', 'Y']);
+  });
+
+  it('pushes rows with null priceEur to the end', async () => {
+    await seed({ id: 'P', priceEur: null, areaSqm: 50 });
+    await seed({ id: 'Q', priceEur: 100000, areaSqm: 50 });
+
+    const { listings } = await searchListings(prisma, { sort: 'eurm2' });
+
+    expect(listings[0]?.id).toBe('Q');
+    expect(listings[1]?.id).toBe('P');
+  });
+
+  it('pricePerSqmAsc behaves identically to eurm2', async () => {
+    await seed({ id: 'A', priceEur: 100000, areaSqm: 50 });
+    await seed({ id: 'B', priceEur: 120000, areaSqm: 80 });
+
+    const { listings: a } = await searchListings(prisma, { sort: 'eurm2' });
+    const { listings: b } = await searchListings(prisma, { sort: 'pricePerSqmAsc' });
+
+    expect(a.map((l) => l.id)).toEqual(b.map((l) => l.id));
+  });
+
+  it('still respects the limit after in-memory sort', async () => {
+    for (let i = 0; i < 5; i++) {
+      await seed({ id: `R${i}`, priceEur: 100000 + i * 1000, areaSqm: 50 });
+    }
+
+    const { listings } = await searchListings(prisma, { sort: 'eurm2', limit: 2 });
+
+    expect(listings.length).toBe(2);
+  });
+
+  it('sort=newest still orders by firstSeenAt desc', async () => {
+    const old = new Date('2024-01-01');
+    const recent = new Date('2024-06-01');
+    await seed({ id: 'OLD', priceEur: 100000, areaSqm: 50, firstSeenAt: old });
+    await seed({ id: 'NEW', priceEur: 100000, areaSqm: 50, firstSeenAt: recent });
+
+    const { listings } = await searchListings(prisma, { sort: 'newest' });
+
+    expect(listings[0]?.id).toBe('NEW');
+    expect(listings[1]?.id).toBe('OLD');
+  });
+});
+
+describe('searchListings extended projection', () => {
+  it('returns landSqm, street, floors, yearBuilt', async () => {
+    await seed({
+      id: 'FULL',
+      priceEur: 100000,
+      areaSqm: 80,
+      landSqm: 200,
+      street: 'Strada Eminescu',
+      floors: 2,
+      yearBuilt: 1995,
+    });
+
+    const { listings } = await searchListings(prisma, {});
+    const row = listings.find((l) => l.id === 'FULL');
+
+    expect(row).toMatchObject({
+      landSqm: 200,
+      street: 'Strada Eminescu',
+      floors: 2,
+      yearBuilt: 1995,
+    });
+  });
+
+  it('priceWas reflects the most recent prior PriceSnapshot', async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    await seed({
+      id: 'DROP',
+      priceEur: 90000,
+      areaSqm: 50,
+      snapshots: [{ capturedAt: threeDaysAgo, priceEur: 100000 }],
+    });
+
+    const { listings } = await searchListings(prisma, {});
+
+    expect(listings[0]?.priceWas).toBe(100000);
+  });
+
+  it('priceWas is the most recent prior snapshot when multiple exist', async () => {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    await seed({
+      id: 'MULTI',
+      priceEur: 90000,
+      areaSqm: 50,
+      snapshots: [
+        { capturedAt: fiveDaysAgo, priceEur: 110000 },
+        { capturedAt: oneDayAgo, priceEur: 100000 },
+      ],
+    });
+
+    const { listings } = await searchListings(prisma, {});
+
+    expect(listings[0]?.priceWas).toBe(100000);
+  });
+
+  it('priceWas is null when no prior snapshot exists', async () => {
+    await seed({ id: 'NOSNAP', priceEur: 90000, areaSqm: 50 });
+
+    const { listings } = await searchListings(prisma, {});
+
+    expect(listings[0]?.priceWas).toBeNull();
+  });
+
+  it('isNew is true when firstSeenAt is within last 24h', async () => {
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    await seed({ id: 'FRESH', priceEur: 90000, areaSqm: 50, firstSeenAt: sixHoursAgo });
+
+    const { listings } = await searchListings(prisma, {});
+
+    expect(listings[0]?.isNew).toBe(true);
+  });
+
+  it('isNew is false when firstSeenAt is older than 24h', async () => {
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    await seed({ id: 'STALE', priceEur: 90000, areaSqm: 50, firstSeenAt: twoDaysAgo });
+
+    const { listings } = await searchListings(prisma, {});
+
+    expect(listings[0]?.isNew).toBe(false);
+  });
+
+  it('getListing response shape is unchanged', async () => {
+    await seed({
+      id: 'SHAPE',
+      priceEur: 100000,
+      areaSqm: 80,
+      landSqm: 200,
+      street: 'Strada Test',
+      floors: 1,
+      yearBuilt: 2000,
+    });
+
+    const r = await getListing(prisma, 'SHAPE');
+
+    expect(r).not.toBeNull();
+    expect(Object.keys(r!).sort()).toEqual(
+      [
+        'active',
+        'areaSqm',
+        'description',
+        'district',
+        'filterValues',
+        'filterValuesEnrichedAt',
+        'firstSeenAt',
+        'floors',
+        'heatingType',
+        'id',
+        'imageUrls',
+        'landSqm',
+        'lastFetchedAt',
+        'lastSeenAt',
+        'priceEur',
+        'priceRaw',
+        'rooms',
+        'street',
+        'title',
+        'url',
+        'yearBuilt',
+      ].sort(),
+    );
   });
 });

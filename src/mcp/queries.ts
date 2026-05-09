@@ -47,8 +47,14 @@ export interface SearchListingsRow {
   priceEur: number | null;
   priceRaw: string | null;
   areaSqm: number | null;
+  landSqm: number | null;
   rooms: number | null;
   district: string | null;
+  street: string | null;
+  floors: number | null;
+  yearBuilt: number | null;
+  priceWas: number | null;
+  isNew: boolean;
   firstSeenAt: string;
   lastSeenAt: string;
 }
@@ -87,6 +93,7 @@ export interface GetListingResult {
 
 const DEFAULT_LIMIT = 50;
 const SAMPLE_LIMIT = 3;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Aggregates the observed filter universe by walking ListingFilterValue and
@@ -162,28 +169,27 @@ export async function searchListings(
   }
   if (filterAnds.length > 0) where['AND'] = filterAnds;
 
-  // Handle priceDrop flag: fetch listings with snapshots, compute drops, filter
+  const limit = input.limit ?? DEFAULT_LIMIT;
+  const isEurm2 = input.sort === 'eurm2' || input.sort === 'pricePerSqmAsc';
+
   type ListingWithSnapshots = Awaited<
     ReturnType<typeof prisma.listing.findMany<{ include: { snapshots: true } }>>
   >[number];
 
-  const rows: Array<
-    ListingWithSnapshots | Awaited<ReturnType<typeof prisma.listing.findMany>>[number]
-  > = [];
+  const rows: ListingWithSnapshots[] = [];
 
   if (input.flags === 'priceDrop') {
     const rowsWithSnapshots = await prisma.listing.findMany({
       where,
       orderBy: orderBy(input.sort),
-      take: input.limit ?? DEFAULT_LIMIT,
+      ...(isEurm2 ? {} : { take: limit }),
       include: { snapshots: true },
     });
 
-    // Filter by price drop (>= 5% drop in past 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     for (const r of rowsWithSnapshots) {
       const relevantSnapshots = r.snapshots.filter((s) => s.capturedAt >= sevenDaysAgo);
-      if (relevantSnapshots.length < 2) continue; // Need both old and new
+      if (relevantSnapshots.length < 2) continue;
 
       const sorted = relevantSnapshots.sort(
         (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime(),
@@ -200,28 +206,50 @@ export async function searchListings(
     const allRows = await prisma.listing.findMany({
       where,
       orderBy: orderBy(input.sort),
-      take: input.limit ?? DEFAULT_LIMIT,
+      ...(isEurm2 ? {} : { take: limit }),
+      include: { snapshots: true },
     });
     rows.push(...allRows);
   }
 
   const total = await prisma.listing.count({ where });
 
-  return {
-    listings: rows.map((r) => ({
+  const now = Date.now();
+  const projected: SearchListingsRow[] = rows.map((r) => {
+    const prior = [...r.snapshots]
+      .filter((s) => s.capturedAt.getTime() < now)
+      .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())[0];
+    return {
       id: r.id,
       url: r.url,
       title: r.title,
       priceEur: r.priceEur,
       priceRaw: r.priceRaw,
       areaSqm: r.areaSqm,
+      landSqm: r.landSqm,
       rooms: r.rooms,
       district: r.district,
+      street: r.street,
+      floors: r.floors,
+      yearBuilt: r.yearBuilt,
+      priceWas: prior?.priceEur ?? null,
+      isNew: now - r.firstSeenAt.getTime() < ONE_DAY_MS,
       firstSeenAt: r.firstSeenAt.toISOString(),
       lastSeenAt: r.lastSeenAt.toISOString(),
-    })),
-    total,
-  };
+    };
+  });
+
+  if (isEurm2) {
+    projected.sort((a, b) => eurPerSqm(a) - eurPerSqm(b));
+    return { listings: projected.slice(0, limit), total };
+  }
+
+  return { listings: projected, total };
+}
+
+function eurPerSqm(row: { priceEur: number | null; areaSqm: number | null }): number {
+  if (row.priceEur == null || row.areaSqm == null || row.areaSqm === 0) return Infinity;
+  return row.priceEur / row.areaSqm;
 }
 
 /**
@@ -293,8 +321,8 @@ function orderBy(sort: SearchListingsInput['sort']): Record<string, 'asc' | 'des
       return { priceEur: 'desc' };
     case 'pricePerSqmAsc':
     case 'eurm2':
-      // No dedicated column — newest as a sensible fallback. Claude can sort
-      // client-side using priceEur/areaSqm if needed.
+      // Computed sort — DB-side ordering doesn't matter; the result is
+      // re-sorted in-memory by priceEur/areaSqm after fetch.
       return { firstSeenAt: 'desc' };
     case 'newest':
     default:
