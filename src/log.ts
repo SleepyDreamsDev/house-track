@@ -8,7 +8,7 @@ import { Writable } from 'node:stream';
 import pino from 'pino';
 
 import { sweepEvents } from './web/events.js';
-import { getActiveSweepId } from './sweep.js';
+import * as sweepModule from './sweep.js';
 
 // Custom write stream that tees to both stdout and the sweepEvents EventEmitter.
 const teeStream = new Writable({
@@ -17,7 +17,7 @@ const teeStream = new Writable({
     // Do this before stdout write to avoid blocking on backpressure
     try {
       const line = JSON.parse(chunk.toString());
-      const sweepId = getActiveSweepId();
+      const sweepId = sweepModule.getActiveSweepId();
       if (sweepId !== null) {
         // Map pino level (10-60) to string: 10→debug, 20→debug, 30→info, 40→warn, 50→error, 60→fatal
         const levelNum = line.level ?? 30;
@@ -49,8 +49,16 @@ const teeStream = new Writable({
       // Non-JSON line or parse error — just skip EventEmitter emission
     }
 
-    // Write to stdout and honor backpressure by passing callback
-    process.stdout.write(chunk, cb);
+    // Write to stdout and honor backpressure via the standard return-value
+    // contract: synchronous ack on `true`, drain-event ack on `false`. Avoids
+    // delegating cb to stdout.write directly so a test mock that returns true
+    // without invoking cb cannot stall the Writable's queue.
+    const ok = process.stdout.write(chunk);
+    if (ok) {
+      cb();
+    } else {
+      process.stdout.once('drain', cb);
+    }
   },
 });
 
