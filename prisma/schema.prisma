@@ -108,6 +108,11 @@ model SweepRun {
   pagesDetail    Json?
   detailsDetail  Json?
   eventLog       Json?
+
+  // Two-tier cadence (PR 1 — plumbing). "legacy" rows are produced by the
+  // current monolithic runSweep(); when sweep.mode flips to "two_tier",
+  // index ticks write "index" and detail-trickle aggregates write "detail".
+  kind String @default("legacy")
 }
 
 model Source {
@@ -129,4 +134,44 @@ model Setting {
   key       String   @id // e.g., "politeness.baseDelayMs"
   valueJson Json // store any JSON value
   updatedAt DateTime @updatedAt
+}
+
+// Per-listing fetch task queue for the two-tier cadence (PR 1 plumbing only;
+// no producer/consumer wires this up yet — that lands in PR 2). The index
+// ticker enqueues new+stale+backfill tasks; the detail trickle drains them
+// in (priority, scheduledFor) order.
+model FetchTask {
+  id           Int      @id @default(autoincrement())
+  listingId    String
+  // 0=NEW, 1=WATCHLIST_REFRESH, 2=STALE_REFRESH, 3=BACKFILL
+  priority     Int
+  // Mirrors priority for operator readability: "new" | "watchlist" | "stale" | "backfill"
+  reason       String
+  enqueuedAt   DateTime @default(now())
+  attemptCount Int      @default(0)
+  lastError    String?
+  scheduledFor DateTime @default(now())
+
+  @@unique([listingId, reason])
+  // Priority-first composite — matches the pop query
+  //   WHERE scheduledFor <= now()
+  //   ORDER BY priority ASC, scheduledFor ASC
+  // At steady state most rows are due, so the priority prefix is the
+  // selective one Postgres should walk first.
+  @@index([priority, scheduledFor])
+}
+
+// Persisted log of adaptive-throttle trigger events. The hot fetch path
+// keeps rolling stats in memory; only the trigger itself is written here so
+// the operator UI can render a "soft-throttled at HH:MM because X" timeline.
+model ThrottleEvent {
+  id          Int      @id @default(autoincrement())
+  triggeredAt DateTime @default(now())
+  // "5xx_rate" | "latency_spike" | "connection_reset"
+  trigger     String
+  durationMs  Int
+  // JSON snapshot of the rolling-window stats at trigger time
+  context     Json?
+
+  @@index([triggeredAt])
 }

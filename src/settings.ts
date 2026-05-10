@@ -9,6 +9,9 @@ const settingSchemas = {
   'politeness.baseDelayMs': z.number().int().positive(),
   'politeness.jitterMs': z.number().int().nonnegative(),
   'politeness.detailDelayMs': z.number().int().positive(),
+  // Two-tier adaptive throttle (PR 1 plumbing — PR 2 wires the observer).
+  'politeness.softThrottleMultiplier': z.number().int().positive(),
+  'politeness.softThrottleDurationMinutes': z.number().int().positive(),
   'sweep.maxPagesPerSweep': z.number().int().positive(),
   'sweep.backfillPerSweep': z.number().int().nonnegative(),
   'sweep.staleRefreshPerSweep': z.number().int().nonnegative(),
@@ -19,6 +22,17 @@ const settingSchemas = {
   'sweep.targetListingsJitter': z.number().int().nonnegative(),
   'sweep.cronWindowJitterMs': z.number().int().nonnegative(),
   'sweep.expectedPerDay': z.number().int().positive(),
+  // Two-tier cadence (PR 1 plumbing). The 'mode' flag stays 'legacy' until
+  // PR 3 flips it; the rest are tunables read by the schedulers in PR 2.
+  'sweep.mode': z.union([z.literal('legacy'), z.literal('two_tier')]),
+  'sweep.indexTickIntervalMinutesMin': z.number().int().positive(),
+  'sweep.indexTickIntervalMinutesMax': z.number().int().positive(),
+  'sweep.indexTickTargetListings': z.number().int().positive(),
+  'sweep.detailTrickleIntervalSecondsMin': z.number().int().positive(),
+  'sweep.detailTrickleIntervalSecondsMax': z.number().int().positive(),
+  'sweep.detailTrickleQueueRefillThreshold': z.number().int().nonnegative(),
+  'sweep.staleThresholdHours': z.number().int().positive(),
+  'sweep.watchlistRefreshHours': z.number().int().positive(),
   'circuit.consecutiveFailureThreshold': z.number().int().positive(),
   'circuit.pauseDurationMs': z.number().int().positive(),
   'filter.generic': genericFilterSchema,
@@ -36,6 +50,8 @@ const defaultValues: Record<string, unknown> = {
   'politeness.baseDelayMs': POLITENESS.baseDelayMs,
   'politeness.jitterMs': POLITENESS.jitterMs,
   'politeness.detailDelayMs': POLITENESS.detailDelayMs,
+  'politeness.softThrottleMultiplier': POLITENESS.softThrottleMultiplier,
+  'politeness.softThrottleDurationMinutes': POLITENESS.softThrottleDurationMinutes,
   'sweep.maxPagesPerSweep': FILTER.maxPagesPerSweep,
   'sweep.backfillPerSweep': SWEEP.backfillPerSweep,
   'sweep.staleRefreshPerSweep': SWEEP.staleRefreshPerSweep,
@@ -46,6 +62,15 @@ const defaultValues: Record<string, unknown> = {
   'sweep.targetListingsJitter': SWEEP.targetListingsJitter,
   'sweep.cronWindowJitterMs': SWEEP.cronWindowJitterMs,
   'sweep.expectedPerDay': SWEEP.expectedPerDay,
+  'sweep.mode': SWEEP.mode,
+  'sweep.indexTickIntervalMinutesMin': SWEEP.indexTickIntervalMinutesMin,
+  'sweep.indexTickIntervalMinutesMax': SWEEP.indexTickIntervalMinutesMax,
+  'sweep.indexTickTargetListings': SWEEP.indexTickTargetListings,
+  'sweep.detailTrickleIntervalSecondsMin': SWEEP.detailTrickleIntervalSecondsMin,
+  'sweep.detailTrickleIntervalSecondsMax': SWEEP.detailTrickleIntervalSecondsMax,
+  'sweep.detailTrickleQueueRefillThreshold': SWEEP.detailTrickleQueueRefillThreshold,
+  'sweep.staleThresholdHours': SWEEP.staleThresholdHours,
+  'sweep.watchlistRefreshHours': SWEEP.watchlistRefreshHours,
   'circuit.consecutiveFailureThreshold': CIRCUIT.consecutiveFailureThreshold,
   'circuit.pauseDurationMs': CIRCUIT.pauseDurationMs,
   'filter.generic': defaultGenericFilter,
@@ -85,6 +110,20 @@ export const settingMeta: Record<
     unit: 'ms',
     label: 'Detail Delay',
     hint: 'Delay for detail page requests (ms)',
+  },
+  'politeness.softThrottleMultiplier': {
+    group: 'Politeness',
+    kind: 'number',
+    unit: '×',
+    label: 'Soft-Throttle Multiplier',
+    hint: 'Delay multiplier engaged by adaptive throttle before the hard 24h circuit. PR 2 wires the observer.',
+  },
+  'politeness.softThrottleDurationMinutes': {
+    group: 'Politeness',
+    kind: 'number',
+    unit: 'min',
+    label: 'Soft-Throttle Duration',
+    hint: 'How long the soft-throttle multiplier stays engaged after a trigger.',
   },
   'sweep.maxPagesPerSweep': {
     group: 'Sweep',
@@ -153,6 +192,69 @@ export const settingMeta: Record<
     label: 'Expected Sweeps/Day',
     hint: 'Used to compute when missing listings go inactive. Phase B forecast panel surfaces mismatches with the cron schedule.',
   },
+  'sweep.mode': {
+    group: 'Sweep',
+    kind: 'select',
+    options: ['legacy', 'two_tier'],
+    label: 'Sweep Mode',
+    hint: 'legacy = current twice-daily monolith. two_tier = index ticker + detail trickle (PR 2+).',
+  },
+  'sweep.indexTickIntervalMinutesMin': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'min',
+    label: 'Index Tick Interval — lower bound',
+    hint: 'Lower bound on time between index ticks (two_tier mode), in minutes.',
+  },
+  'sweep.indexTickIntervalMinutesMax': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'min',
+    label: 'Index Tick Interval — upper bound',
+    hint: 'Upper bound on time between index ticks (two_tier mode), in minutes.',
+  },
+  'sweep.indexTickTargetListings': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'listings',
+    label: 'Index Tick Target Listings',
+    hint: 'Per-tick listing target for the index ticker (two_tier mode). Replaces targetListingsPerSweep.',
+  },
+  'sweep.detailTrickleIntervalSecondsMin': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 's',
+    label: 'Detail Trickle Interval — lower bound',
+    hint: 'Lower bound on time between detail-trickle fetches, in seconds.',
+  },
+  'sweep.detailTrickleIntervalSecondsMax': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 's',
+    label: 'Detail Trickle Interval — upper bound',
+    hint: 'Upper bound on time between detail-trickle fetches, in seconds.',
+  },
+  'sweep.detailTrickleQueueRefillThreshold': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'tasks',
+    label: 'Queue Refill Threshold',
+    hint: 'When the FetchTask queue depth drops below this, seed STALE+BACKFILL tasks.',
+  },
+  'sweep.staleThresholdHours': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'h',
+    label: 'Stale Threshold',
+    hint: 'Active listings with lastFetchedAt older than this are eligible for STALE_REFRESH.',
+  },
+  'sweep.watchlistRefreshHours': {
+    group: 'Sweep',
+    kind: 'number',
+    unit: 'h',
+    label: 'Watchlist Refresh',
+    hint: 'Watchlist listings older than this get WATCHLIST_REFRESH priority.',
+  },
   'circuit.consecutiveFailureThreshold': {
     group: 'Circuit breaker',
     kind: 'number',
@@ -203,6 +305,17 @@ export async function getSetting<T = unknown>(key: string, fallback?: T): Promis
   throw new Error(`Setting key "${key}" not found and no default provided`);
 }
 
+// Paired bounds where the min/max relationship must hold (`<min-key>` ≤ `<max-key>`).
+// Cross-key validation runs inside setSetting() — the partner value is read from
+// the DB (falling back to the default) and compared against the incoming write.
+const pairedBounds: ReadonlyArray<{ min: string; max: string }> = [
+  { min: 'sweep.indexTickIntervalMinutesMin', max: 'sweep.indexTickIntervalMinutesMax' },
+  {
+    min: 'sweep.detailTrickleIntervalSecondsMin',
+    max: 'sweep.detailTrickleIntervalSecondsMax',
+  },
+];
+
 export async function setSetting<T = unknown>(key: string, value: T): Promise<void> {
   // Validate against the schema
   const schema = settingSchemas[key as keyof typeof settingSchemas];
@@ -211,6 +324,30 @@ export async function setSetting<T = unknown>(key: string, value: T): Promise<vo
   }
 
   const parsed = schema.parse(value);
+
+  // Cross-key validation: pairedBounds enforce min ≤ max. We check both
+  // directions (writing the min or the max) by looking up the partner's
+  // current value before persisting. This prevents an internally
+  // contradictory config (PR 2's schedulers would otherwise busy-loop or
+  // sleep negative durations).
+  for (const pair of pairedBounds) {
+    if (key === pair.min) {
+      const partner = await getSetting<number>(pair.max);
+      if (typeof parsed === 'number' && parsed > partner) {
+        throw new Error(
+          `${pair.min} (${parsed}) cannot exceed ${pair.max} (${partner}). Update ${pair.max} first.`,
+        );
+      }
+    } else if (key === pair.max) {
+      const partner = await getSetting<number>(pair.min);
+      if (typeof parsed === 'number' && parsed < partner) {
+        throw new Error(
+          `${pair.max} (${parsed}) cannot be less than ${pair.min} (${partner}). Update ${pair.min} first.`,
+        );
+      }
+    }
+  }
+
   const prisma = getPrisma();
 
   // Prisma's JSON type requires explicit any cast for validated zod objects

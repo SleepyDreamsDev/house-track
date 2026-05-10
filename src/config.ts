@@ -73,6 +73,13 @@ export const POLITENESS = {
   // listings page rather than a direct API probe.
   origin: 'https://999.md',
   referer: 'https://999.md/ro/list/real-estate/houses-and-yards',
+  // Adaptive soft-throttle defaults (PR 1 plumbing). When the rolling-window
+  // observer (lands in PR 2) detects a 5xx-rate / latency-spike /
+  // connection-reset signal it multiplies the active delay by this factor
+  // for softThrottleDurationMinutes before the hard 24h circuit can ever
+  // trip. Both knobs are runtime-mutable via the Setting table.
+  softThrottleMultiplier: 3,
+  softThrottleDurationMinutes: 30,
 } as const;
 
 export const CIRCUIT = {
@@ -115,4 +122,27 @@ export const SWEEP = {
   // anchor. Phase B's forecast panel surfaces inconsistencies between
   // these two values.
   expectedPerDay: 2,
+
+  // ── Two-tier cadence defaults (PR 1 plumbing) ──────────────────────────
+  // No code reads these yet — PR 2 wires the index ticker + detail trickle
+  // schedulers. Stored here so settings.ts has a single defaults source.
+  // See docs/superpowers/specs/2026-05-10-politeness-two-tier-design.md.
+
+  // Feature flag: 'legacy' = current runSweep() monolith; 'two_tier' =
+  // index ticker + detail trickle. PR 2 honours this; PR 3 flips it.
+  mode: 'legacy' as 'legacy' | 'two_tier',
+
+  // Tier 1 — Index ticker
+  indexTickIntervalMinutesMin: 60,
+  indexTickIntervalMinutesMax: 120,
+  indexTickTargetListings: 100,
+
+  // Tier 2 — Detail trickle
+  detailTrickleIntervalSecondsMin: 180,
+  detailTrickleIntervalSecondsMax: 360,
+  detailTrickleQueueRefillThreshold: 40,
+
+  // Queue seeding policy
+  staleThresholdHours: 168, // 7 days
+  watchlistRefreshHours: 6,
 } as const;

@@ -172,6 +172,23 @@ export const FILTER = {
 | Headers | `Accept-Language: ro-RO,ru-RU;q=0.9,en;q=0.8`, `Accept: text/html,application/xhtml+xml`, no cookies |
 | robots.txt | Re-run `pnpm verify-robots` (verified 2026-05-02 — `/graphql` not disallowed for `User-agent: *`; `/ro/<id>` is reference-only, not crawled). |
 
+### Two-tier cadence (in progress)
+
+The current `legacy` mode runs two large sweeps/day (`0 9,21 * * *`) that
+touch ~336 listings each. A four-PR migration replaces that with a
+two-tier rhythm — an **index ticker** (60–120 min, 100 listings/tick,
+discovery-only) and a **detail trickle** (one fetch every 3–6 min during
+07:00–23:00, draining a priority queue: NEW → WATCHLIST → STALE →
+BACKFILL). An **adaptive soft-throttle** observer slows both rhythms 3× for
+30 min on 5xx-rate / latency-spike / connection-reset signals before the
+hard 24h circuit can fire.
+
+PR 1 (this PR) lands the plumbing: `FetchTask` and `ThrottleEvent` tables,
+a `SweepRun.kind` column (defaults `'legacy'`), and 11 new `Setting` keys
+under a `sweep.mode` feature flag that still resolves to `'legacy'`. No
+runtime behavior changes here. The full design and migration plan live in
+[`docs/superpowers/specs/2026-05-10-politeness-two-tier-design.md`](./superpowers/specs/2026-05-10-politeness-two-tier-design.md).
+
 ## Failure handling
 
 - **Network error** → retry per backoff schedule, then log to `SweepRun.errors`, continue.
