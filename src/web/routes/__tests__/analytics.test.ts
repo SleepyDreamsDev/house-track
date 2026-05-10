@@ -711,6 +711,15 @@ describe('Analytics routes', () => {
       expect(ids).toEqual(['md-botanica', 'md-centru']);
     });
 
+    it('best-buys: ?district=A&district=B (repeated param form) returns the union', async () => {
+      await seedThreeDistricts();
+      const res = await app.request('/api/analytics/best-buys?district=Centru&district=Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      const ids = body.map((r) => r.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+    });
+
     it('best-buys: legacy `?region=Centru,Botanica` alias returns the union', async () => {
       await seedThreeDistricts();
       const res = await app.request('/api/analytics/best-buys?region=Centru,Botanica');

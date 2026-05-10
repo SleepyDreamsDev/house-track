@@ -762,6 +762,18 @@ describe('GET /api/listings', () => {
       expect(body.total).toBe(2);
     });
 
+    it('?district=A&district=B (repeated param form) returns the union', async () => {
+      const res = await app.request('/api/listings?district=Centru&district=Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        listings: Array<{ id: string }>;
+        total: number;
+      };
+      const ids = body.listings.map((l) => l.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+      expect(body.total).toBe(2);
+    });
+
     it('?district=Centru (single value) preserves length-1 fast path', async () => {
       const res = await app.request('/api/listings?district=Centru');
       const body = (await res.json()) as {

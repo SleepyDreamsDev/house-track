@@ -53,7 +53,12 @@ export const Listings: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
   // Empty array == "All districts". Multiple values send `district=A,B` to the
   // backend, which compiles to a SQL `IN (...)` clause (see searchListings).
-  const [districts, setDistricts] = useState<string[]>([]);
+  const [districtsRaw, setDistrictsRaw] = useState<string[]>([]);
+  // De-dupe at the setter so any future entry point (URL hydration, "select
+  // all", paste-from-saved-filter) can't produce duplicate chips that the
+  // SQL IN clause would silently collapse.
+  const setDistricts = (next: string[]) => setDistrictsRaw(Array.from(new Set(next)));
+  const districts = districtsRaw;
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();

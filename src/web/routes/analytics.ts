@@ -80,11 +80,15 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
   const q = c.req.query('q') || undefined;
   const maxPriceRaw = c.req.query('maxPrice');
   const maxPrice = maxPriceRaw ? Number.parseInt(maxPriceRaw, 10) : undefined;
-  const districtRaw = c.req.query('district') ?? c.req.query('region');
+  // Accept both `?district=A,B` and `?district=A&district=B`. The first form
+  // is what the UI emits; the second is more natural for hand-written URLs
+  // and external callers. queries() returns undefined when the param is
+  // absent and an array (possibly with one or more entries) when present.
+  const districtParams = c.req.queries('district') ?? c.req.queries('region');
   let districts: string[] = [];
-  if (districtRaw !== undefined) {
-    districts = districtRaw
-      .split(',')
+  if (districtParams !== undefined) {
+    districts = districtParams
+      .flatMap((raw) => raw.split(','))
       .map((s) => s.trim())
       .filter(Boolean);
     if (districts.length === 0) {
@@ -114,11 +118,14 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
 // applied post-fetch because translating to ILIKE patterns is brittle for
 // Romanian diacritics like "vilă".
 function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
+  if (!Array.isArray(f.districts)) {
+    throw new TypeError('AnalyticsFilters.districts must be an array');
+  }
   const where: Prisma.ListingWhereInput = { active: true };
   if (f.maxPrice != null) where.priceEur = { lte: f.maxPrice };
-  if (f.districts.length === 1) {
-    // length-1 guard guarantees [0] is defined; satisfies noUncheckedIndexedAccess
-    where.district = f.districts[0] as string;
+  const [only] = f.districts;
+  if (f.districts.length === 1 && only !== undefined) {
+    where.district = only;
   } else if (f.districts.length > 1) {
     where.district = { in: f.districts };
   }

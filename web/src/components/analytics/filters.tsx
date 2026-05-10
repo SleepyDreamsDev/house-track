@@ -35,9 +35,7 @@ export const FilterGroupVertical: React.FC<{
   </div>
 );
 
-// Multi-select chip group. Empty `values` array means "all". Clicking a chip
-// toggles it; clicking "All" clears the selection. Used for the District
-// filter where operators want to compare e.g. Centru + Buiucani in one view.
+// Empty `values` means "all" — same sentinel as the rest of the rail.
 export const MultiSelectGroupVertical: React.FC<{
   label: string;
   values: string[];

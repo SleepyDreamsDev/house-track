@@ -53,9 +53,7 @@ interface FilterState {
 
 // Build the query string sent to /api/analytics/* — mirrors the filter set
 // Listings sends to /api/listings, so an operator who narrowed Listings sees
-// the same slice when they switch tabs. Multi-district selections serialize
-// as comma-separated values ("district=Centru,Botanica"); the backend splits
-// on the same delimiter.
+// the same slice when they switch tabs.
 function buildQueryParams(state: FilterState, priceMax: number): URLSearchParams {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
@@ -108,7 +106,6 @@ export const Analytics: React.FC = () => {
   const districtsKey = districts.join(',');
   const queryParams = useMemo(
     () => buildQueryParams(filterState, priceMax).toString(),
-    // queryParams depends only on flat values; districtsKey serializes the array
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [q, maxPrice, districtsKey, type, rooms, priceMax],
   );
@@ -219,6 +216,12 @@ const OverviewPanel: React.FC<{
       : Object.fromEntries(
           activeDistricts.filter((d) => trendByDistrict[d]).map((d) => [d, trendByDistrict[d]!]),
         );
+  // Surface selected districts that produced no trend data so the legend
+  // shrinking doesn't look like a chart bug — operator selected Buiucani
+  // but the response has no Buiucani key (zero qualifying listings in
+  // the slice).
+  const missingDistricts =
+    data && activeDistricts.length > 0 ? activeDistricts.filter((d) => !trendByDistrict[d]) : [];
   const heatmapDistricts = Object.keys(data?.heatmap ?? {});
   const heatmapBuckets = ['1–2', '3', '4', '5+'];
 
@@ -266,6 +269,11 @@ const OverviewPanel: React.FC<{
               right={<Legend districts={districts} />}
             />
             <MultiLineChart series={series} months={data?.months ?? []} />
+            {missingDistricts.length > 0 && (
+              <p className="mt-2 text-[11px] text-neutral-500">
+                No trend data for {missingDistricts.join(', ')} in the current filter slice.
+              </p>
+            )}
           </Card>
 
           <div className="grid grid-cols-2 gap-5">
