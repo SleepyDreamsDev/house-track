@@ -18,6 +18,7 @@ export interface OverviewResponse {
 
 export interface BestBuyRow {
   id: string;
+  url: string;
   title: string;
   district: string;
   type: string;
@@ -37,6 +38,7 @@ export interface BestBuyRow {
 
 export interface PriceDropRow {
   id: string;
+  url: string;
   title: string;
   district: string;
   type: string;

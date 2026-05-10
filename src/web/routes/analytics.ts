@@ -26,6 +26,7 @@ interface OverviewResponse {
 
 interface BestBuyRow {
   id: string;
+  url: string;
   title: string;
   district: string;
   type: string;
@@ -45,6 +46,7 @@ interface BestBuyRow {
 
 interface PriceDropRow {
   id: string;
+  url: string;
   title: string;
   district: string;
   type: string;
@@ -58,7 +60,7 @@ interface PriceDropRow {
 interface AnalyticsFilters {
   q: string | undefined;
   maxPrice: number | undefined;
-  district: string | undefined;
+  districts: string[];
   type: string | undefined;
   rooms: number | undefined;
 }
@@ -72,14 +74,20 @@ function parseAnalyticsFilters(c: Context): AnalyticsFilters {
   const q = c.req.query('q') || undefined;
   const maxPriceRaw = c.req.query('maxPrice');
   const maxPrice = maxPriceRaw ? Number.parseInt(maxPriceRaw, 10) : undefined;
-  const district = c.req.query('district') || c.req.query('region') || undefined;
+  const districtRaw = c.req.query('district') || c.req.query('region') || '';
+  // Accept single ("Centru") or comma-separated ("Centru,Botanica") values.
+  // Older saved URLs with `?region=Centru` keep working via the alias above.
+  const districts = districtRaw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const type = c.req.query('type') || undefined;
   const roomsRaw = c.req.query('rooms');
   const rooms = roomsRaw ? Number.parseInt(roomsRaw, 10) : undefined;
   return {
     q,
     maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
-    district,
+    districts,
     type,
     rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
   };
@@ -92,7 +100,12 @@ function parseAnalyticsFilters(c: Context): AnalyticsFilters {
 function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
   const where: Prisma.ListingWhereInput = { active: true };
   if (f.maxPrice != null) where.priceEur = { lte: f.maxPrice };
-  if (f.district) where.district = f.district;
+  if (f.districts.length === 1) {
+    // length-1 guard guarantees [0] is defined; satisfies noUncheckedIndexedAccess
+    where.district = f.districts[0] as string;
+  } else if (f.districts.length > 1) {
+    where.district = { in: f.districts };
+  }
   if (f.rooms != null) where.rooms = f.rooms;
   // Mirrors searchListings (src/mcp/queries.ts) — case-insensitive title contains.
   if (f.q) where.title = { contains: f.q, mode: 'insensitive' };
@@ -335,6 +348,7 @@ analyticsRouter.get('/analytics/best-buys', async (c) => {
     where: baseWhere,
     select: {
       id: true,
+      url: true,
       title: true,
       priceEur: true,
       areaSqm: true,
@@ -393,6 +407,7 @@ analyticsRouter.get('/analytics/best-buys', async (c) => {
 
     return {
       id: l.id,
+      url: l.url,
       title: l.title,
       district: l.district as string,
       type: deriveType(l.title),
@@ -433,6 +448,7 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
     where: baseWhere,
     select: {
       id: true,
+      url: true,
       title: true,
       district: true,
       snapshots: {
@@ -456,6 +472,7 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
 
     rows.push({
       id: l.id,
+      url: l.url,
       title: l.title,
       district: l.district ?? '',
       type: deriveType(l.title),

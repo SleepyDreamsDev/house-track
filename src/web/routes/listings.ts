@@ -19,6 +19,8 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     const maxAreaSqm = c.req.query('maxAreaSqm')
       ? parseFloat(c.req.query('maxAreaSqm')!)
       : undefined;
+    // district may be a single value or comma-separated list ("Centru,Botanica");
+    // searchListings splits + builds an `IN (...)` clause when >1 value.
     const district = c.req.query('district');
     const sort = c.req.query('sort') as 'newest' | 'price' | 'eurm2' | undefined;
     const q = c.req.query('q');

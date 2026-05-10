@@ -46,19 +46,21 @@ const PRICE_MAX_FALLBACK = 250000;
 interface FilterState {
   q: string;
   maxPrice: number;
-  district: string;
+  districts: string[];
   type: string;
   rooms: string;
 }
 
 // Build the query string sent to /api/analytics/* — mirrors the filter set
 // Listings sends to /api/listings, so an operator who narrowed Listings sees
-// the same slice when they switch tabs.
+// the same slice when they switch tabs. Multi-district selections serialize
+// as comma-separated values ("district=Centru,Botanica"); the backend splits
+// on the same delimiter.
 function buildQueryParams(state: FilterState, priceMax: number): URLSearchParams {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
   if (state.maxPrice < priceMax) p.set('maxPrice', String(state.maxPrice));
-  if (state.district !== 'all') p.set('district', state.district);
+  if (state.districts.length > 0) p.set('district', state.districts.join(','));
   if (state.type !== 'all') p.set('type', state.type);
   if (state.rooms !== 'all') {
     const values = bucketToRoomsValues(state.rooms as RoomsBucket);
@@ -75,7 +77,7 @@ export const Analytics: React.FC = () => {
   const [q, setQ] = useState('');
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
   const [maxPriceTouched, setMaxPriceTouched] = useState(false);
-  const [district, setDistrict] = useState('all');
+  const [districts, setDistricts] = useState<string[]>([]);
   const [type, setType] = useState('all');
   const [rooms, setRooms] = useState('all');
   const [dropPeriod, setDropPeriod] = useState<DropPeriod>('30d');
@@ -102,12 +104,13 @@ export const Analytics: React.FC = () => {
     setMaxPrice(v);
   };
 
-  const filterState: FilterState = { q, maxPrice, district, type, rooms };
+  const filterState: FilterState = { q, maxPrice, districts, type, rooms };
+  const districtsKey = districts.join(',');
   const queryParams = useMemo(
     () => buildQueryParams(filterState, priceMax).toString(),
-    // queryParams depends only on flat values, so spread them
+    // queryParams depends only on flat values; districtsKey serializes the array
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [q, maxPrice, district, type, rooms, priceMax],
+    [q, maxPrice, districtsKey, type, rooms, priceMax],
   );
 
   const overviewQ = useQuery<OverviewResponse>({
@@ -142,8 +145,8 @@ export const Analytics: React.FC = () => {
     setQ,
     maxPrice,
     setMaxPrice: handleSetMaxPrice,
-    district,
-    setDistrict,
+    districts,
+    setDistricts,
     type,
     setType,
     rooms,
@@ -179,7 +182,7 @@ export const Analytics: React.FC = () => {
           railProps={railProps}
           districts={facets?.districts ?? []}
           onTab={setTab}
-          activeDistrict={district}
+          activeDistricts={districts}
         />
       </TabPanel>
 
@@ -205,16 +208,17 @@ const OverviewPanel: React.FC<{
   data: OverviewResponse | undefined;
   railProps: Omit<RailProps, 'extraSlot'>;
   districts: string[];
-  activeDistrict: string;
+  activeDistricts: string[];
   onTab: (t: TabId) => void;
-}> = ({ data, railProps, districts, activeDistrict, onTab }) => {
+}> = ({ data, railProps, districts, activeDistricts, onTab }) => {
   const kpis = data?.kpis;
+  const trendByDistrict = data?.trendByDistrict ?? {};
   const series =
-    activeDistrict === 'all'
-      ? (data?.trendByDistrict ?? {})
-      : data?.trendByDistrict[activeDistrict]
-        ? { [activeDistrict]: data.trendByDistrict[activeDistrict]! }
-        : {};
+    activeDistricts.length === 0
+      ? trendByDistrict
+      : Object.fromEntries(
+          activeDistricts.filter((d) => trendByDistrict[d]).map((d) => [d, trendByDistrict[d]!]),
+        );
   const heatmapDistricts = Object.keys(data?.heatmap ?? {});
   const heatmapBuckets = ['1–2', '3', '4', '5+'];
 

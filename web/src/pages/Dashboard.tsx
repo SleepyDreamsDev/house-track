@@ -149,6 +149,14 @@ export const Dashboard: React.FC = () => {
               {(drops ?? []).map((l) => (
                 <LeadRow key={l.id} listing={l} kind="drop" />
               ))}
+              {drops && drops.length === 0 && (
+                <Card>
+                  <p className="text-sm text-neutral-400 text-center">
+                    No price drops ≥5% in the last 7 days — needs two snapshots of the same listing
+                    at different prices.
+                  </p>
+                </Card>
+              )}
             </div>
           </div>
         </div>
