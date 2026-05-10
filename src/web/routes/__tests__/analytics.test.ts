@@ -214,7 +214,7 @@ describe('Analytics routes', () => {
       }
     });
 
-    it('filters by region=Centru and rooms=3 — every row has matching district and rooms', async () => {
+    it('filters by district=Centru and rooms=3 — every row has matching district and rooms', async () => {
       const now = new Date();
       await prisma.listing.createMany({
         data: [
@@ -277,7 +277,7 @@ describe('Analytics routes', () => {
         ],
       });
 
-      const res = await app.request('/api/analytics/best-buys?region=Centru&rooms=3');
+      const res = await app.request('/api/analytics/best-buys?district=Centru&rooms=3');
       expect(res.status).toBe(200);
       const body = (await res.json()) as BestBuyRow[];
 
@@ -445,6 +445,200 @@ describe('Analytics routes', () => {
     it('returns 400 on invalid period', async () => {
       const res = await app.request('/api/analytics/price-drops?period=bogus');
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('Listings filter parity', () => {
+    const seedTwoDistricts = async () => {
+      const now = new Date();
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'fp-centru-cheap',
+            url: 'https://999.md/fp-centru-cheap',
+            title: 'Casă Centru cheap',
+            priceEur: 100_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'fp-centru-expensive',
+            url: 'https://999.md/fp-centru-expensive',
+            title: 'Vilă Centru expensive',
+            priceEur: 400_000,
+            areaSqm: 200,
+            rooms: 5,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'fp-botanica',
+            url: 'https://999.md/fp-botanica',
+            title: 'Casă Botanica',
+            priceEur: 150_000,
+            areaSqm: 120,
+            rooms: 4,
+            district: 'Botanica',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+        ],
+      });
+    };
+
+    it('overview: q narrows activeInventory to title-matching listings', async () => {
+      await seedTwoDistricts();
+      const res = await app.request('/api/analytics/overview?q=Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as OverviewResponse;
+      expect(body.kpis.activeInventory).toBe(1);
+    });
+
+    it('overview: maxPrice excludes listings priced above the cap', async () => {
+      await seedTwoDistricts();
+      const res = await app.request('/api/analytics/overview?maxPrice=200000');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as OverviewResponse;
+      expect(body.kpis.activeInventory).toBe(2);
+    });
+
+    it('overview: district narrows activeInventory', async () => {
+      await seedTwoDistricts();
+      const res = await app.request('/api/analytics/overview?district=Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as OverviewResponse;
+      expect(body.kpis.activeInventory).toBe(1);
+    });
+
+    it('overview: type=Villa keeps only Villa-titled rows', async () => {
+      await seedTwoDistricts();
+      const res = await app.request('/api/analytics/overview?type=Villa');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as OverviewResponse;
+      expect(body.kpis.activeInventory).toBe(1);
+    });
+
+    it('overview: combined q + maxPrice + district narrows the slice', async () => {
+      await seedTwoDistricts();
+      const res = await app.request(
+        '/api/analytics/overview?q=Cas%C4%83&maxPrice=200000&district=Centru',
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as OverviewResponse;
+      expect(body.kpis.activeInventory).toBe(1);
+    });
+
+    it('best-buys: maxPrice excludes higher-priced listings', async () => {
+      await seedTwoDistricts();
+      const res = await app.request('/api/analytics/best-buys?maxPrice=200000');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      const ids = body.map((r) => r.id);
+      expect(ids).not.toContain('fp-centru-expensive');
+      expect(ids.length).toBe(2);
+    });
+
+    it('best-buys: district= filters; legacy region= still works as alias', async () => {
+      await seedTwoDistricts();
+      const r1 = await app.request('/api/analytics/best-buys?district=Botanica');
+      const b1 = (await r1.json()) as BestBuyRow[];
+      expect(b1.every((r) => r.district === 'Botanica')).toBe(true);
+      expect(b1.length).toBe(1);
+
+      const r2 = await app.request('/api/analytics/best-buys?region=Botanica');
+      const b2 = (await r2.json()) as BestBuyRow[];
+      expect(b2.every((r) => r.district === 'Botanica')).toBe(true);
+      expect(b2.length).toBe(1);
+    });
+
+    it('best-buys: q filters by title contains, case-insensitive', async () => {
+      await seedTwoDistricts();
+      const res = await app.request('/api/analytics/best-buys?q=botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      expect(body.length).toBe(1);
+      expect(body[0]?.id).toBe('fp-botanica');
+    });
+
+    it('best-buys: type=Villa keeps only Villa-titled rows', async () => {
+      await seedTwoDistricts();
+      const res = await app.request('/api/analytics/best-buys?type=Villa');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      expect(body.length).toBe(1);
+      expect(body[0]?.id).toBe('fp-centru-expensive');
+      expect(body[0]?.type).toBe('Villa');
+    });
+
+    it('price-drops: district filter is honored', async () => {
+      const now = new Date();
+      const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+      const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'pd-centru',
+            url: 'https://999.md/pd-centru',
+            title: 'Casă Centru',
+            priceEur: 90_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: sixDaysAgo,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'pd-botanica',
+            url: 'https://999.md/pd-botanica',
+            title: 'Casă Botanica',
+            priceEur: 90_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Botanica',
+            active: true,
+            firstSeenAt: sixDaysAgo,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+        ],
+      });
+      await prisma.listingSnapshot.createMany({
+        data: [
+          { listingId: 'pd-centru', capturedAt: sixDaysAgo, priceEur: 100_000, rawHtmlHash: 'h1' },
+          { listingId: 'pd-centru', capturedAt: fiveDaysAgo, priceEur: 90_000, rawHtmlHash: 'h2' },
+          {
+            listingId: 'pd-botanica',
+            capturedAt: sixDaysAgo,
+            priceEur: 100_000,
+            rawHtmlHash: 'h3',
+          },
+          {
+            listingId: 'pd-botanica',
+            capturedAt: fiveDaysAgo,
+            priceEur: 90_000,
+            rawHtmlHash: 'h4',
+          },
+        ],
+      });
+
+      const res = await app.request('/api/analytics/price-drops?district=Centru');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as PriceDropRow[];
+      const ids = body.map((r) => r.id);
+      expect(ids).toContain('pd-centru');
+      expect(ids).not.toContain('pd-botanica');
     });
   });
 });

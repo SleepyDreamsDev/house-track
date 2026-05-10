@@ -32,6 +32,7 @@ export interface BestBuyRow {
   score: number;
   priceDrop: boolean;
   dropPct: number;
+  rooms: number;
 }
 
 export interface PriceDropRow {
@@ -46,10 +47,9 @@ export interface PriceDropRow {
   when: string;
 }
 
-export const A_DISTRICTS = ['Buiucani', 'Botanica', 'Centru', 'Ciocana', 'Durlești', 'Râșcani'];
-export const A_ROOMS = ['1–2', '3', '4', '5+'];
-export const A_TYPES = ['House', 'Villa', 'Townhouse'];
-
+// Color map keyed by district name. New districts that appear in observed
+// data fall back to the teal accent at consumer sites — keeping this static
+// is intentional (fully data-driven theming is a separate concern).
 export const DIST_COLORS: Record<string, string> = {
   Buiucani: '#0f766e',
   Botanica: '#6366f1',
