@@ -74,6 +74,7 @@ export const Analytics: React.FC = () => {
   const [tab, setTab] = useState<TabId>('overview');
   const [q, setQ] = useState('');
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
+  const [maxPriceTouched, setMaxPriceTouched] = useState(false);
   const [district, setDistrict] = useState('all');
   const [type, setType] = useState('all');
   const [rooms, setRooms] = useState('all');
@@ -85,13 +86,21 @@ export const Analytics: React.FC = () => {
   });
   const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
 
-  // Snap maxPrice to the data's max once facets resolve, but only if the
-  // user hasn't already moved the slider past it. Same pattern as Listings.
+  // While the user hasn't touched the slider, mirror the facets-derived
+  // catalog max. This serves two needs: (a) on a fresh page, no maxPrice
+  // param is sent (slider is at max → buildQueryParams omits it), and
+  // (b) if the catalog max shrinks below our fallback, the slider clamps
+  // down. Once the user moves the slider, maxPriceTouched locks state so
+  // facets refreshes can't yank their selection.
   useEffect(() => {
-    if (facets && maxPrice > priceMax) setMaxPrice(priceMax);
-    // initial-only clamp; intentionally exclude maxPrice
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facets]);
+    if (!facets || maxPriceTouched) return;
+    if (maxPrice !== priceMax) setMaxPrice(priceMax);
+  }, [facets, priceMax, maxPriceTouched, maxPrice]);
+
+  const handleSetMaxPrice = (v: number) => {
+    setMaxPriceTouched(true);
+    setMaxPrice(v);
+  };
 
   const filterState: FilterState = { q, maxPrice, district, type, rooms };
   const queryParams = useMemo(
@@ -132,7 +141,7 @@ export const Analytics: React.FC = () => {
     q,
     setQ,
     maxPrice,
-    setMaxPrice,
+    setMaxPrice: handleSetMaxPrice,
     district,
     setDistrict,
     type,

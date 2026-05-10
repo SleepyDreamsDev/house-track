@@ -32,7 +32,7 @@ export interface BestBuyRow {
   score: number;
   priceDrop: boolean;
   dropPct: number;
-  rooms?: number;
+  rooms: number;
 }
 
 export interface PriceDropRow {

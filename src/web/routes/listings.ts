@@ -66,8 +66,13 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       _count: true,
     });
 
+    // Dedupe titles at the DB level — deriveType is a JS regex over title
+    // (no clean SQL translation for the Romanian "vilă" diacritic), so we
+    // must read titles, but distinct titles bounds the row count regardless
+    // of catalog size. Then bucket in memory.
     const titleRows = await prisma.listing.findMany({
       where: { active: true },
+      distinct: ['title'],
       select: { title: true },
     });
     const types = Array.from(new Set(titleRows.map((r) => deriveType(r.title)))).sort();
