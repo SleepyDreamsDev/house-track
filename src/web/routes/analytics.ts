@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
+import type { Prisma } from '@prisma/client';
 import { getPrisma } from '../../db.js';
+import { deriveType, roomsBucket } from '../../lib/listing-type.js';
 
 export const analyticsRouter = new Hono();
 
@@ -52,18 +55,53 @@ interface PriceDropRow {
   when: string;
 }
 
-function deriveType(title: string): string {
-  if (/vil[ăa]/i.test(title)) return 'Villa';
-  if (/townhouse/i.test(title)) return 'Townhouse';
-  return 'House';
+interface AnalyticsFilters {
+  q: string | undefined;
+  maxPrice: number | undefined;
+  district: string | undefined;
+  type: string | undefined;
+  rooms: number | undefined;
 }
 
-function roomsBucket(rooms: number | null): string {
-  if (rooms == null) return '1–2';
-  if (rooms <= 2) return '1–2';
-  if (rooms === 3) return '3';
-  if (rooms === 4) return '4';
-  return '5+';
+// Unified filter parsing for all three analytics routes. Mirrors Listings'
+// /api/listings query params so an operator can carry a Listings filter view
+// over to Analytics and see the same slice. `region` is accepted as a legacy
+// alias for `district` (the previous /analytics/best-buys + /price-drops
+// param name) so old saved URLs keep working without a 400.
+function parseAnalyticsFilters(c: Context): AnalyticsFilters {
+  const q = c.req.query('q') || undefined;
+  const maxPriceRaw = c.req.query('maxPrice');
+  const maxPrice = maxPriceRaw ? Number.parseInt(maxPriceRaw, 10) : undefined;
+  const district = c.req.query('district') || c.req.query('region') || undefined;
+  const type = c.req.query('type') || undefined;
+  const roomsRaw = c.req.query('rooms');
+  const rooms = roomsRaw ? Number.parseInt(roomsRaw, 10) : undefined;
+  return {
+    q,
+    maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
+    district,
+    type,
+    rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
+  };
+}
+
+// Prisma where shape that applies the SQL-able subset of the filters.
+// `type` is intentionally NOT here — it's a regex over title (`deriveType`),
+// applied post-fetch because translating to ILIKE patterns is brittle for
+// Romanian diacritics like "vilă".
+function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
+  const where: Prisma.ListingWhereInput = { active: true };
+  if (f.maxPrice != null) where.priceEur = { lte: f.maxPrice };
+  if (f.district) where.district = f.district;
+  if (f.rooms != null) where.rooms = f.rooms;
+  // Mirrors searchListings (src/mcp/queries.ts) — case-insensitive title contains.
+  if (f.q) where.title = { contains: f.q, mode: 'insensitive' };
+  return where;
+}
+
+function applyTypeFilter<T extends { title: string }>(rows: T[], type: string | undefined): T[] {
+  if (!type) return rows;
+  return rows.filter((r) => deriveType(r.title) === type);
 }
 
 function median(values: number[]): number {
@@ -96,9 +134,11 @@ function relativeWhen(from: Date, now: Date): string {
 analyticsRouter.get('/analytics/overview', async (c) => {
   const prisma = getPrisma();
   const now = new Date();
+  const filters = parseAnalyticsFilters(c);
+  const baseWhere = buildListingWhere(filters);
 
-  const active = await prisma.listing.findMany({
-    where: { active: true },
+  const allActive = await prisma.listing.findMany({
+    where: baseWhere,
     select: {
       id: true,
       title: true,
@@ -109,6 +149,7 @@ analyticsRouter.get('/analytics/overview', async (c) => {
       firstSeenAt: true,
     },
   });
+  const active = applyTypeFilter(allActive, filters.type);
 
   const validForMedian = active.filter(
     (l): l is typeof l & { priceEur: number; areaSqm: number } =>
@@ -214,17 +255,26 @@ analyticsRouter.get('/analytics/overview', async (c) => {
       district: l.district,
     }));
 
+  // Recent-drops counter respects the same filter slice: we look only at
+  // listings already present in `active` (post-filter) and check their
+  // snapshot history for a >=3% drop in the last 30 days.
   const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const listingsWithRecentSnapshots = await prisma.listing.findMany({
-    where: { active: true, snapshots: { some: { capturedAt: { gte: since30d } } } },
-    select: {
-      snapshots: {
-        where: { capturedAt: { gte: since30d } },
-        orderBy: { capturedAt: 'asc' },
-        select: { priceEur: true },
-      },
-    },
-  });
+  const activeIds = new Set(active.map((l) => l.id));
+  const listingsWithRecentSnapshots = activeIds.size
+    ? await prisma.listing.findMany({
+        where: {
+          id: { in: [...activeIds] },
+          snapshots: { some: { capturedAt: { gte: since30d } } },
+        },
+        select: {
+          snapshots: {
+            where: { capturedAt: { gte: since30d } },
+            orderBy: { capturedAt: 'asc' },
+            select: { priceEur: true },
+          },
+        },
+      })
+    : [];
   let recentDropsCount = 0;
   for (const l of listingsWithRecentSnapshots) {
     if (l.snapshots.length < 2) continue;
@@ -235,6 +285,9 @@ analyticsRouter.get('/analytics/overview', async (c) => {
     if (dropPct >= 3) recentDropsCount++;
   }
 
+  // District medians + best-deals count are computed within the filtered
+  // slice. "Discount vs district median" is therefore relative to whatever
+  // the user filtered to — intended; do not silently fall back to global.
   const districtPrices = new Map<string, number[]>();
   for (const l of validForMedian) {
     if (!l.district) continue;
@@ -275,23 +328,11 @@ analyticsRouter.get('/analytics/overview', async (c) => {
 
 analyticsRouter.get('/analytics/best-buys', async (c) => {
   const prisma = getPrisma();
-  const region = c.req.query('region');
-  const type = c.req.query('type');
-  const roomsParam = c.req.query('rooms');
-  const roomsFilter = roomsParam ? Number.parseInt(roomsParam, 10) : undefined;
+  const filters = parseAnalyticsFilters(c);
+  const baseWhere = buildListingWhere(filters);
 
-  const where: Parameters<typeof prisma.listing.findMany>[0] extends infer T
-    ? T extends { where?: infer W }
-      ? W
-      : never
-    : never = { active: true };
-  if (region) (where as Record<string, unknown>).district = region;
-  if (roomsFilter != null && !Number.isNaN(roomsFilter)) {
-    (where as Record<string, unknown>).rooms = roomsFilter;
-  }
-
-  const listings = await prisma.listing.findMany({
-    where,
+  const listingsRaw = await prisma.listing.findMany({
+    where: baseWhere,
     select: {
       id: true,
       title: true,
@@ -305,14 +346,14 @@ analyticsRouter.get('/analytics/best-buys', async (c) => {
     },
   });
 
-  const filtered = listings.filter((l) => {
-    if (l.priceEur == null || l.areaSqm == null || l.areaSqm <= 0 || !l.district) return false;
-    if (type) {
-      if (deriveType(l.title) !== type) return false;
-    }
-    return true;
-  });
+  const listings = applyTypeFilter(listingsRaw, filters.type);
 
+  const filtered = listings.filter(
+    (l) => l.priceEur != null && l.areaSqm != null && l.areaSqm > 0 && !!l.district,
+  );
+
+  // District medians/std computed within the filtered slice — see overview's
+  // matching note. Discount ratings are slice-relative by design.
   const byDistrict = new Map<string, number[]>();
   for (const l of filtered) {
     const arr = byDistrict.get(l.district as string) ?? [];
@@ -382,17 +423,14 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
     return c.json({ error: 'invalid period' }, 400);
   }
   const days = allowed[period] as number;
-  const region = c.req.query('region');
-  const type = c.req.query('type');
+  const filters = parseAnalyticsFilters(c);
+  const baseWhere = buildListingWhere(filters);
 
   const now = new Date();
   const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const where: Record<string, unknown> = { active: true };
-  if (region) where.district = region;
-
-  const listings = await prisma.listing.findMany({
-    where,
+  const listingsRaw = await prisma.listing.findMany({
+    where: baseWhere,
     select: {
       id: true,
       title: true,
@@ -404,6 +442,7 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
       },
     },
   });
+  const listings = applyTypeFilter(listingsRaw, filters.type);
 
   const rows: PriceDropRow[] = [];
   for (const l of listings) {
@@ -415,14 +454,11 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
     const dropPct = (1 - latest.priceEur / earliest.priceEur) * 100;
     if (dropPct < 3) continue;
 
-    const derived = deriveType(l.title);
-    if (type && derived !== type) continue;
-
     rows.push({
       id: l.id,
       title: l.title,
       district: l.district ?? '',
-      type: derived,
+      type: deriveType(l.title),
       priceWas: earliest.priceEur,
       priceEur: latest.priceEur,
       dropPct: Math.round(dropPct * 10) / 10,

@@ -701,4 +701,134 @@ describe('GET /api/listings', () => {
       expect(listing).toHaveProperty('lastSeenAt');
     });
   });
+
+  describe('GET /api/listings/facets', () => {
+    interface FacetsResponse {
+      total: number;
+      districts: string[];
+      price: { min: number | null; max: number | null };
+      rooms: { min: number | null; max: number | null };
+      areaSqm: { min: number | null; max: number | null };
+      types: string[];
+      roomsValues: number[];
+    }
+
+    it('exposes types derived from active listing titles', async () => {
+      const now = new Date();
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'fc-1',
+            url: 'https://999.md/fc-1',
+            title: 'Casă Centru',
+            priceEur: 100_000,
+            areaSqm: 90,
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'fc-2',
+            url: 'https://999.md/fc-2',
+            title: 'Vilă Botanica',
+            priceEur: 250_000,
+            areaSqm: 200,
+            rooms: 5,
+            district: 'Botanica',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'fc-3',
+            url: 'https://999.md/fc-3',
+            title: 'Townhouse Ciocana',
+            priceEur: 180_000,
+            areaSqm: 150,
+            rooms: 4,
+            district: 'Ciocana',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+        ],
+      });
+
+      const res = await app.request('/api/listings/facets');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as FacetsResponse;
+
+      expect(body.types).toEqual(expect.arrayContaining(['House', 'Villa', 'Townhouse']));
+      expect(body.types.length).toBe(3);
+    });
+
+    it('exposes roomsValues sorted ascending and excludes nulls', async () => {
+      const now = new Date();
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'fr-1',
+            url: 'https://999.md/fr-1',
+            title: 'A',
+            rooms: 4,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'fr-2',
+            url: 'https://999.md/fr-2',
+            title: 'B',
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'fr-3',
+            url: 'https://999.md/fr-3',
+            title: 'C',
+            rooms: null,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'fr-4',
+            url: 'https://999.md/fr-4',
+            title: 'D',
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+        ],
+      });
+
+      const res = await app.request('/api/listings/facets');
+      const body = (await res.json()) as FacetsResponse;
+
+      expect(body.roomsValues).toEqual([3, 4]);
+    });
+
+    it('returns empty types and roomsValues when catalog is empty', async () => {
+      const res = await app.request('/api/listings/facets');
+      const body = (await res.json()) as FacetsResponse;
+      expect(body.types).toEqual([]);
+      expect(body.roomsValues).toEqual([]);
+    });
+  });
 });

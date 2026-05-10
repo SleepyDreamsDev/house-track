@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import type { PrismaClient } from '@prisma/client';
 import { searchListings, getListing } from '../../mcp/queries.js';
 import { Persistence } from '../../persist.js';
+import { deriveType } from '../../lib/listing-type.js';
 
 export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   app.get('/api/listings', async (c) => {
@@ -65,12 +66,28 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       _count: true,
     });
 
+    const titleRows = await prisma.listing.findMany({
+      where: { active: true },
+      select: { title: true },
+    });
+    const types = Array.from(new Set(titleRows.map((r) => deriveType(r.title)))).sort();
+
+    const roomsRows = await prisma.listing.findMany({
+      where: { active: true, rooms: { not: null } },
+      distinct: ['rooms'],
+      select: { rooms: true },
+      orderBy: { rooms: 'asc' },
+    });
+    const roomsValues = roomsRows.map((r) => r.rooms).filter((r): r is number => r !== null);
+
     return c.json({
       total: aggregates._count,
       districts,
       price: { min: aggregates._min.priceEur, max: aggregates._max.priceEur },
       rooms: { min: aggregates._min.rooms, max: aggregates._max.rooms },
       areaSqm: { min: aggregates._min.areaSqm, max: aggregates._max.areaSqm },
+      types,
+      roomsValues,
     });
   });
 

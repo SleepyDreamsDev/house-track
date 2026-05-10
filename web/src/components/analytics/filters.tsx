@@ -1,5 +1,8 @@
 import React from 'react';
-import { A_DISTRICTS, DIST_COLORS } from './types.js';
+import { Input } from '@/components/ui/Input.js';
+import { fmt } from '@/lib/format.js';
+import { roomsBucket, type RoomsBucket } from '@/lib/listing-type.js';
+import { DIST_COLORS } from './types.js';
 
 export const FilterGroupVertical: React.FC<{
   label: string;
@@ -12,7 +15,7 @@ export const FilterGroupVertical: React.FC<{
       {label}
     </div>
     <div className="flex flex-wrap gap-1">
-      {options.map((o) => {
+      {['all', ...options].map((o) => {
         const active = value === o;
         return (
           <button
@@ -57,13 +60,116 @@ export const Segmented: React.FC<{
   </div>
 );
 
-export const Legend: React.FC = () => (
+export const Legend: React.FC<{ districts: string[] }> = ({ districts }) => (
   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-    {A_DISTRICTS.map((d) => (
+    {districts.map((d) => (
       <span key={d} className="inline-flex items-center gap-1">
-        <span className="h-2 w-2 rounded-full" style={{ background: DIST_COLORS[d] }} />
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ background: DIST_COLORS[d] ?? '#0f766e' }}
+        />
         <span className="text-neutral-600">{d}</span>
       </span>
     ))}
   </div>
 );
+
+const PRICE_MAX_FALLBACK = 250000;
+const PRICE_MIN_FALLBACK = 0;
+
+export interface AnalyticsFacets {
+  districts: string[];
+  types: string[];
+  roomsValues: number[];
+  price: { min: number | null; max: number | null };
+}
+
+export interface AnalyticsFilterRailProps {
+  q: string;
+  setQ: (v: string) => void;
+  maxPrice: number;
+  setMaxPrice: (v: number) => void;
+  district: string;
+  setDistrict: (v: string) => void;
+  type: string;
+  setType: (v: string) => void;
+  rooms: string;
+  setRooms: (v: string) => void;
+  facets: AnalyticsFacets | undefined;
+  extraSlot?: React.ReactNode;
+}
+
+// Derive the rooms-bucket option list from observed roomsValues so the rail
+// only offers buckets that have any listings backing them.
+function bucketsFromFacets(roomsValues: number[]): RoomsBucket[] {
+  const set = new Set<RoomsBucket>();
+  for (const r of roomsValues) set.add(roomsBucket(r));
+  return (['1–2', '3', '4', '5+'] as RoomsBucket[]).filter((b) => set.has(b));
+}
+
+export const AnalyticsFilterRail: React.FC<AnalyticsFilterRailProps> = ({
+  q,
+  setQ,
+  maxPrice,
+  setMaxPrice,
+  district,
+  setDistrict,
+  type,
+  setType,
+  rooms,
+  setRooms,
+  facets,
+  extraSlot,
+}) => {
+  const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
+  const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
+  const districts = facets?.districts ?? [];
+  const types = facets?.types ?? [];
+  const buckets = bucketsFromFacets(facets?.roomsValues ?? []);
+
+  return (
+    <div className="space-y-4 text-[13px]" data-testid="analytics-filter-rail">
+      <div className="text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500">
+        Filters
+      </div>
+      <div>
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+          Search
+        </label>
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Title…"
+          aria-label="Search listings"
+        />
+      </div>
+      <div>
+        <div className="mb-1.5 flex justify-between">
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+            Max price
+          </label>
+          <span className="text-[11px] tabular-nums text-neutral-600">{fmt.eur(maxPrice)}</span>
+        </div>
+        <input
+          type="range"
+          min={Math.max(0, priceMin)}
+          max={priceMax}
+          step={Math.max(1000, Math.round((priceMax - priceMin) / 50))}
+          value={maxPrice}
+          onChange={(e) => setMaxPrice(Number(e.target.value))}
+          className="w-full accent-accent"
+          aria-label="Max price"
+        />
+      </div>
+      <FilterGroupVertical
+        label="District"
+        value={district}
+        setValue={setDistrict}
+        options={districts}
+      />
+      <FilterGroupVertical label="Property type" value={type} setValue={setType} options={types} />
+      <FilterGroupVertical label="Rooms" value={rooms} setValue={setRooms} options={buckets} />
+      {extraSlot}
+    </div>
+  );
+};

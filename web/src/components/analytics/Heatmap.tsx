@@ -1,10 +1,13 @@
 import React from 'react';
-import { A_DISTRICTS, A_ROOMS } from './types.js';
 
-export const Heatmap: React.FC<{ data: Record<string, Record<string, number>> }> = ({ data }) => {
-  const all = A_DISTRICTS.flatMap((d) => A_ROOMS.map((r) => data[d]?.[r] ?? 0)).filter(
-    (v) => v > 0,
-  );
+export const Heatmap: React.FC<{
+  data: Record<string, Record<string, number>>;
+  districts: string[];
+  roomBuckets: string[];
+}> = ({ data, districts, roomBuckets }) => {
+  const all = districts
+    .flatMap((d) => roomBuckets.map((r) => data[d]?.[r] ?? 0))
+    .filter((v) => v > 0);
   const min = all.length > 0 ? Math.min(...all) : 0;
   const max = all.length > 0 ? Math.max(...all) : 1;
   const tone = (v: number) => {
@@ -20,7 +23,7 @@ export const Heatmap: React.FC<{ data: Record<string, Record<string, number>> }>
             <th className="px-3 py-2 text-left font-semibold text-neutral-500 text-[10.5px] uppercase tracking-wider">
               District
             </th>
-            {A_ROOMS.map((r) => (
+            {roomBuckets.map((r) => (
               <th
                 key={r}
                 className="px-2 py-2 text-right font-semibold text-neutral-500 text-[10.5px] uppercase tracking-wider"
@@ -31,10 +34,10 @@ export const Heatmap: React.FC<{ data: Record<string, Record<string, number>> }>
           </tr>
         </thead>
         <tbody>
-          {A_DISTRICTS.map((d) => (
+          {districts.map((d) => (
             <tr key={d} className="border-t border-neutral-200">
               <td className="px-3 py-2 font-medium text-neutral-700">{d}</td>
-              {A_ROOMS.map((r) => {
+              {roomBuckets.map((r) => {
                 const v = data[d]?.[r] ?? 0;
                 return (
                   <td
