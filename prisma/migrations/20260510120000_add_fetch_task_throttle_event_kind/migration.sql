@@ -27,7 +27,7 @@ CREATE TABLE "ThrottleEvent" (
 );
 
 -- CreateIndex
-CREATE INDEX "FetchTask_scheduledFor_priority_idx" ON "FetchTask"("scheduledFor", "priority");
+CREATE INDEX "FetchTask_priority_scheduledFor_idx" ON "FetchTask"("priority", "scheduledFor");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FetchTask_listingId_reason_key" ON "FetchTask"("listingId", "reason");

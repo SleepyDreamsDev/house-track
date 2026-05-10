@@ -126,7 +126,7 @@ export const SWEEP = {
   // ── Two-tier cadence defaults (PR 1 plumbing) ──────────────────────────
   // No code reads these yet — PR 2 wires the index ticker + detail trickle
   // schedulers. Stored here so settings.ts has a single defaults source.
-  // See plans/reassess-the-politeness-approach-partitioned-plum.md.
+  // See docs/superpowers/specs/2026-05-10-politeness-two-tier-design.md.
 
   // Feature flag: 'legacy' = current runSweep() monolith; 'two_tier' =
   // index ticker + detail trickle. PR 2 honours this; PR 3 flips it.

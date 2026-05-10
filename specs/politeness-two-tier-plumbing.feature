@@ -24,10 +24,11 @@ Feature: Politeness two-tier plumbing
 
   Scenario: FetchTask popping order respects priority then scheduledFor
     Given Listings L1, L2, L3
-    And FetchTask rows: (L1, BACKFILL=3, scheduled now), (L2, NEW=0, scheduled now+1s), (L3, STALE=2, scheduled now)
-    When I query the next eligible task ordered by priority then scheduledFor
-    Then the first row returned is L2 (NEW)
+    And FetchTask rows: (L1, BACKFILL=3, scheduled at T0), (L2, NEW=0, scheduled at T0-1s), (L3, STALE=2, scheduled at T0-2s)
+    When I query (priority ASC, scheduledFor ASC) tasks with scheduledFor <= now
+    Then the first row returned is L2 (NEW)  # lowest priority number wins regardless of earlier scheduledFor on others
     And the second row returned is L3 (STALE)
+    And the third row returned is L1 (BACKFILL)
 
   Scenario: FetchTask with future scheduledFor is not yet eligible
     Given a Listing with id "L1"

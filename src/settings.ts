@@ -203,15 +203,15 @@ export const settingMeta: Record<
     group: 'Sweep',
     kind: 'number',
     unit: 'min',
-    label: 'Index Tick Interval (min)',
-    hint: 'Lower bound on time between index ticks (two_tier mode).',
+    label: 'Index Tick Interval — lower bound',
+    hint: 'Lower bound on time between index ticks (two_tier mode), in minutes.',
   },
   'sweep.indexTickIntervalMinutesMax': {
     group: 'Sweep',
     kind: 'number',
     unit: 'min',
-    label: 'Index Tick Interval (max)',
-    hint: 'Upper bound on time between index ticks (two_tier mode).',
+    label: 'Index Tick Interval — upper bound',
+    hint: 'Upper bound on time between index ticks (two_tier mode), in minutes.',
   },
   'sweep.indexTickTargetListings': {
     group: 'Sweep',
@@ -224,15 +224,15 @@ export const settingMeta: Record<
     group: 'Sweep',
     kind: 'number',
     unit: 's',
-    label: 'Detail Trickle Interval (min)',
-    hint: 'Lower bound on time between detail-trickle fetches.',
+    label: 'Detail Trickle Interval — lower bound',
+    hint: 'Lower bound on time between detail-trickle fetches, in seconds.',
   },
   'sweep.detailTrickleIntervalSecondsMax': {
     group: 'Sweep',
     kind: 'number',
     unit: 's',
-    label: 'Detail Trickle Interval (max)',
-    hint: 'Upper bound on time between detail-trickle fetches.',
+    label: 'Detail Trickle Interval — upper bound',
+    hint: 'Upper bound on time between detail-trickle fetches, in seconds.',
   },
   'sweep.detailTrickleQueueRefillThreshold': {
     group: 'Sweep',
@@ -305,6 +305,17 @@ export async function getSetting<T = unknown>(key: string, fallback?: T): Promis
   throw new Error(`Setting key "${key}" not found and no default provided`);
 }
 
+// Paired bounds where the min/max relationship must hold (`<min-key>` ≤ `<max-key>`).
+// Cross-key validation runs inside setSetting() — the partner value is read from
+// the DB (falling back to the default) and compared against the incoming write.
+const pairedBounds: ReadonlyArray<{ min: string; max: string }> = [
+  { min: 'sweep.indexTickIntervalMinutesMin', max: 'sweep.indexTickIntervalMinutesMax' },
+  {
+    min: 'sweep.detailTrickleIntervalSecondsMin',
+    max: 'sweep.detailTrickleIntervalSecondsMax',
+  },
+];
+
 export async function setSetting<T = unknown>(key: string, value: T): Promise<void> {
   // Validate against the schema
   const schema = settingSchemas[key as keyof typeof settingSchemas];
@@ -313,6 +324,30 @@ export async function setSetting<T = unknown>(key: string, value: T): Promise<vo
   }
 
   const parsed = schema.parse(value);
+
+  // Cross-key validation: pairedBounds enforce min ≤ max. We check both
+  // directions (writing the min or the max) by looking up the partner's
+  // current value before persisting. This prevents an internally
+  // contradictory config (PR 2's schedulers would otherwise busy-loop or
+  // sleep negative durations).
+  for (const pair of pairedBounds) {
+    if (key === pair.min) {
+      const partner = await getSetting<number>(pair.max);
+      if (typeof parsed === 'number' && parsed > partner) {
+        throw new Error(
+          `${pair.min} (${parsed}) cannot exceed ${pair.max} (${partner}). Update ${pair.max} first.`,
+        );
+      }
+    } else if (key === pair.max) {
+      const partner = await getSetting<number>(pair.min);
+      if (typeof parsed === 'number' && parsed < partner) {
+        throw new Error(
+          `${pair.max} (${parsed}) cannot be less than ${pair.min} (${partner}). Update ${pair.min} first.`,
+        );
+      }
+    }
+  }
+
   const prisma = getPrisma();
 
   // Prisma's JSON type requires explicit any cast for validated zod objects

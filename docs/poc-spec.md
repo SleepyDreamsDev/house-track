@@ -187,7 +187,7 @@ PR 1 (this PR) lands the plumbing: `FetchTask` and `ThrottleEvent` tables,
 a `SweepRun.kind` column (defaults `'legacy'`), and 11 new `Setting` keys
 under a `sweep.mode` feature flag that still resolves to `'legacy'`. No
 runtime behavior changes here. The full design and migration plan live in
-`~/.claude/plans/reassess-the-politeness-approach-partitioned-plum.md`.
+[`docs/superpowers/specs/2026-05-10-politeness-two-tier-design.md`](./superpowers/specs/2026-05-10-politeness-two-tier-design.md).
 
 ## Failure handling
 

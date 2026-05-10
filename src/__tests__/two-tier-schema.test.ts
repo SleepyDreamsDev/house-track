@@ -84,14 +84,17 @@ describe('FetchTask queue', () => {
   });
 
   it('orders by priority then scheduledFor when popping the next eligible task', async () => {
+    // All three rows are eligible (scheduledFor in the past). Priority alone
+    // should drive the order — even though L2 (NEW) is scheduled *latest*,
+    // its lower priority number wins over L3 (STALE) and L1 (BACKFILL).
     await Promise.all([seedListing('L1'), seedListing('L2'), seedListing('L3')]);
-    const now = new Date();
+    const t0 = new Date();
     await prisma.fetchTask.create({
       data: {
         listingId: 'L1',
         priority: 3,
         reason: 'backfill',
-        scheduledFor: now,
+        scheduledFor: new Date(t0.getTime() - 2000),
       },
     });
     await prisma.fetchTask.create({
@@ -99,7 +102,7 @@ describe('FetchTask queue', () => {
         listingId: 'L2',
         priority: 0,
         reason: 'new',
-        scheduledFor: new Date(now.getTime() + 1000),
+        scheduledFor: new Date(t0.getTime() - 500),
       },
     });
     await prisma.fetchTask.create({
@@ -107,12 +110,13 @@ describe('FetchTask queue', () => {
         listingId: 'L3',
         priority: 2,
         reason: 'stale',
-        scheduledFor: now,
+        scheduledFor: new Date(t0.getTime() - 1500),
       },
     });
 
+    const queryAt = new Date(t0.getTime());
     const next = await prisma.fetchTask.findMany({
-      where: { scheduledFor: { lte: new Date(now.getTime() + 5000) } },
+      where: { scheduledFor: { lte: queryAt } },
       orderBy: [{ priority: 'asc' }, { scheduledFor: 'asc' }],
     });
 

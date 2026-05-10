@@ -153,7 +153,12 @@ model FetchTask {
   scheduledFor DateTime @default(now())
 
   @@unique([listingId, reason])
-  @@index([scheduledFor, priority])
+  // Priority-first composite — matches the pop query
+  //   WHERE scheduledFor <= now()
+  //   ORDER BY priority ASC, scheduledFor ASC
+  // At steady state most rows are due, so the priority prefix is the
+  // selective one Postgres should walk first.
+  @@index([priority, scheduledFor])
 }
 
 // Persisted log of adaptive-throttle trigger events. The hot fetch path

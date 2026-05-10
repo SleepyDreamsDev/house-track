@@ -153,6 +153,44 @@ describe('Two-tier cadence settings (PR 1 plumbing)', () => {
     });
   });
 
+  describe('Cross-key bound validation', () => {
+    it('rejects writing index-tick min > current max', async () => {
+      // Default max = 120. Writing min = 200 should fail.
+      await expect(setSetting('sweep.indexTickIntervalMinutesMin', 200)).rejects.toThrow(
+        /cannot exceed/,
+      );
+    });
+
+    it('rejects writing index-tick max < current min', async () => {
+      // Default min = 60. Writing max = 30 should fail.
+      await expect(setSetting('sweep.indexTickIntervalMinutesMax', 30)).rejects.toThrow(
+        /cannot be less than/,
+      );
+    });
+
+    it('rejects writing detail-trickle min > current max', async () => {
+      // Default max = 360. Writing min = 500 should fail.
+      await expect(setSetting('sweep.detailTrickleIntervalSecondsMin', 500)).rejects.toThrow(
+        /cannot exceed/,
+      );
+    });
+
+    it('rejects writing detail-trickle max < current min', async () => {
+      // Default min = 180. Writing max = 60 should fail.
+      await expect(setSetting('sweep.detailTrickleIntervalSecondsMax', 60)).rejects.toThrow(
+        /cannot be less than/,
+      );
+    });
+
+    it('allows widening the range in the correct order (max first, then min)', async () => {
+      // Widen index-tick: bump max to 300 first (allowed: 300 ≥ 60), then min to 200.
+      await setSetting('sweep.indexTickIntervalMinutesMax', 300);
+      await setSetting('sweep.indexTickIntervalMinutesMin', 200);
+      expect(await getSetting('sweep.indexTickIntervalMinutesMin')).toBe(200);
+      expect(await getSetting('sweep.indexTickIntervalMinutesMax')).toBe(300);
+    });
+  });
+
   describe('No regression in existing defaults', () => {
     it("sweep.cronSchedule default is still '0 9,21 * * *'", async () => {
       expect(await getSetting('sweep.cronSchedule')).toBe('0 9,21 * * *');
