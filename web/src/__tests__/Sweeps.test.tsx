@@ -138,6 +138,45 @@ describe('Sweeps', () => {
     });
   });
 
+  it('both action buttons are disabled when a sweep is currently running', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation(
+      mockBy({
+        '/sweeps': {
+          sweeps: [
+            {
+              id: 99,
+              startedAt: new Date().toISOString(),
+              durationMs: 1234,
+              status: 'running',
+              pagesFetched: 1,
+              detailsFetched: 0,
+              newListings: 0,
+              updatedListings: 0,
+              errorCount: 0,
+            },
+          ],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        },
+        '/circuit': { open: false },
+      }),
+    );
+
+    const router = createMemoryRouter([{ path: '/', element: <Sweeps /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Run sweep now/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Run smoke/i })).toBeDisabled();
+    });
+  });
+
   it('shows the circuit-breaker banner with reset button when circuit is open', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockImplementation(

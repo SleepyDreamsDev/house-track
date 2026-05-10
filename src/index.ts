@@ -21,7 +21,7 @@ import { applyPostFilter, parseIndex } from './parse-index.js';
 import { Persistence } from './persist.js';
 import { resolveActiveFilter } from './filter-resolver.js';
 import { getSetting } from './settings.js';
-import { runSweep, type SweepDeps } from './sweep.js';
+import { findInProgressSweep, runSweep, type SweepDeps } from './sweep.js';
 import { createApiApp } from './web/server.js';
 
 // Cron schedule + frequency are settings-driven at runtime; this is the
@@ -143,6 +143,11 @@ async function inQuietHours(): Promise<boolean> {
 async function tick(): Promise<void> {
   if (await inQuietHours()) {
     log.info({ event: 'tick.skipped', reason: 'quiet_hours' });
+    return;
+  }
+  const activeSweepId = await findInProgressSweep(prisma);
+  if (activeSweepId !== null) {
+    log.info({ event: 'tick.skipped', reason: 'sweep_in_progress', activeSweepId });
     return;
   }
   const deps = await buildDeps();
