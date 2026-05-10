@@ -26,6 +26,7 @@ interface OverviewResponse {
 
 interface BestBuyRow {
   id: string;
+  url: string;
   title: string;
   district: string;
   type: string;
@@ -45,6 +46,7 @@ interface BestBuyRow {
 
 interface PriceDropRow {
   id: string;
+  url: string;
   title: string;
   district: string;
   type: string;
@@ -58,30 +60,56 @@ interface PriceDropRow {
 interface AnalyticsFilters {
   q: string | undefined;
   maxPrice: number | undefined;
-  district: string | undefined;
+  districts: string[];
   type: string | undefined;
   rooms: number | undefined;
 }
 
+type ParsedFilters = { ok: true; filters: AnalyticsFilters } | { ok: false; error: string };
+
 // Unified filter parsing for all three analytics routes. Mirrors Listings'
 // /api/listings query params so an operator can carry a Listings filter view
 // over to Analytics and see the same slice. `region` is accepted as a legacy
-// alias for `district` (the previous /analytics/best-buys + /price-drops
-// param name) so old saved URLs keep working without a 400.
-function parseAnalyticsFilters(c: Context): AnalyticsFilters {
+// alias for `district` so old saved URLs keep working without a 400.
+//
+// Returns a discriminated union so callers can 400 on a present-but-empty
+// district parameter (`?district=`, `?district=,,,`, `?district=%20`) — that
+// shape would otherwise collapse to an empty array and silently widen the
+// query to "all districts", masking an operator-side bug.
+function parseAnalyticsFilters(c: Context): ParsedFilters {
   const q = c.req.query('q') || undefined;
   const maxPriceRaw = c.req.query('maxPrice');
   const maxPrice = maxPriceRaw ? Number.parseInt(maxPriceRaw, 10) : undefined;
-  const district = c.req.query('district') || c.req.query('region') || undefined;
+  // Accept both `?district=A,B` and `?district=A&district=B`. The first form
+  // is what the UI emits; the second is more natural for hand-written URLs
+  // and external callers. queries() returns undefined when the param is
+  // absent and an array (possibly with one or more entries) when present.
+  const districtParams = c.req.queries('district') ?? c.req.queries('region');
+  let districts: string[] = [];
+  if (districtParams !== undefined) {
+    districts = districtParams
+      .flatMap((raw) => raw.split(','))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (districts.length === 0) {
+      return {
+        ok: false,
+        error: 'district query parameter is empty or whitespace-only',
+      };
+    }
+  }
   const type = c.req.query('type') || undefined;
   const roomsRaw = c.req.query('rooms');
   const rooms = roomsRaw ? Number.parseInt(roomsRaw, 10) : undefined;
   return {
-    q,
-    maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
-    district,
-    type,
-    rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
+    ok: true,
+    filters: {
+      q,
+      maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
+      districts,
+      type,
+      rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
+    },
   };
 }
 
@@ -90,9 +118,17 @@ function parseAnalyticsFilters(c: Context): AnalyticsFilters {
 // applied post-fetch because translating to ILIKE patterns is brittle for
 // Romanian diacritics like "vilă".
 function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
+  if (!Array.isArray(f.districts)) {
+    throw new TypeError('AnalyticsFilters.districts must be an array');
+  }
   const where: Prisma.ListingWhereInput = { active: true };
   if (f.maxPrice != null) where.priceEur = { lte: f.maxPrice };
-  if (f.district) where.district = f.district;
+  const [only] = f.districts;
+  if (f.districts.length === 1 && only !== undefined) {
+    where.district = only;
+  } else if (f.districts.length > 1) {
+    where.district = { in: f.districts };
+  }
   if (f.rooms != null) where.rooms = f.rooms;
   // Mirrors searchListings (src/mcp/queries.ts) — case-insensitive title contains.
   if (f.q) where.title = { contains: f.q, mode: 'insensitive' };
@@ -134,7 +170,9 @@ function relativeWhen(from: Date, now: Date): string {
 analyticsRouter.get('/analytics/overview', async (c) => {
   const prisma = getPrisma();
   const now = new Date();
-  const filters = parseAnalyticsFilters(c);
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
   const baseWhere = buildListingWhere(filters);
 
   const allActive = await prisma.listing.findMany({
@@ -328,13 +366,16 @@ analyticsRouter.get('/analytics/overview', async (c) => {
 
 analyticsRouter.get('/analytics/best-buys', async (c) => {
   const prisma = getPrisma();
-  const filters = parseAnalyticsFilters(c);
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
   const baseWhere = buildListingWhere(filters);
 
   const listingsRaw = await prisma.listing.findMany({
     where: baseWhere,
     select: {
       id: true,
+      url: true,
       title: true,
       priceEur: true,
       areaSqm: true,
@@ -393,6 +434,7 @@ analyticsRouter.get('/analytics/best-buys', async (c) => {
 
     return {
       id: l.id,
+      url: l.url,
       title: l.title,
       district: l.district as string,
       type: deriveType(l.title),
@@ -423,7 +465,9 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
     return c.json({ error: 'invalid period' }, 400);
   }
   const days = allowed[period] as number;
-  const filters = parseAnalyticsFilters(c);
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
   const baseWhere = buildListingWhere(filters);
 
   const now = new Date();
@@ -433,6 +477,7 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
     where: baseWhere,
     select: {
       id: true,
+      url: true,
       title: true,
       district: true,
       snapshots: {
@@ -456,6 +501,7 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
 
     rows.push({
       id: l.id,
+      url: l.url,
       title: l.title,
       district: l.district ?? '',
       type: deriveType(l.title),

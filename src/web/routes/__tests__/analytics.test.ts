@@ -641,4 +641,250 @@ describe('Analytics routes', () => {
       expect(ids).not.toContain('pd-botanica');
     });
   });
+
+  describe('Multi-district filter', () => {
+    const seedThreeDistricts = async () => {
+      const now = new Date();
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'md-centru',
+            url: 'https://999.md/md-centru',
+            title: 'Casă Centru',
+            priceEur: 120_000,
+            areaSqm: 90,
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'md-botanica',
+            url: 'https://999.md/md-botanica',
+            title: 'Casă Botanica',
+            priceEur: 130_000,
+            areaSqm: 95,
+            rooms: 3,
+            district: 'Botanica',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'md-buiucani',
+            url: 'https://999.md/md-buiucani',
+            title: 'Casă Buiucani',
+            priceEur: 140_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Buiucani',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+        ],
+      });
+    };
+
+    it('best-buys: ?district=Centru,Botanica returns the union, excludes the third district', async () => {
+      await seedThreeDistricts();
+      const res = await app.request('/api/analytics/best-buys?district=Centru,Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      const ids = body.map((r) => r.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+      expect(ids).not.toContain('md-buiucani');
+    });
+
+    it('best-buys: tolerates whitespace and empty fragments — `Centru , ,Botanica` → union', async () => {
+      await seedThreeDistricts();
+      const res = await app.request(
+        `/api/analytics/best-buys?district=${encodeURIComponent('Centru , ,Botanica')}`,
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      const ids = body.map((r) => r.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+    });
+
+    it('best-buys: ?district=A&district=B (repeated param form) returns the union', async () => {
+      await seedThreeDistricts();
+      const res = await app.request('/api/analytics/best-buys?district=Centru&district=Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      const ids = body.map((r) => r.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+    });
+
+    it('best-buys: legacy `?region=Centru,Botanica` alias returns the union', async () => {
+      await seedThreeDistricts();
+      const res = await app.request('/api/analytics/best-buys?region=Centru,Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as BestBuyRow[];
+      const ids = body.map((r) => r.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+    });
+
+    it('overview: ?district=Centru,Botanica narrows activeInventory to those two districts', async () => {
+      await seedThreeDistricts();
+      const res = await app.request('/api/analytics/overview?district=Centru,Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as OverviewResponse;
+      expect(body.kpis.activeInventory).toBe(2);
+    });
+
+    it('price-drops: ?district=Centru,Botanica returns the union, excludes the third district', async () => {
+      const now = new Date();
+      const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+      const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'mpd-centru',
+            url: 'https://999.md/mpd-centru',
+            title: 'Casă Centru',
+            priceEur: 90_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: sixDaysAgo,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'mpd-botanica',
+            url: 'https://999.md/mpd-botanica',
+            title: 'Casă Botanica',
+            priceEur: 90_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Botanica',
+            active: true,
+            firstSeenAt: sixDaysAgo,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'mpd-buiucani',
+            url: 'https://999.md/mpd-buiucani',
+            title: 'Casă Buiucani',
+            priceEur: 90_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Buiucani',
+            active: true,
+            firstSeenAt: sixDaysAgo,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+        ],
+      });
+      await prisma.listingSnapshot.createMany({
+        data: [
+          { listingId: 'mpd-centru', capturedAt: sixDaysAgo, priceEur: 100_000, rawHtmlHash: 'a1' },
+          { listingId: 'mpd-centru', capturedAt: fiveDaysAgo, priceEur: 90_000, rawHtmlHash: 'a2' },
+          {
+            listingId: 'mpd-botanica',
+            capturedAt: sixDaysAgo,
+            priceEur: 100_000,
+            rawHtmlHash: 'b1',
+          },
+          {
+            listingId: 'mpd-botanica',
+            capturedAt: fiveDaysAgo,
+            priceEur: 90_000,
+            rawHtmlHash: 'b2',
+          },
+          {
+            listingId: 'mpd-buiucani',
+            capturedAt: sixDaysAgo,
+            priceEur: 100_000,
+            rawHtmlHash: 'c1',
+          },
+          {
+            listingId: 'mpd-buiucani',
+            capturedAt: fiveDaysAgo,
+            priceEur: 90_000,
+            rawHtmlHash: 'c2',
+          },
+        ],
+      });
+      const res = await app.request('/api/analytics/price-drops?district=Centru,Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as PriceDropRow[];
+      const ids = body.map((r) => r.id).sort();
+      expect(ids).toEqual(['mpd-botanica', 'mpd-centru']);
+    });
+
+    it('rejects `?district=` (present but empty) with 400 instead of silently returning all', async () => {
+      await seedThreeDistricts();
+      const res = await app.request('/api/analytics/best-buys?district=');
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects `?district=,,,` (whitespace-only after split) with 400', async () => {
+      await seedThreeDistricts();
+      const res = await app.request('/api/analytics/overview?district=,,,');
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('Response shape', () => {
+    it('best-buys rows expose `url` so the frontend can link to the source listing', async () => {
+      const now = new Date();
+      await prisma.listing.create({
+        data: {
+          id: 'url-row',
+          url: 'https://999.md/url-row',
+          title: 'Casă with URL',
+          priceEur: 100_000,
+          areaSqm: 100,
+          rooms: 3,
+          district: 'Centru',
+          active: true,
+          firstSeenAt: now,
+          lastSeenAt: now,
+          lastFetchedAt: now,
+        },
+      });
+      const res = await app.request('/api/analytics/best-buys');
+      const body = (await res.json()) as Array<BestBuyRow & { url?: string }>;
+      expect(body[0]?.url).toBe('https://999.md/url-row');
+    });
+
+    it('price-drops rows expose `url`', async () => {
+      const now = new Date();
+      const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+      const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+      await prisma.listing.create({
+        data: {
+          id: 'url-drop',
+          url: 'https://999.md/url-drop',
+          title: 'Casă drop URL',
+          priceEur: 90_000,
+          areaSqm: 100,
+          rooms: 3,
+          district: 'Centru',
+          active: true,
+          firstSeenAt: sixDaysAgo,
+          lastSeenAt: now,
+          lastFetchedAt: now,
+        },
+      });
+      await prisma.listingSnapshot.createMany({
+        data: [
+          { listingId: 'url-drop', capturedAt: sixDaysAgo, priceEur: 100_000, rawHtmlHash: 'u1' },
+          { listingId: 'url-drop', capturedAt: fiveDaysAgo, priceEur: 90_000, rawHtmlHash: 'u2' },
+        ],
+      });
+      const res = await app.request('/api/analytics/price-drops');
+      const body = (await res.json()) as Array<PriceDropRow & { url?: string }>;
+      expect(body[0]?.url).toBe('https://999.md/url-drop');
+    });
+  });
 });

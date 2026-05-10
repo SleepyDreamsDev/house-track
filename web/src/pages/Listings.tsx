@@ -51,7 +51,14 @@ export const Listings: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState('');
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
-  const [district, setDistrict] = useState('all');
+  // Empty array == "All districts". Multiple values send `district=A,B` to the
+  // backend, which compiles to a SQL `IN (...)` clause (see searchListings).
+  const [districtsRaw, setDistrictsRaw] = useState<string[]>([]);
+  // De-dupe at the setter so any future entry point (URL hydration, "select
+  // all", paste-from-saved-filter) can't produce duplicate chips that the
+  // SQL IN clause would silently collapse.
+  const setDistricts = (next: string[]) => setDistrictsRaw(Array.from(new Set(next)));
+  const districts = districtsRaw;
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
@@ -65,7 +72,7 @@ export const Listings: React.FC = () => {
   });
   const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
   const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
-  const districts = facets?.districts ?? [];
+  const districtOptions = facets?.districts ?? [];
   // If the server's max is below the slider's current position, clamp down.
   useEffect(() => {
     if (facets && maxPrice > priceMax) setMaxPrice(priceMax);
@@ -97,17 +104,21 @@ export const Listings: React.FC = () => {
 
   // Reset to page 0 whenever any filter changes — page N may not exist for the
   // new query (smaller result set).
+  const districtsKey = districts.join(',');
   useEffect(() => {
     setPage(0);
-  }, [q, maxPrice, district, sort, firstSeenAfter, lastFetchedAfter]);
+  }, [q, maxPrice, districtsKey, sort, firstSeenAfter, lastFetchedAfter]);
 
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
-    queryKey: ['listings', { q, maxPrice, district, sort, page, firstSeenAfter, lastFetchedAfter }],
+    queryKey: [
+      'listings',
+      { q, maxPrice, districtsKey, sort, page, firstSeenAfter, lastFetchedAfter },
+    ],
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
       if (maxPrice < priceMax) p.append('maxPrice', String(maxPrice));
-      if (district !== 'all') p.append('district', district);
+      if (districts.length > 0) p.append('district', districts.join(','));
       if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       if (lastFetchedAfter) p.append('lastFetchedAfter', lastFetchedAfter);
       p.append('sort', sort);
@@ -203,25 +214,48 @@ export const Listings: React.FC = () => {
               />
             </div>
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
-                District
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                  District
+                </span>
+                {districts.length > 0 && (
+                  <button
+                    onClick={() => setDistricts([])}
+                    className="text-[11px] text-neutral-500 hover:text-neutral-800"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
               <div className="space-y-0.5">
                 <button
-                  onClick={() => setDistrict('all')}
-                  className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${district === 'all' ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                  onClick={() => setDistricts([])}
+                  aria-pressed={districts.length === 0}
+                  className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${districts.length === 0 ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
                 >
                   All districts
                 </button>
-                {districts.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setDistrict(d)}
-                    className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${district === d ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
-                  >
-                    {d}
-                  </button>
-                ))}
+                {districtOptions.map((d) => {
+                  const active = districts.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      onClick={() =>
+                        setDistricts(active ? districts.filter((x) => x !== d) : [...districts, d])
+                      }
+                      aria-pressed={active}
+                      className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors ${active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                    >
+                      <span
+                        className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border ${active ? 'border-white bg-white text-neutral-900' : 'border-neutral-300 bg-white'}`}
+                        aria-hidden
+                      >
+                        {active && <span className="text-[10px] leading-none">✓</span>}
+                      </span>
+                      <span>{d}</span>
+                    </button>
+                  );
+                })}
                 {!facets && (
                   <p className="px-2 py-1.5 text-xs text-neutral-400">Loading districts…</p>
                 )}

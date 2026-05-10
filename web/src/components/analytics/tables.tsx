@@ -52,7 +52,16 @@ export const BestBuysTable: React.FC<{
           <td className="py-1.5">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-mono text-[11px] text-neutral-400">{r.id.slice(-4)}</span>
-              <span className="truncate text-neutral-800 max-w-[220px]">{r.title}</span>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="truncate text-neutral-800 max-w-[220px] hover:text-teal-700 hover:underline"
+                title={r.title}
+              >
+                {r.title}
+              </a>
               {r.priceDrop && <Badge variant="warning">drop</Badge>}
             </div>
           </td>
@@ -137,7 +146,16 @@ export const PriceDropsTable: React.FC<{
           <td className="py-1.5">
             <div className="flex items-center gap-2">
               <span className="font-mono text-[11px] text-neutral-400">{r.id.slice(-4)}</span>
-              <span className="truncate text-neutral-800 max-w-[220px]">{r.title}</span>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="truncate text-neutral-800 max-w-[220px] hover:text-teal-700 hover:underline"
+                title={r.title}
+              >
+                {r.title}
+              </a>
             </div>
           </td>
           {!compact && (

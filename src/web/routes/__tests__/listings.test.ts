@@ -702,6 +702,112 @@ describe('GET /api/listings', () => {
     });
   });
 
+  describe('multi-district filter', () => {
+    beforeEach(async () => {
+      const now = new Date();
+      await prisma.listing.createMany({
+        data: [
+          {
+            id: 'md-centru',
+            url: 'https://999.md/md-centru',
+            title: 'Casă Centru',
+            priceEur: 100_000,
+            areaSqm: 90,
+            rooms: 3,
+            district: 'Centru',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'md-botanica',
+            url: 'https://999.md/md-botanica',
+            title: 'Casă Botanica',
+            priceEur: 110_000,
+            areaSqm: 95,
+            rooms: 3,
+            district: 'Botanica',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+          {
+            id: 'md-buiucani',
+            url: 'https://999.md/md-buiucani',
+            title: 'Casă Buiucani',
+            priceEur: 120_000,
+            areaSqm: 100,
+            rooms: 3,
+            district: 'Buiucani',
+            active: true,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            lastFetchedAt: now,
+          },
+        ],
+      });
+    });
+
+    it('?district=Centru,Botanica returns the union, excludes the third district', async () => {
+      const res = await app.request('/api/listings?district=Centru,Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        listings: Array<{ id: string; district: string }>;
+        total: number;
+      };
+      const ids = body.listings.map((l) => l.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+      expect(body.total).toBe(2);
+    });
+
+    it('?district=A&district=B (repeated param form) returns the union', async () => {
+      const res = await app.request('/api/listings?district=Centru&district=Botanica');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        listings: Array<{ id: string }>;
+        total: number;
+      };
+      const ids = body.listings.map((l) => l.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+      expect(body.total).toBe(2);
+    });
+
+    it('?district=Centru (single value) preserves length-1 fast path', async () => {
+      const res = await app.request('/api/listings?district=Centru');
+      const body = (await res.json()) as {
+        listings: Array<{ id: string }>;
+        total: number;
+      };
+      expect(body.listings.map((l) => l.id)).toEqual(['md-centru']);
+      expect(body.total).toBe(1);
+    });
+
+    it('tolerates whitespace and empty fragments — `Centru , ,Botanica` → union', async () => {
+      const res = await app.request(
+        `/api/listings?district=${encodeURIComponent('Centru , ,Botanica')}`,
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        listings: Array<{ id: string }>;
+        total: number;
+      };
+      const ids = body.listings.map((l) => l.id).sort();
+      expect(ids).toEqual(['md-botanica', 'md-centru']);
+    });
+
+    it('rejects `?district=` (present but empty) with 400', async () => {
+      const res = await app.request('/api/listings?district=');
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects `?district=,,,` (whitespace-only after split) with 400', async () => {
+      const res = await app.request('/api/listings?district=,,,');
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('GET /api/listings/facets', () => {
     interface FacetsResponse {
       total: number;

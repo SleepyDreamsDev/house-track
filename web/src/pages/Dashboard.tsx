@@ -45,11 +45,11 @@ interface CircuitState {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { data: newToday } = useQuery<Listing[]>({
+  const { data: newToday, isError: newTodayError } = useQuery<Listing[]>({
     queryKey: ['newToday'],
     queryFn: () => apiCall('/listings/new-today'),
   });
-  const { data: drops } = useQuery<Listing[]>({
+  const { data: drops, isError: dropsError } = useQuery<Listing[]>({
     queryKey: ['drops'],
     queryFn: () => apiCall('/listings/price-drops'),
   });
@@ -125,7 +125,7 @@ export const Dashboard: React.FC = () => {
           <div>
             <SectionHeader
               title="New today"
-              hint={`${newToday?.length ?? 0} listings`}
+              hint={newTodayError ? 'failed to load' : `${newToday?.length ?? 0} listings`}
               right={
                 <Button size="sm" variant="ghost" onClick={() => navigate('/listings')}>
                   View all listings →
@@ -133,22 +133,55 @@ export const Dashboard: React.FC = () => {
               }
             />
             <div className="space-y-2">
-              {(newToday ?? []).map((l) => (
-                <LeadRow key={l.id} listing={l} kind="new" />
-              ))}
-              {newToday && newToday.length === 0 && (
+              {newTodayError ? (
                 <Card>
-                  <p className="text-sm text-neutral-400 text-center">No new listings yet today</p>
+                  <p className="text-sm text-error text-center">
+                    Failed to load new listings. Check the crawler logs and try again.
+                  </p>
                 </Card>
+              ) : (
+                <>
+                  {(newToday ?? []).map((l) => (
+                    <LeadRow key={l.id} listing={l} kind="new" />
+                  ))}
+                  {newToday && newToday.length === 0 && (
+                    <Card>
+                      <p className="text-sm text-neutral-400 text-center">
+                        No new listings yet today
+                      </p>
+                    </Card>
+                  )}
+                </>
               )}
             </div>
           </div>
           <div>
-            <SectionHeader title="Price drops" hint={`${drops?.length ?? 0} this week`} />
+            <SectionHeader
+              title="Price drops"
+              hint={dropsError ? 'failed to load' : `${drops?.length ?? 0} this week`}
+            />
             <div className="space-y-2">
-              {(drops ?? []).map((l) => (
-                <LeadRow key={l.id} listing={l} kind="drop" />
-              ))}
+              {dropsError ? (
+                <Card>
+                  <p className="text-sm text-error text-center">
+                    Failed to load price drops. Check the crawler logs and try again.
+                  </p>
+                </Card>
+              ) : (
+                <>
+                  {(drops ?? []).map((l) => (
+                    <LeadRow key={l.id} listing={l} kind="drop" />
+                  ))}
+                  {drops && drops.length === 0 && (
+                    <Card>
+                      <p className="text-sm text-neutral-400 text-center">
+                        No price drops ≥5% in the last 7 days — needs two snapshots of the same
+                        listing at different prices.
+                      </p>
+                    </Card>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

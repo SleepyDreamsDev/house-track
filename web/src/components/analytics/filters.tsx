@@ -35,6 +35,56 @@ export const FilterGroupVertical: React.FC<{
   </div>
 );
 
+// Empty `values` means "all" — same sentinel as the rest of the rail.
+export const MultiSelectGroupVertical: React.FC<{
+  label: string;
+  values: string[];
+  setValues: (v: string[]) => void;
+  options: string[];
+}> = ({ label, values, setValues, options }) => {
+  const allActive = values.length === 0;
+  const toggle = (o: string) => {
+    if (values.includes(o)) setValues(values.filter((v) => v !== o));
+    else setValues([...values, o]);
+  };
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        <button
+          onClick={() => setValues([])}
+          className={`rounded-md px-2 py-1 text-[12px] ring-1 ring-inset ${
+            allActive
+              ? 'bg-neutral-900 text-white ring-neutral-900'
+              : 'bg-white text-neutral-700 ring-neutral-200 hover:bg-neutral-50'
+          }`}
+        >
+          All
+        </button>
+        {options.map((o) => {
+          const active = values.includes(o);
+          return (
+            <button
+              key={o}
+              onClick={() => toggle(o)}
+              aria-pressed={active}
+              className={`rounded-md px-2 py-1 text-[12px] ring-1 ring-inset ${
+                active
+                  ? 'bg-neutral-900 text-white ring-neutral-900'
+                  : 'bg-white text-neutral-700 ring-neutral-200 hover:bg-neutral-50'
+              }`}
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const Segmented: React.FC<{
   options: string[];
   value: string;
@@ -89,8 +139,8 @@ export interface AnalyticsFilterRailProps {
   setQ: (v: string) => void;
   maxPrice: number;
   setMaxPrice: (v: number) => void;
-  district: string;
-  setDistrict: (v: string) => void;
+  districts: string[];
+  setDistricts: (v: string[]) => void;
   type: string;
   setType: (v: string) => void;
   rooms: string;
@@ -112,8 +162,8 @@ export const AnalyticsFilterRail: React.FC<AnalyticsFilterRailProps> = ({
   setQ,
   maxPrice,
   setMaxPrice,
-  district,
-  setDistrict,
+  districts,
+  setDistricts,
   type,
   setType,
   rooms,
@@ -123,7 +173,7 @@ export const AnalyticsFilterRail: React.FC<AnalyticsFilterRailProps> = ({
 }) => {
   const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
   const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
-  const districts = facets?.districts ?? [];
+  const districtOptions = facets?.districts ?? [];
   const types = facets?.types ?? [];
   const buckets = bucketsFromFacets(facets?.roomsValues ?? []);
 
@@ -161,11 +211,11 @@ export const AnalyticsFilterRail: React.FC<AnalyticsFilterRailProps> = ({
           aria-label="Max price"
         />
       </div>
-      <FilterGroupVertical
+      <MultiSelectGroupVertical
         label="District"
-        value={district}
-        setValue={setDistrict}
-        options={districts}
+        values={districts}
+        setValues={setDistricts}
+        options={districtOptions}
       />
       <FilterGroupVertical label="Property type" value={type} setValue={setType} options={types} />
       <FilterGroupVertical label="Rooms" value={rooms} setValue={setRooms} options={buckets} />

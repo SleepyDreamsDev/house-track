@@ -33,7 +33,9 @@ export interface SearchListingsInput {
   maxRooms?: number | undefined;
   minAreaSqm?: number | undefined;
   maxAreaSqm?: number | undefined;
-  district?: string | undefined;
+  /** Single district, or comma-separated list, or array. Compiles to a SQL
+   *  `IN (...)` when more than one value is supplied. */
+  district?: string | string[] | undefined;
   filters?:
     | Array<{ filterId?: number | undefined; featureId: number; optionIds: number[] }>
     | undefined;
@@ -180,7 +182,16 @@ export async function searchListings(
   if (input.minAreaSqm !== undefined || input.maxAreaSqm !== undefined) {
     where['areaSqm'] = rangeWhere(input.minAreaSqm, input.maxAreaSqm);
   }
-  if (input.district) where['district'] = input.district;
+  if (input.district) {
+    const list = Array.isArray(input.district)
+      ? input.district
+      : input.district
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+    if (list.length === 1) where['district'] = list[0];
+    else if (list.length > 1) where['district'] = { in: list };
+  }
   if (input.q) where['title'] = { contains: input.q, mode: 'insensitive' };
   if (input.firstSeenAfter) where['firstSeenAt'] = { gte: new Date(input.firstSeenAfter) };
   if (input.lastFetchedAfter) {

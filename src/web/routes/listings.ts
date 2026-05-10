@@ -19,7 +19,22 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     const maxAreaSqm = c.req.query('maxAreaSqm')
       ? parseFloat(c.req.query('maxAreaSqm')!)
       : undefined;
-    const district = c.req.query('district');
+    // Accept `?district=A,B` and `?district=A&district=B`. Reject the
+    // present-but-empty shape (`?district=`, `?district=,,,`, `?district=%20`)
+    // with 400 — otherwise it silently widens to "all districts" and masks
+    // an operator-side bug.
+    const districtParams = c.req.queries('district');
+    let district: string | undefined;
+    if (districtParams !== undefined) {
+      const parts = districtParams
+        .flatMap((raw) => raw.split(','))
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (parts.length === 0) {
+        return c.json({ error: 'district query parameter is empty or whitespace-only' }, 400);
+      }
+      district = parts.join(',');
+    }
     const sort = c.req.query('sort') as 'newest' | 'price' | 'eurm2' | undefined;
     const q = c.req.query('q');
     const flags = c.req.query('flags');
