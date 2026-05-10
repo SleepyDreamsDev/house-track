@@ -127,7 +127,9 @@ describe('Settings', () => {
     politenessSettings.forEach((setting) => {
       expect(setting.group).toBe('Politeness');
       expect(setting.kind).toBe('number');
-      expect(setting.unit).toBe('ms');
+      // The base/jitter/detail delays are milliseconds; the soft-throttle keys
+      // are a multiplier (×) and a duration (min). All are numeric tunables.
+      expect(['ms', '×', 'min']).toContain(setting.unit);
     });
   });
 
@@ -139,7 +141,10 @@ describe('Settings', () => {
     const sweepSettings = results.filter((s) => s.key.startsWith('sweep.'));
     sweepSettings.forEach((setting) => {
       expect(setting.group).toBe('Sweep');
-      expect(['number', 'text']).toContain(setting.kind);
+      // 'select' covers sweep.mode (legacy/two_tier), the others are
+      // numbers/text. Keep this list narrow — a stray 'tags' or other novel
+      // kind should still fail the assertion.
+      expect(['number', 'text', 'select']).toContain(setting.kind);
     });
   });
 
