@@ -20,8 +20,22 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       ? parseFloat(c.req.query('maxAreaSqm')!)
       : undefined;
     // district may be a single value or comma-separated list ("Centru,Botanica");
-    // searchListings splits + builds an `IN (...)` clause when >1 value.
-    const district = c.req.query('district');
+    // searchListings splits + builds an `IN (...)` clause when >1 value. If the
+    // param is present but parses to zero non-empty entries (`?district=`,
+    // `?district=,,,`, `?district=%20`), reject with 400 — otherwise we'd
+    // silently widen to "all districts" and mask an operator-side bug.
+    const districtRaw = c.req.query('district');
+    let district: string | undefined;
+    if (districtRaw !== undefined) {
+      const parts = districtRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (parts.length === 0) {
+        return c.json({ error: 'district query parameter is empty or whitespace-only' }, 400);
+      }
+      district = parts.join(',');
+    }
     const sort = c.req.query('sort') as 'newest' | 'price' | 'eurm2' | undefined;
     const q = c.req.query('q');
     const flags = c.req.query('flags');

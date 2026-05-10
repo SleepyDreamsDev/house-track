@@ -65,31 +65,47 @@ interface AnalyticsFilters {
   rooms: number | undefined;
 }
 
+type ParsedFilters = { ok: true; filters: AnalyticsFilters } | { ok: false; error: string };
+
 // Unified filter parsing for all three analytics routes. Mirrors Listings'
 // /api/listings query params so an operator can carry a Listings filter view
 // over to Analytics and see the same slice. `region` is accepted as a legacy
-// alias for `district` (the previous /analytics/best-buys + /price-drops
-// param name) so old saved URLs keep working without a 400.
-function parseAnalyticsFilters(c: Context): AnalyticsFilters {
+// alias for `district` so old saved URLs keep working without a 400.
+//
+// Returns a discriminated union so callers can 400 on a present-but-empty
+// district parameter (`?district=`, `?district=,,,`, `?district=%20`) — that
+// shape would otherwise collapse to an empty array and silently widen the
+// query to "all districts", masking an operator-side bug.
+function parseAnalyticsFilters(c: Context): ParsedFilters {
   const q = c.req.query('q') || undefined;
   const maxPriceRaw = c.req.query('maxPrice');
   const maxPrice = maxPriceRaw ? Number.parseInt(maxPriceRaw, 10) : undefined;
-  const districtRaw = c.req.query('district') || c.req.query('region') || '';
-  // Accept single ("Centru") or comma-separated ("Centru,Botanica") values.
-  // Older saved URLs with `?region=Centru` keep working via the alias above.
-  const districts = districtRaw
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const districtRaw = c.req.query('district') ?? c.req.query('region');
+  let districts: string[] = [];
+  if (districtRaw !== undefined) {
+    districts = districtRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (districts.length === 0) {
+      return {
+        ok: false,
+        error: 'district query parameter is empty or whitespace-only',
+      };
+    }
+  }
   const type = c.req.query('type') || undefined;
   const roomsRaw = c.req.query('rooms');
   const rooms = roomsRaw ? Number.parseInt(roomsRaw, 10) : undefined;
   return {
-    q,
-    maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
-    districts,
-    type,
-    rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
+    ok: true,
+    filters: {
+      q,
+      maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
+      districts,
+      type,
+      rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
+    },
   };
 }
 
@@ -147,7 +163,9 @@ function relativeWhen(from: Date, now: Date): string {
 analyticsRouter.get('/analytics/overview', async (c) => {
   const prisma = getPrisma();
   const now = new Date();
-  const filters = parseAnalyticsFilters(c);
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
   const baseWhere = buildListingWhere(filters);
 
   const allActive = await prisma.listing.findMany({
@@ -341,7 +359,9 @@ analyticsRouter.get('/analytics/overview', async (c) => {
 
 analyticsRouter.get('/analytics/best-buys', async (c) => {
   const prisma = getPrisma();
-  const filters = parseAnalyticsFilters(c);
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
   const baseWhere = buildListingWhere(filters);
 
   const listingsRaw = await prisma.listing.findMany({
@@ -438,7 +458,9 @@ analyticsRouter.get('/analytics/price-drops', async (c) => {
     return c.json({ error: 'invalid period' }, 400);
   }
   const days = allowed[period] as number;
-  const filters = parseAnalyticsFilters(c);
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
   const baseWhere = buildListingWhere(filters);
 
   const now = new Date();
