@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge.js';
 import { Input } from '@/components/ui/Input.js';
 import { PhotoPlaceholder } from '@/components/ui/PhotoPlaceholder.js';
 import { PageHeader } from '@/components/ui/PageHeader.js';
+import { ListingsTable } from '@/components/listings/ListingsTable.js';
 import { apiCall } from '@/lib/api.js';
 import { fmt } from '@/lib/format.js';
 
@@ -60,6 +61,7 @@ export const Listings: React.FC = () => {
   const setDistricts = (next: string[]) => setDistrictsRaw(Array.from(new Set(next)));
   const districts = districtsRaw;
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
+  const [view, setView] = useState<'cards' | 'table'>('cards');
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
 
@@ -265,17 +267,40 @@ export const Listings: React.FC = () => {
         </Card>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1 rounded-sm bg-neutral-100 p-0.5">
-              {(['newest', 'price', 'eurm2'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSort(s)}
-                  className={`rounded-sm px-3 py-1 text-xs font-medium transition-colors ${sort === s ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400'}`}
-                >
-                  {s === 'newest' ? 'Newest' : s === 'price' ? 'Price ↑' : '€/m² ↑'}
-                </button>
-              ))}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div
+                className="flex gap-1 rounded-sm bg-neutral-100 p-0.5"
+                role="tablist"
+                aria-label="Sort"
+              >
+                {(['newest', 'price', 'eurm2'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSort(s)}
+                    className={`rounded-sm px-3 py-1 text-xs font-medium transition-colors ${sort === s ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400'}`}
+                  >
+                    {s === 'newest' ? 'Newest' : s === 'price' ? 'Price ↑' : '€/m² ↑'}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="flex gap-1 rounded-sm bg-neutral-100 p-0.5"
+                role="tablist"
+                aria-label="View"
+              >
+                {(['cards', 'table'] as const).map((v) => (
+                  <button
+                    key={v}
+                    role="tab"
+                    aria-selected={view === v}
+                    onClick={() => setView(v)}
+                    className={`rounded-sm px-3 py-1 text-xs font-medium transition-colors ${view === v ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400'}`}
+                  >
+                    {v === 'cards' ? 'Cards' : 'Table'}
+                  </button>
+                ))}
+              </div>
             </div>
             <span className="text-xs text-neutral-400">
               {data?.listings?.length ?? 0} of {total} · page {page + 1} of {pageCount}
@@ -284,15 +309,23 @@ export const Listings: React.FC = () => {
 
           {isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
           {error && <p className="text-sm text-error">Error loading listings</p>}
-          {data?.listings?.map((l) => (
-            <ListingCard
-              key={l.id}
-              l={l}
-              selected={selectedId === l.id}
-              autoScroll={highlightId === l.id}
-              onSelect={() => setSelectedId((cur) => (cur === l.id ? null : l.id))}
+          {view === 'cards' &&
+            data?.listings?.map((l) => (
+              <ListingCard
+                key={l.id}
+                l={l}
+                selected={selectedId === l.id}
+                autoScroll={highlightId === l.id}
+                onSelect={() => setSelectedId((cur) => (cur === l.id ? null : l.id))}
+              />
+            ))}
+          {view === 'table' && data?.listings && (
+            <ListingsTable
+              rows={data.listings}
+              selectedId={selectedId}
+              onRowClick={(r) => setSelectedId((cur) => (cur === r.id ? null : r.id))}
             />
-          ))}
+          )}
 
           {total > PAGE_SIZE && (
             <div className="flex items-center justify-between pt-2">
