@@ -49,6 +49,55 @@ describe('Listings', () => {
     expect(screen.getByText('€/m² ↑')).toBeInTheDocument();
   });
 
+  it('exposes a Cards/Table view toggle with Cards selected by default', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const cardsTab = await screen.findByRole('tab', { name: 'Cards' });
+    const tableTab = screen.getByRole('tab', { name: 'Table' });
+    expect(cardsTab).toHaveAttribute('aria-selected', 'true');
+    expect(tableTab).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('switching to Table view renders the sortable listings table', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockResolvedValue({
+      listings: [
+        {
+          id: 'h-1',
+          url: 'https://example.test/1',
+          title: 'Casă Buiucani',
+          priceEur: 150000,
+          areaSqm: 110,
+          rooms: 3,
+          district: 'Buiucani',
+          firstSeenAt: new Date().toISOString(),
+        },
+      ],
+      total: 1,
+    });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: 'Table' }));
+    expect(await screen.findByTestId('listings-table')).toBeInTheDocument();
+    expect(screen.getByText('Casă Buiucani')).toBeInTheDocument();
+  });
+
   it('renders listing cards from API data', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockResolvedValue({

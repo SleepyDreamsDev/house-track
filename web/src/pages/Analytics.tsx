@@ -320,19 +320,28 @@ const OverviewPanel: React.FC<{
   );
 };
 
+const BEST_BUY_PRESETS: Record<string, { key: string; dir: 'asc' | 'desc' }> = {
+  Score: { key: 'score', dir: 'desc' },
+  Discount: { key: 'discount', dir: 'desc' },
+  Newest: { key: 'daysOnMkt', dir: 'asc' },
+  '€/m²': { key: 'eurPerSqm', dir: 'asc' },
+};
+
 const BestBuysPanel: React.FC<{
   rows: BestBuyRow[];
   railProps: Omit<RailProps, 'extraSlot'>;
 }> = ({ rows, railProps }) => {
-  const [sort, setSort] = useState('Score');
-  const sorted = useMemo(() => {
-    const s = [...rows];
-    if (sort === 'Discount') s.sort((a, b) => b.discount - a.discount);
-    else if (sort === '€/m²') s.sort((a, b) => a.eurPerSqm - b.eurPerSqm);
-    else if (sort === 'Newest') s.sort((a, b) => a.daysOnMkt - b.daysOnMkt);
-    else s.sort((a, b) => b.score - a.score);
-    return s;
-  }, [rows, sort]);
+  const [columnSort, setColumnSort] = useState<{ key: string; dir: 'asc' | 'desc' }>(
+    BEST_BUY_PRESETS.Score!,
+  );
+  const sort =
+    Object.entries(BEST_BUY_PRESETS).find(
+      ([, p]) => p.key === columnSort.key && p.dir === columnSort.dir,
+    )?.[0] ?? '';
+  const setSort = (label: string) => {
+    const preset = BEST_BUY_PRESETS[label];
+    if (preset) setColumnSort(preset);
+  };
 
   const strongCandidates = rows.filter((r) => r.discount >= 15).length;
   const belowMedian = rows.filter((r) => r.discount >= 5).length;
@@ -372,7 +381,7 @@ const BestBuysPanel: React.FC<{
 
         <Card>
           <SectionHeader
-            title={`Best options to buy now — ${sorted.length} of ${rows.length}`}
+            title={`Best options to buy now — ${rows.length}`}
             hint="ranked by composite score"
             right={
               <div className="flex items-center gap-2 text-[12px]">
@@ -385,11 +394,17 @@ const BestBuysPanel: React.FC<{
               </div>
             }
           />
-          <BestBuysTable rows={sorted} fullCols />
+          <BestBuysTable rows={rows} fullCols sort={columnSort} onSortChange={setColumnSort} />
         </Card>
       </div>
     </div>
   );
+};
+
+const PRICE_DROP_PRESETS: Record<string, { key: string; dir: 'asc' | 'desc' }> = {
+  '% drop': { key: 'dropPct', dir: 'desc' },
+  '€ drop': { key: 'dropEur', dir: 'desc' },
+  Newest: { key: 'when', dir: 'asc' },
 };
 
 const PriceDropsPanel: React.FC<{
@@ -398,14 +413,17 @@ const PriceDropsPanel: React.FC<{
   period: DropPeriod;
   setPeriod: (v: DropPeriod) => void;
 }> = ({ rows, railProps, period, setPeriod }) => {
-  const [sort, setSort] = useState('% drop');
-  const sorted = useMemo(() => {
-    const s = [...rows];
-    if (sort === '€ drop') s.sort((a, b) => b.dropEur - a.dropEur);
-    else if (sort === 'Newest') s.sort((a, b) => parseInt(a.when) - parseInt(b.when));
-    else s.sort((a, b) => b.dropPct - a.dropPct);
-    return s;
-  }, [rows, sort]);
+  const [columnSort, setColumnSort] = useState<{ key: string; dir: 'asc' | 'desc' }>(
+    PRICE_DROP_PRESETS['% drop']!,
+  );
+  const sort =
+    Object.entries(PRICE_DROP_PRESETS).find(
+      ([, p]) => p.key === columnSort.key && p.dir === columnSort.dir,
+    )?.[0] ?? '';
+  const setSort = (label: string) => {
+    const preset = PRICE_DROP_PRESETS[label];
+    if (preset) setColumnSort(preset);
+  };
 
   const totalCutK = rows.length ? Math.round(rows.reduce((s, r) => s + r.dropEur, 0) / 1000) : 0;
   const thisWeek = rows.filter((r) => parseInt(r.when) <= 7).length;
@@ -452,7 +470,7 @@ const PriceDropsPanel: React.FC<{
 
         <Card>
           <SectionHeader
-            title={`Recent price drops — ${sorted.length} of ${rows.length}`}
+            title={`Recent price drops — ${rows.length}`}
             hint="last 30 days · ranked"
             right={
               <div className="flex items-center gap-2 text-[12px]">
@@ -465,7 +483,7 @@ const PriceDropsPanel: React.FC<{
               </div>
             }
           />
-          <PriceDropsTable rows={sorted} fullCols />
+          <PriceDropsTable rows={rows} fullCols sort={columnSort} onSortChange={setColumnSort} />
         </Card>
       </div>
     </div>
