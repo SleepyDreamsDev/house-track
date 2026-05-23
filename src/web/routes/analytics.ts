@@ -61,6 +61,7 @@ interface AnalyticsFilters {
   q: string | undefined;
   maxPrice: number | undefined;
   districts: string[];
+  sectors: string[];
   type: string | undefined;
   rooms: number | undefined;
 }
@@ -98,6 +99,17 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
       };
     }
   }
+  const sectorParams = c.req.queries('sector');
+  let sectors: string[] = [];
+  if (sectorParams !== undefined) {
+    sectors = sectorParams
+      .flatMap((raw) => raw.split(','))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (sectors.length === 0) {
+      return { ok: false, error: 'sector query parameter is empty or whitespace-only' };
+    }
+  }
   const type = c.req.query('type') || undefined;
   const roomsRaw = c.req.query('rooms');
   const rooms = roomsRaw ? Number.parseInt(roomsRaw, 10) : undefined;
@@ -107,6 +119,7 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
       q,
       maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
       districts,
+      sectors,
       type,
       rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
     },
@@ -129,6 +142,9 @@ function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
   } else if (f.districts.length > 1) {
     where.district = { in: f.districts };
   }
+  const [onlySector] = f.sectors;
+  if (f.sectors.length === 1 && onlySector !== undefined) where.sector = onlySector;
+  else if (f.sectors.length > 1) where.sector = { in: f.sectors };
   if (f.rooms != null) where.rooms = f.rooms;
   // Mirrors searchListings (src/mcp/queries.ts) — case-insensitive title contains.
   if (f.q) where.title = { contains: f.q, mode: 'insensitive' };
