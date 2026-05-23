@@ -22,6 +22,8 @@ function makeProps(overrides: Partial<AnalyticsFilterRailProps> = {}): Analytics
     setMaxPrice: vi.fn(),
     districts: [],
     setDistricts: vi.fn(),
+    sectors: [],
+    setSectors: vi.fn(),
     type: 'all',
     setType: vi.fn(),
     rooms: 'all',

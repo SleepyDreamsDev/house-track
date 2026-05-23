@@ -47,6 +47,7 @@ interface FilterState {
   q: string;
   maxPrice: number;
   districts: string[];
+  sectors: string[];
   type: string;
   rooms: string;
 }
@@ -59,6 +60,7 @@ function buildQueryParams(state: FilterState, priceMax: number): URLSearchParams
   if (state.q) p.set('q', state.q);
   if (state.maxPrice < priceMax) p.set('maxPrice', String(state.maxPrice));
   if (state.districts.length > 0) p.set('district', state.districts.join(','));
+  if (state.sectors.length > 0) p.set('sector', state.sectors.join(','));
   if (state.type !== 'all') p.set('type', state.type);
   if (state.rooms !== 'all') {
     const values = bucketToRoomsValues(state.rooms as RoomsBucket);
@@ -76,6 +78,7 @@ export const Analytics: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
   const [maxPriceTouched, setMaxPriceTouched] = useState(false);
   const [districts, setDistricts] = useState<string[]>([]);
+  const [sectors, setSectors] = useState<string[]>([]);
   const [type, setType] = useState('all');
   const [rooms, setRooms] = useState('all');
   const [dropPeriod, setDropPeriod] = useState<DropPeriod>('30d');
@@ -102,12 +105,13 @@ export const Analytics: React.FC = () => {
     setMaxPrice(v);
   };
 
-  const filterState: FilterState = { q, maxPrice, districts, type, rooms };
+  const filterState: FilterState = { q, maxPrice, districts, sectors, type, rooms };
   const districtsKey = districts.join(',');
+  const sectorsKey = sectors.join(',');
   const queryParams = useMemo(
     () => buildQueryParams(filterState, priceMax).toString(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [q, maxPrice, districtsKey, type, rooms, priceMax],
+    [q, maxPrice, districtsKey, sectorsKey, type, rooms, priceMax],
   );
 
   const overviewQ = useQuery<OverviewResponse>({
@@ -144,6 +148,8 @@ export const Analytics: React.FC = () => {
     setMaxPrice: handleSetMaxPrice,
     districts,
     setDistricts,
+    sectors,
+    setSectors,
     type,
     setType,
     rooms,

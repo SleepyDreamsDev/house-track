@@ -132,6 +132,7 @@ export interface AnalyticsFacets {
   types: string[];
   roomsValues: number[];
   price: { min: number | null; max: number | null };
+  sectors?: { name: string; count: number }[];
 }
 
 export interface AnalyticsFilterRailProps {
@@ -141,6 +142,8 @@ export interface AnalyticsFilterRailProps {
   setMaxPrice: (v: number) => void;
   districts: string[];
   setDistricts: (v: string[]) => void;
+  sectors: string[];
+  setSectors: (v: string[]) => void;
   type: string;
   setType: (v: string) => void;
   rooms: string;
@@ -164,6 +167,8 @@ export const AnalyticsFilterRail: React.FC<AnalyticsFilterRailProps> = ({
   setMaxPrice,
   districts,
   setDistricts,
+  sectors,
+  setSectors,
   type,
   setType,
   rooms,
@@ -174,6 +179,7 @@ export const AnalyticsFilterRail: React.FC<AnalyticsFilterRailProps> = ({
   const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
   const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
   const districtOptions = facets?.districts ?? [];
+  const sectorOptions = (facets?.sectors ?? []).map((s) => s.name);
   const types = facets?.types ?? [];
   const buckets = bucketsFromFacets(facets?.roomsValues ?? []);
 
@@ -217,6 +223,14 @@ export const AnalyticsFilterRail: React.FC<AnalyticsFilterRailProps> = ({
         setValues={setDistricts}
         options={districtOptions}
       />
+      {sectorOptions.length > 0 && (
+        <MultiSelectGroupVertical
+          label="Sector"
+          values={sectors}
+          setValues={setSectors}
+          options={sectorOptions}
+        />
+      )}
       <FilterGroupVertical label="Property type" value={type} setValue={setType} options={types} />
       <FilterGroupVertical label="Rooms" value={rooms} setValue={setRooms} options={buckets} />
       {extraSlot}
