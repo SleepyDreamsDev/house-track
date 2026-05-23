@@ -1,10 +1,5 @@
-// src/lib/chisinau-sector.ts
-//
-// Best-effort derivation of Chișinău city sectors from listing free text.
-// The 999.md source does NOT subdivide Chișinău (it is one flat locality),
-// so sectors are inferred from street/title/description and are expected to
-// miss — unclassifiable city listings return null ("Unknown"). Communes and
-// non-Chișinău districts always return null.
+// 999.md lists all of Chișinău as one flat locality; sectors must be inferred
+// from free text and are expected to miss — unclassifiable listings return null.
 
 export const CHISINAU_SECTORS = ['Centru', 'Botanica', 'Râșcani', 'Ciocana', 'Buiucani'] as const;
 export type ChisinauSector = (typeof CHISINAU_SECTORS)[number];
@@ -17,7 +12,7 @@ const KEYWORDS: ReadonlyArray<readonly [RegExp, ChisinauSector]> = [
   [/r[âîi]șcani|riscani|rascani/i, 'Râșcani'],
   [/ciocana/i, 'Ciocana'],
   [/buiucani/i, 'Buiucani'],
-  [/telecentru|centru/i, 'Centru'],
+  [/telecentru|\bcentru\b/i, 'Centru'],
 ];
 
 // Well-known neighborhoods/streets with no sector word in them. Best-effort,

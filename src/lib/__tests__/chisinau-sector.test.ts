@@ -24,6 +24,10 @@ describe('deriveSector', () => {
     expect(deriveSector({ ...base, street: 'str. Nuferilor', title: 'Casă, 49 m²' })).toBeNull();
   });
 
+  it('does not match centru inside a larger word', () => {
+    expect(deriveSector({ ...base, description: 'aproape de centrul vechi' })).toBeNull();
+  });
+
   it('A commune listing is never assigned a sector', () => {
     expect(
       deriveSector({ district: 'Durlești', street: 'str. Centru', title: null, description: null }),
