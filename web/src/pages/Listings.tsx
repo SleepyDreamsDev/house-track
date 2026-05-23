@@ -43,6 +43,7 @@ const PRICE_MIN_FALLBACK = 0;
 interface ListingsFacets {
   total: number;
   districts: string[];
+  sectors?: { name: string; count: number }[];
   price: { min: number | null; max: number | null };
   rooms: { min: number | null; max: number | null };
   areaSqm: { min: number | null; max: number | null };
@@ -60,6 +61,9 @@ export const Listings: React.FC = () => {
   // SQL IN clause would silently collapse.
   const setDistricts = (next: string[]) => setDistrictsRaw(Array.from(new Set(next)));
   const districts = districtsRaw;
+  const [sectorsRaw, setSectorsRaw] = useState<string[]>([]);
+  const setSectors = (next: string[]) => setSectorsRaw(Array.from(new Set(next)));
+  const sectors = sectorsRaw;
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [page, setPage] = useState(0);
@@ -75,6 +79,7 @@ export const Listings: React.FC = () => {
   const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
   const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
   const districtOptions = facets?.districts ?? [];
+  const sectorOptions = facets?.sectors ?? [];
   // If the server's max is below the slider's current position, clamp down.
   useEffect(() => {
     if (facets && maxPrice > priceMax) setMaxPrice(priceMax);
@@ -107,20 +112,22 @@ export const Listings: React.FC = () => {
   // Reset to page 0 whenever any filter changes — page N may not exist for the
   // new query (smaller result set).
   const districtsKey = districts.join(',');
+  const sectorsKey = sectors.join(',');
   useEffect(() => {
     setPage(0);
-  }, [q, maxPrice, districtsKey, sort, firstSeenAfter, lastFetchedAfter]);
+  }, [q, maxPrice, districtsKey, sectorsKey, sort, firstSeenAfter, lastFetchedAfter]);
 
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
     queryKey: [
       'listings',
-      { q, maxPrice, districtsKey, sort, page, firstSeenAfter, lastFetchedAfter },
+      { q, maxPrice, districtsKey, sectorsKey, sort, page, firstSeenAfter, lastFetchedAfter },
     ],
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
       if (maxPrice < priceMax) p.append('maxPrice', String(maxPrice));
       if (districts.length > 0) p.append('district', districts.join(','));
+      if (sectors.length > 0) p.append('sector', sectors.join(','));
       if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       if (lastFetchedAfter) p.append('lastFetchedAfter', lastFetchedAfter);
       p.append('sort', sort);
@@ -263,6 +270,38 @@ export const Listings: React.FC = () => {
                 )}
               </div>
             </div>
+            {sectorOptions.length > 0 && (
+              <div className="mt-4">
+                <div className="mb-1.5 flex justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                    Sector
+                  </span>
+                  {sectors.length > 0 && (
+                    <button
+                      className="text-[11px] text-neutral-500 hover:text-neutral-900"
+                      onClick={() => setSectors([])}
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+                {sectorOptions.map(({ name }) => {
+                  const active = sectors.includes(name);
+                  return (
+                    <button
+                      key={name}
+                      aria-pressed={active}
+                      onClick={() =>
+                        setSectors(active ? sectors.filter((x) => x !== name) : [...sectors, name])
+                      }
+                      className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </Card>
 
