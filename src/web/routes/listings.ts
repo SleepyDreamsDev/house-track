@@ -35,6 +35,18 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       }
       district = parts.join(',');
     }
+    const sectorParams = c.req.queries('sector');
+    let sector: string | undefined;
+    if (sectorParams !== undefined) {
+      const parts = sectorParams
+        .flatMap((raw) => raw.split(','))
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (parts.length === 0) {
+        return c.json({ error: 'sector query parameter is empty or whitespace-only' }, 400);
+      }
+      sector = parts.join(',');
+    }
     const sort = c.req.query('sort') as 'newest' | 'price' | 'eurm2' | undefined;
     const q = c.req.query('q');
     const flags = c.req.query('flags');
@@ -51,6 +63,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       minAreaSqm,
       maxAreaSqm,
       district,
+      sector,
       sort,
       q,
       flags,

@@ -36,6 +36,8 @@ export interface SearchListingsInput {
   /** Single district, or comma-separated list, or array. Compiles to a SQL
    *  `IN (...)` when more than one value is supplied. */
   district?: string | string[] | undefined;
+  /** Single sector, comma-separated list, or array. Compiles to SQL IN(...). */
+  sector?: string | string[] | undefined;
   filters?:
     | Array<{ filterId?: number | undefined; featureId: number; optionIds: number[] }>
     | undefined;
@@ -191,6 +193,16 @@ export async function searchListings(
           .filter(Boolean);
     if (list.length === 1) where['district'] = list[0];
     else if (list.length > 1) where['district'] = { in: list };
+  }
+  if (input.sector) {
+    const list = Array.isArray(input.sector)
+      ? input.sector
+      : input.sector
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+    if (list.length === 1) where['sector'] = list[0];
+    else if (list.length > 1) where['sector'] = { in: list };
   }
   if (input.q) where['title'] = { contains: input.q, mode: 'insensitive' };
   if (input.firstSeenAfter) where['firstSeenAt'] = { gte: new Date(input.firstSeenAfter) };
