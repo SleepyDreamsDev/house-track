@@ -37,6 +37,7 @@ model Listing {
   areaSqm     Float?
   landSqm     Float? // houses have land
   district    String? // raw value from breadcrumb/filter
+  sector      String? // derived Chișinău city sector; null for communes + unclassified
   street      String?
   floors      Int? // for houses: number of floors
   yearBuilt   Int?
@@ -56,6 +57,7 @@ model Listing {
   @@index([priceEur])
   @@index([watchlist, lastFetchedAt]) // tiered-refresh rotation key
   @@index([active, lastFetchedAt]) // stale-rotation picker
+  @@index([sector])
 }
 
 // One row per filter triple observed on a listing's detail response.
