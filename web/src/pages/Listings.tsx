@@ -271,9 +271,9 @@ export const Listings: React.FC = () => {
               </div>
             </div>
             {sectorOptions.length > 0 && (
-              <div className="mt-4">
+              <div className="mt-4" data-testid="sector-filter">
                 <div className="mb-1.5 flex justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
                     Sector
                   </span>
                   {sectors.length > 0 && (
@@ -281,25 +281,29 @@ export const Listings: React.FC = () => {
                       className="text-[11px] text-neutral-500 hover:text-neutral-900"
                       onClick={() => setSectors([])}
                     >
-                      clear
+                      Clear
                     </button>
                   )}
                 </div>
-                {sectorOptions.map(({ name }) => {
-                  const active = sectors.includes(name);
-                  return (
-                    <button
-                      key={name}
-                      aria-pressed={active}
-                      onClick={() =>
-                        setSectors(active ? sectors.filter((x) => x !== name) : [...sectors, name])
-                      }
-                      className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
-                    >
-                      {name}
-                    </button>
-                  );
-                })}
+                <div className="space-y-0.5">
+                  {sectorOptions.map(({ name }) => {
+                    const active = sectors.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        aria-pressed={active}
+                        onClick={() =>
+                          setSectors(
+                            active ? sectors.filter((x) => x !== name) : [...sectors, name],
+                          )
+                        }
+                        className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
