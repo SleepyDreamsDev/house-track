@@ -67,6 +67,21 @@ describe('GET /api/listings?sector=', () => {
     expect(ids).toEqual(['s-botanica', 's-centru']);
   });
 
+  it('filters to multiple sectors via repeated query params', async () => {
+    await seedListing('s-centru', 'Centru');
+    await seedListing('s-botanica', 'Botanica');
+    await seedListing('s-ciocana', 'Ciocana');
+
+    const res = await app.request('/api/listings?sector=Centru&sector=Botanica');
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { listings: unknown[]; total: number };
+    expect(body.total).toBe(2);
+    expect(body.listings).toHaveLength(2);
+    const ids = (body.listings as { id: string }[]).map((l) => l.id).sort();
+    expect(ids).toEqual(['s-botanica', 's-centru']);
+  });
+
   it('returns 400 for present-but-empty sector param', async () => {
     const res = await app.request('/api/listings?sector=');
     expect(res.status).toBe(400);

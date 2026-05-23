@@ -36,7 +36,8 @@ export interface SearchListingsInput {
   /** Single district, or comma-separated list, or array. Compiles to a SQL
    *  `IN (...)` when more than one value is supplied. */
   district?: string | string[] | undefined;
-  /** Single sector, comma-separated list, or array. Compiles to SQL IN(...). */
+  /** Single sector, or comma-separated list, or array. Compiles to a SQL
+   *  `IN (...)` when more than one value is supplied. */
   sector?: string | string[] | undefined;
   filters?:
     | Array<{ filterId?: number | undefined; featureId: number; optionIds: number[] }>
