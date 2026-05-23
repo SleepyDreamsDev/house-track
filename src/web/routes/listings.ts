@@ -100,9 +100,19 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     });
     const roomsValues = roomsRows.map((r) => r.rooms).filter((r): r is number => r !== null);
 
+    const sectorRows = await prisma.listing.groupBy({
+      by: ['sector'],
+      where: { active: true, sector: { not: null } },
+      _count: { _all: true },
+    });
+    const sectors = sectorRows
+      .map((r) => ({ name: r.sector as string, count: r._count._all }))
+      .sort((a, b) => b.count - a.count);
+
     return c.json({
       total: aggregates._count,
       districts,
+      ...(sectors.length > 0 ? { sectors } : {}),
       price: { min: aggregates._min.priceEur, max: aggregates._max.priceEur },
       rooms: { min: aggregates._min.rooms, max: aggregates._max.rooms },
       areaSqm: { min: aggregates._min.areaSqm, max: aggregates._max.areaSqm },
