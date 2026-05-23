@@ -4,6 +4,7 @@
 
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { deriveSector } from './lib/chisinau-sector.js';
 import { bootstrapLutFromConfig, type TaxonomyLut } from './parse-taxonomy.js';
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
 
@@ -94,6 +95,12 @@ export class Persistence {
       areaSqm: detail.areaSqm,
       landSqm: detail.landSqm,
       district: detail.district,
+      sector: deriveSector({
+        district: detail.district,
+        street: detail.street,
+        title: detail.title,
+        description: detail.description,
+      }),
       street: detail.street,
       floors: detail.floors,
       yearBuilt: detail.yearBuilt,
