@@ -97,8 +97,16 @@ describe('parseDetail', () => {
     expect(d.yearBuilt).toBeNull();
     expect(d.heatingType).toBeNull();
     expect(d.sellerType).toBeNull();
-    expect(d.postedAt).toBeNull();
+    expect(d.postedAt).toBeNull(); // fixture has no `posted` field
     expect(d.features).toEqual([]);
+  });
+
+  it('Parses postedAt from the advert `posted` date when present', async () => {
+    const json = { data: { advert: { id: ID, title: 'x', posted: '26 apr. 2026, 18:34' } } };
+
+    const d = parseDetail(ID, json);
+
+    expect(d.postedAt).toEqual(new Date(2026, 3, 26, 18, 34, 0, 0));
   });
 
   it('rawHtmlHash is a sha256 hex string and is stable across irrelevant field changes', async () => {

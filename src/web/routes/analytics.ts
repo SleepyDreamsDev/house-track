@@ -4,6 +4,13 @@ import type { Prisma } from '@prisma/client';
 import { getPrisma } from '../../db.js';
 import { deriveType, roomsBucket } from '../../lib/listing-type.js';
 import {
+  DISTRESS_LEXICON,
+  isWeekend,
+  postingHourHistogram,
+  scanDistress,
+  type DistressCategory,
+} from '../../lib/listing-text.js';
+import {
   absorptionMonths,
   iqr,
   median,
@@ -579,6 +586,64 @@ analyticsRouter.get('/analytics/sellers', async (c) => {
     }))
     .sort((x, y) => y.listings - x.listings);
   return c.json(sellers);
+});
+
+// Distress Index (P3): seller-stress gauge from description language (urgency /
+// negotiable / reduced / exchange / installments), plus weekend-delist share
+// (distressed sales close fast) and a posting-hour histogram. Pure-derive over
+// already-stored fields — no capture dependency.
+analyticsRouter.get('/analytics/distress', async (c) => {
+  const prisma = getPrisma();
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
+  const baseWhere = buildListingWhere(filters);
+
+  const active = applyTypeFilter(
+    await prisma.listing.findMany({
+      where: baseWhere,
+      select: { title: true, description: true, postedAt: true, bumpedAt: true },
+    }),
+    filters.type,
+  );
+
+  const signalBreakdown = Object.fromEntries(
+    (Object.keys(DISTRESS_LEXICON) as DistressCategory[]).map((k) => [k, 0]),
+  ) as Record<DistressCategory, number>;
+  let distressedCount = 0;
+  for (const l of active) {
+    const result = scanDistress(l.description);
+    if (result.distressed) distressedCount++;
+    for (const signal of result.signals) signalBreakdown[signal]++;
+  }
+  const distressShare = active.length > 0 ? distressedCount / active.length : 0;
+
+  // Posting cadence — postedAt where known, else the bump timestamp.
+  const times = active.map((l) => l.postedAt ?? l.bumpedAt).filter((d): d is Date => d != null);
+  const postingHour = postingHourHistogram(times);
+
+  // Weekend-delist share over the closed slice (distressed sales clear fast).
+  const closed = applyTypeFilter(
+    await prisma.listing.findMany({
+      where: { ...baseWhere, active: false, delistedAt: { not: null } },
+      select: { title: true, delistedAt: true },
+    }),
+    filters.type,
+  );
+  const weekendDelists = closed.filter(
+    (l) => l.delistedAt != null && isWeekend(l.delistedAt),
+  ).length;
+  const weekendDelistShare = closed.length > 0 ? weekendDelists / closed.length : 0;
+
+  return c.json({
+    activeCount: active.length,
+    distressedCount,
+    distressShare,
+    signalBreakdown,
+    closedCount: closed.length,
+    weekendDelistShare,
+    postingHour,
+  });
 });
 
 analyticsRouter.get('/analytics/best-buys', async (c) => {
