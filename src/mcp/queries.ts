@@ -8,6 +8,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 
+import { classifyListing, type DerivedType } from '../lib/listing-classification.js';
 import { getFeatureLabel, getFilterLabel, getOptionLabel } from '../taxonomy-labels.js';
 
 export interface FilterGroup {
@@ -71,6 +72,10 @@ export interface SearchListingsRow {
   district: string | null;
   firstSeenAt: string;
   lastSeenAt: string;
+  derivedType: DerivedType;
+  typeMismatch: boolean;
+  regionMismatch: boolean;
+  mismatchReasons: string[];
 }
 
 export interface FilterValueRow {
@@ -272,20 +277,31 @@ export async function searchListings(
   const total = await prisma.listing.count({ where });
 
   return {
-    listings: rows.map((r) => ({
-      id: r.id,
-      url: r.url,
-      title: r.title,
-      priceEur: r.priceEur,
-      priceRaw: r.priceRaw,
-      areaSqm: r.areaSqm,
-      rooms: r.rooms,
-      district: r.district,
-      firstSeenAt: r.firstSeenAt.toISOString(),
-      lastSeenAt: r.lastSeenAt.toISOString(),
-      lastFetchedAt: r.lastFetchedAt.toISOString(),
-      watchlist: r.watchlist,
-    })),
+    listings: rows.map((r) => {
+      const cls = classifyListing({
+        title: r.title,
+        description: r.description,
+        district: r.district,
+      });
+      return {
+        id: r.id,
+        url: r.url,
+        title: r.title,
+        priceEur: r.priceEur,
+        priceRaw: r.priceRaw,
+        areaSqm: r.areaSqm,
+        rooms: r.rooms,
+        district: r.district,
+        firstSeenAt: r.firstSeenAt.toISOString(),
+        lastSeenAt: r.lastSeenAt.toISOString(),
+        lastFetchedAt: r.lastFetchedAt.toISOString(),
+        watchlist: r.watchlist,
+        derivedType: cls.derivedType,
+        typeMismatch: cls.typeMismatch,
+        regionMismatch: cls.regionMismatch,
+        mismatchReasons: cls.reasons,
+      };
+    }),
     total,
   };
 }
