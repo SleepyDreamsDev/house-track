@@ -13,7 +13,6 @@ import { CircuitTrippingError } from './fetch.js';
 import type { Logger } from './log.js';
 import type { Persistence, SweepResult } from './persist.js';
 import { AdvertNotFoundError } from './parse-detail.js';
-import type { PostFilter } from './parse-index.js';
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
 
 // Module-level variable tracking the currently active sweep (if any)
@@ -97,8 +96,6 @@ export interface SweepDeps {
   circuit: Pick<Circuit, 'isOpen'>;
   parseIndex: (json: unknown) => ListingStub[];
   parseDetail: (id: string, json: unknown) => ParsedDetail;
-  applyPostFilter?: (stubs: ListingStub[]) => ListingStub[];
-  postFilter?: PostFilter;
   maxPagesPerSweep: number;
   missingThresholdMs: number;
   /** Cap on per-sweep backfill of listings with NULL filterValuesEnrichedAt. 0 disables. */
@@ -142,8 +139,7 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
       'sweep.backfillPerSweep': deps.backfillPerSweep ?? 0,
     };
     const allStubs = await collectIndexStubs(deps, result, controller.signal, sweepId);
-    const stubs = deps.applyPostFilter ? deps.applyPostFilter(allStubs) : allStubs;
-    const diff = await deps.persist.diffAgainstDb(stubs);
+    const diff = await deps.persist.diffAgainstDb(allStubs);
     // Cap detail processing to targetListingsThisSweep — pagination's cap
     // only limits index pages, but a single page yields ~78 stubs which
     // (with seen-stub persist) costs 78×10s. Smoke needs an actual cap on

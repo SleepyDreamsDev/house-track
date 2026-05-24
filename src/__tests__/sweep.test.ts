@@ -360,20 +360,19 @@ describe('runSweep', () => {
     });
   });
 
-  it('applyPostFilter callback runs before diffAgainstDb', async () => {
+  it('allStubs are passed directly to diffAgainstDb (no postFilter)', async () => {
     const env = makeEnv();
     env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
     env.parseIndex.mockReturnValueOnce([stub('A'), stub('B')]);
     env.parseIndex.mockReturnValueOnce([]);
-    env.fetchAdvert.mockResolvedValueOnce(envelope({}));
-    env.parseDetail.mockReturnValueOnce(detail('A'));
-    env.deps.applyPostFilter = (s) => s.filter((x) => x.id === 'A');
+    env.fetchAdvert.mockResolvedValueOnce(envelope({})).mockResolvedValueOnce(envelope({}));
+    env.parseDetail.mockReturnValueOnce(detail('A')).mockReturnValueOnce(detail('B'));
 
     await runSweep(env.deps);
 
     expect(env.diffAgainstDb).toHaveBeenCalledOnce();
-    expect(env.diffAgainstDb.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['A']);
+    expect(env.diffAgainstDb.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['A', 'B']);
   });
 
   describe('JSON column persistence (pagesDetail, detailsDetail, configSnapshot)', () => {

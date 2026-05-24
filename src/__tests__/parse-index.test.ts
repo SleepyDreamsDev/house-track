@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { applyPostFilter, parseIndex } from '../parse-index.js';
+import { parseIndex } from '../parse-index.js';
 
 const FIXTURE_DIR = dirname(fileURLToPath(import.meta.url)) + '/fixtures';
 
@@ -101,49 +101,5 @@ describe('parseIndex', () => {
 
   it('Throws when the response shape is broken (no data.searchAds)', () => {
     expect(() => parseIndex({ errors: ['boom'] })).toThrow();
-  });
-});
-
-describe('applyPostFilter', () => {
-  const make = (id: string, priceEur: number | null, areaSqm: number | null) => ({
-    id,
-    url: `https://999.md/ro/${id}`,
-    title: `t${id}`,
-    priceEur,
-    priceRaw: priceEur === null ? null : `${priceEur} EUR`,
-    areaSqm,
-    postedAt: null,
-  });
-
-  it('Drops listings whose priceEur is over budget', () => {
-    const stubs = [make('A', 100_000, 120), make('B', 300_000, 120)];
-
-    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
-
-    expect(kept.map((s) => s.id)).toEqual(['A']);
-  });
-
-  it('Keeps listings regardless of areaSqm (area is now source-level)', () => {
-    const stubs = [make('A', 100_000, 120), make('B', 100_000, 999)];
-
-    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
-
-    expect(kept.map((s) => s.id)).toEqual(['A', 'B']);
-  });
-
-  it('Keeps listings with null priceEur (currency unknown — let detail decide)', () => {
-    const stubs = [make('A', null, 120)];
-
-    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
-
-    expect(kept.map((s) => s.id)).toEqual(['A']);
-  });
-
-  it('Keeps listings with null areaSqm (no area in title — detail page may have it)', () => {
-    const stubs = [make('A', 100_000, null)];
-
-    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
-
-    expect(kept.map((s) => s.id)).toEqual(['A']);
   });
 });

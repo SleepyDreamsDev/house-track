@@ -17,7 +17,7 @@ import {
 } from './graphql.js';
 import { log } from './log.js';
 import { parseDetail } from './parse-detail.js';
-import { applyPostFilter, parseIndex } from './parse-index.js';
+import { parseIndex } from './parse-index.js';
 import { Persistence } from './persist.js';
 import { resolveActiveFilter } from './filter-resolver.js';
 import { getSetting } from './settings.js';
@@ -82,7 +82,6 @@ async function buildDeps(): Promise<SweepDeps> {
   // intentionally out of scope (next tick picks up the change).
   const resolved = await resolveActiveFilter();
   const searchInputOverride = resolved.searchInput;
-  const postFilterOverride = resolved.postFilter;
 
   return {
     fetchSearchPage: (pageIdx, signal) => {
@@ -109,7 +108,6 @@ async function buildDeps(): Promise<SweepDeps> {
     circuit,
     parseIndex,
     parseDetail,
-    applyPostFilter: (stubs) => applyPostFilter(stubs, postFilterOverride),
     maxPagesPerSweep,
     missingThresholdMs,
     backfillPerSweep,

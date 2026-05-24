@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { FILTER } from '../config.js';
 import { resolveActiveFilter } from '../filter-resolver.js';
 import { setSetting } from '../settings.js';
 import { defaultGenericFilter } from '../types/filter.js';
@@ -27,8 +26,10 @@ describe('resolveActiveFilter', () => {
   it('falls back to the config constant when no setting exists', async () => {
     const resolved = await resolveActiveFilter();
     expect(resolved.sourceSlug).toBe('999md');
-    expect(resolved.searchInput.subCategoryId).toBe(FILTER.searchInput.subCategoryId);
-    expect(resolved.postFilter.maxPriceEur).toBe(FILTER.postFilter.maxPriceEur);
+    expect(resolved.searchInput.subCategoryId).toBe(1406);
+    expect(resolved).not.toHaveProperty('postFilter');
+    const priceGroup = resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceGroup).toBeDefined();
   });
 
   it('reads the persisted generic filter and runs the active source resolve()', async () => {
@@ -42,7 +43,13 @@ describe('resolveActiveFilter', () => {
     };
     await setSetting('filter.generic', customFilter);
     const resolved = await resolveActiveFilter();
-    expect(resolved.postFilter.maxPriceEur).toBe(180_000);
+    expect(resolved).not.toHaveProperty('postFilter');
+    const priceGroup = resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceGroup?.features[0]).toMatchObject({
+      featureId: 2,
+      unit: 'UNIT_EUR',
+      range: { max: '180000' },
+    });
     expect(resolved.searchInput.subCategoryId).toBe(1406);
     expect(resolved.generic.category).toBe('house');
   });
@@ -53,7 +60,9 @@ describe('resolveActiveFilter', () => {
       data: { key: 'filter.generic', valueJson: { not: 'a filter' } },
     });
     const resolved = await resolveActiveFilter();
-    expect(resolved.postFilter.maxPriceEur).toBe(FILTER.postFilter.maxPriceEur);
+    expect(resolved).not.toHaveProperty('postFilter');
+    const priceGroup = resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceGroup).toBeDefined();
     expect(resolved.generic).toEqual(defaultGenericFilter);
   });
 });

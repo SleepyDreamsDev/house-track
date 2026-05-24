@@ -24,18 +24,20 @@ beforeEach(async () => {
 });
 
 describe('GET /api/filter', () => {
-  it('returns the active generic filter, sources list, and resolved input', async () => {
+  it('returns the active generic filter, sources list, and resolved input (no postFilter)', async () => {
     const res = await app.request('/api/filter');
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       generic: unknown;
       sources: Array<{ slug: string; name: string; active: boolean }>;
-      resolved: { searchInput: { subCategoryId: number }; postFilter: Record<string, number> };
+      resolved: { searchInput: { subCategoryId: number; filters: Array<{ filterId: number }> } };
     };
     expect(body.generic).toBeDefined();
     expect(body.sources).toEqual([{ slug: '999md', name: '999.md', active: true }]);
     expect(body.resolved.searchInput.subCategoryId).toBe(1406);
-    expect(body.resolved.postFilter.maxPriceEur).toBe(250_000);
+    expect(body.resolved).not.toHaveProperty('postFilter');
+    const priceEntry = body.resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceEntry).toBeDefined();
   });
 });
 
@@ -56,9 +58,22 @@ describe('PUT /api/filter', () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      resolved: { postFilter: Record<string, number> };
+      resolved: {
+        searchInput: {
+          filters: Array<{
+            filterId: number;
+            features: Array<{ featureId: number; unit?: string; range?: { max?: string } }>;
+          }>;
+        };
+      };
     };
-    expect(body.resolved.postFilter.maxPriceEur).toBe(180_000);
+    expect(body.resolved).not.toHaveProperty('postFilter');
+    const priceEntry = body.resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceEntry?.features[0]).toMatchObject({
+      featureId: 2,
+      unit: 'UNIT_EUR',
+      range: { max: '180000' },
+    });
 
     const re = await app.request('/api/filter');
     const reBody = (await re.json()) as { generic: { category: string } };
