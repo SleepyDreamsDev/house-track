@@ -64,7 +64,7 @@ export const Settings: React.FC = () => {
 
       <div className="grid grid-cols-[200px_1fr] gap-8">
         <nav className="sticky top-0 self-start space-y-0.5 text-sm">
-          {[...Object.keys(groups), 'Sources'].map((g) => (
+          {[...Object.keys(groups), 'Sources', 'Debug'].map((g) => (
             <a
               key={g}
               href={`#${g}`}
@@ -115,9 +115,73 @@ export const Settings: React.FC = () => {
               ))}
             </div>
           </Card>
+
+          <DebugCard />
         </div>
       </div>
     </div>
+  );
+};
+
+interface Seller {
+  authorId: string;
+  authorName: string | null;
+  listings: number;
+  activeListings: number;
+  sellThrough: number;
+}
+
+// Operator debug probe: confirms the captured seller-identity fields are
+// populating after a sweep. /api/analytics/sellers only returns rows once
+// Listing.authorId is set, so an empty result means details haven't been
+// refetched on the latest build yet.
+const DebugCard: React.FC = () => {
+  const check = useMutation<Seller[], Error>({
+    mutationFn: () => apiCall<Seller[]>('/analytics/sellers'),
+  });
+
+  return (
+    <Card id="Debug">
+      <SectionHeader title="Debug" />
+      <div className="space-y-3 py-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Seller-field population check</div>
+            <div className="text-xs text-neutral-400">
+              <code className="font-mono">GET /api/analytics/sellers</code> — confirms{' '}
+              <code className="font-mono">authorId</code> is populating after a sweep
+            </div>
+          </div>
+          <Button size="sm" onClick={() => check.mutate()} disabled={check.isPending}>
+            {check.isPending ? 'Checking…' : 'Run check'}
+          </Button>
+        </div>
+
+        {check.isError && <div className="text-xs text-error">{check.error.message}</div>}
+
+        {check.data &&
+          (check.data.length === 0 ? (
+            <div className="rounded-sm bg-neutral-50 p-3 text-xs text-neutral-500">
+              0 sellers — author identity not populated yet. Run a sweep on the latest build, then
+              re-check.
+            </div>
+          ) : (
+            <div className="space-y-1 rounded-sm bg-neutral-50 p-3 text-xs">
+              <div className="font-medium text-success">
+                {check.data.length} seller{check.data.length === 1 ? '' : 's'} populating ✓
+              </div>
+              <ul className="space-y-0.5 font-mono text-neutral-600">
+                {check.data.slice(0, 5).map((s) => (
+                  <li key={s.authorId}>
+                    {s.authorName ?? s.authorId} — {s.listings} listings,{' '}
+                    {Math.round(s.sellThrough * 100)}% sell-through
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+      </div>
+    </Card>
   );
 };
 
