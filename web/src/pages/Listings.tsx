@@ -156,7 +156,8 @@ export const Listings: React.FC = () => {
     (l) => !hideMislabeled || !(l.typeMismatch || l.regionMismatch),
   );
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const onLastPage = page >= pageCount - 1;
+  // Client-side hide can empty a server page; don't offer "Next" into nothing.
+  const onLastPage = page >= pageCount - 1 || (hideMislabeled && visibleListings.length === 0);
 
   return (
     <div data-screen-label="Listings">

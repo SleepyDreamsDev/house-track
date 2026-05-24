@@ -37,6 +37,14 @@ describe('detectType', () => {
   it('does not match duplex inside a larger word', () => {
     expect(detectType('Casă cu acoperiș duplexat oarecare')).toBe('House');
   });
+
+  it('does not match "downtown house" as a townhouse', () => {
+    expect(detectType('Casă în zona downtown house deschisă')).toBe('House');
+  });
+
+  it('negation survives a longer Romanian phrase', () => {
+    expect(detectType('Casă lângă magazinul mare ce are un townhouse')).toBe('House');
+  });
 });
 
 describe('fold', () => {

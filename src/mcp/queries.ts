@@ -72,6 +72,8 @@ export interface SearchListingsRow {
   district: string | null;
   firstSeenAt: string;
   lastSeenAt: string;
+  lastFetchedAt: string;
+  watchlist: boolean;
   derivedType: DerivedType;
   typeMismatch: boolean;
   regionMismatch: boolean;

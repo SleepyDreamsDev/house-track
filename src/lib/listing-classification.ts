@@ -7,7 +7,8 @@ export type DerivedType = 'House' | 'Villa' | 'Townhouse' | 'Duplex';
 // "townhouse" is reported as the more specific Duplex.
 const TYPE_RULES: ReadonlyArray<readonly [DerivedType, RegExp]> = [
   ['Duplex', /\bduplex\b/i],
-  ['Townhouse', /town\s?house|таунхаус/i],
+  // \b on "town" stops "downtown house" from matching.
+  ['Townhouse', /\btown\s?house\b|таунхаус/i],
   // Trailing lookahead instead of \b: ASCII \b does not fire after "ă".
   ['Villa', /\bvil[aă](?![a-zăâîșț])/i],
 ];
@@ -20,7 +21,8 @@ const NEG_CUE =
 
 function isNegated(textBeforeMatch: string): boolean {
   // Only the immediate run-up matters; a negation 200 chars earlier is noise.
-  return NEG_CUE.test(textBeforeMatch.slice(-25));
+  // 40 chars covers compound Romanian phrases ("lângă … ce are un …").
+  return NEG_CUE.test(textBeforeMatch.slice(-40));
 }
 
 export function detectType(haystack: string): DerivedType {
