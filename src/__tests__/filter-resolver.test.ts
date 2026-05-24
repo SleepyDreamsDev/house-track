@@ -5,6 +5,7 @@ import { FILTER } from '../config.js';
 import { resolveActiveFilter } from '../filter-resolver.js';
 import { setSetting } from '../settings.js';
 import { defaultGenericFilter } from '../types/filter.js';
+import type { GenericFilter } from '../types/filter.js';
 
 let prisma: PrismaClient;
 
@@ -31,11 +32,19 @@ describe('resolveActiveFilter', () => {
   });
 
   it('reads the persisted generic filter and runs the active source resolve()', async () => {
-    await setSetting('filter.generic', { ...defaultGenericFilter, priceMax: 180_000 });
+    const customFilter: GenericFilter = {
+      category: 'house',
+      filters: [
+        { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+        { kind: 'options', filterId: 32, featureId: 7, optionIds: [12900] },
+        { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_EUR', max: '180000' },
+      ],
+    };
+    await setSetting('filter.generic', customFilter);
     const resolved = await resolveActiveFilter();
     expect(resolved.postFilter.maxPriceEur).toBe(180_000);
     expect(resolved.searchInput.subCategoryId).toBe(1406);
-    expect(resolved.generic.priceMax).toBe(180_000);
+    expect(resolved.generic.category).toBe('house');
   });
 
   it('falls back when the persisted setting fails schema validation', async () => {

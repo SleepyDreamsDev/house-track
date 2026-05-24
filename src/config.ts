@@ -36,7 +36,7 @@ export const FILTER = {
   // GraphQL search input for SearchAds operation.
   searchInput: {
     subCategoryId: 1406,
-    source: 'AD_SOURCE_DESKTOP' as const,
+    source: 'AD_SOURCE_DESKTOP_REDESIGN' as const,
     filters: [
       // Sale listings only ("Vând").
       { filterId: 16, features: [{ featureId: 1, optionIds: [776] }] },
@@ -45,11 +45,10 @@ export const FILTER = {
     ],
   },
 
-  // Client-side filters applied AFTER parse-index, since URL-level price/area
-  // params are still unknown. See module header.
+  // Client-side price filter (area is now source-level via range selections).
   postFilter: {
+    minPriceEur: 0,
     maxPriceEur: 250_000,
-    maxAreaSqm: 200,
   },
 
   // Listings per GraphQL page. 78 matches the browser default; keep it.

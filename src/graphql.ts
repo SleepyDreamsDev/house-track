@@ -429,12 +429,17 @@ fragment i18NKeyFragment on I18NKey {
   __typename
 }`;
 
+export type SearchInputFeature =
+  | { featureId: number }
+  | { featureId: number; optionIds: number[] }
+  | { featureId: number; unit?: string; range: { min?: string; max?: string } };
+
 export interface SearchInputOverride {
   subCategoryId: number;
-  source: 'AD_SOURCE_DESKTOP';
+  source: 'AD_SOURCE_DESKTOP' | 'AD_SOURCE_DESKTOP_REDESIGN';
   filters: ReadonlyArray<{
     filterId: number;
-    features: ReadonlyArray<{ featureId: number; optionIds: number[] }>;
+    features: ReadonlyArray<SearchInputFeature>;
   }>;
 }
 
@@ -446,6 +451,7 @@ export function buildSearchVariables(
   return {
     input: {
       ...base,
+      sort: 'SORT_ADS_DATE_DESC',
       pagination: {
         limit: FILTER.pageSize,
         skip: pageIdx * FILTER.pageSize,

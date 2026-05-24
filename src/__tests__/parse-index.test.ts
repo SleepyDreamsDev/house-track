@@ -118,23 +118,23 @@ describe('applyPostFilter', () => {
   it('Drops listings whose priceEur is over budget', () => {
     const stubs = [make('A', 100_000, 120), make('B', 300_000, 120)];
 
-    const kept = applyPostFilter(stubs, { maxPriceEur: 250_000, maxAreaSqm: 200 });
+    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
 
     expect(kept.map((s) => s.id)).toEqual(['A']);
   });
 
-  it('Drops listings whose areaSqm is over the cap', () => {
-    const stubs = [make('A', 100_000, 120), make('B', 100_000, 250)];
+  it('Keeps listings regardless of areaSqm (area is now source-level)', () => {
+    const stubs = [make('A', 100_000, 120), make('B', 100_000, 999)];
 
-    const kept = applyPostFilter(stubs, { maxPriceEur: 250_000, maxAreaSqm: 200 });
+    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
 
-    expect(kept.map((s) => s.id)).toEqual(['A']);
+    expect(kept.map((s) => s.id)).toEqual(['A', 'B']);
   });
 
   it('Keeps listings with null priceEur (currency unknown — let detail decide)', () => {
     const stubs = [make('A', null, 120)];
 
-    const kept = applyPostFilter(stubs, { maxPriceEur: 250_000, maxAreaSqm: 200 });
+    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
 
     expect(kept.map((s) => s.id)).toEqual(['A']);
   });
@@ -142,7 +142,7 @@ describe('applyPostFilter', () => {
   it('Keeps listings with null areaSqm (no area in title — detail page may have it)', () => {
     const stubs = [make('A', 100_000, null)];
 
-    const kept = applyPostFilter(stubs, { maxPriceEur: 250_000, maxAreaSqm: 200 });
+    const kept = applyPostFilter(stubs, { minPriceEur: 0, maxPriceEur: 250_000 });
 
     expect(kept.map((s) => s.id)).toEqual(['A']);
   });

@@ -1,22 +1,24 @@
 import type { GenericFilter } from '../types/filter.js';
 
+export type ResolvedFeature =
+  | { featureId: number }
+  | { featureId: number; optionIds: number[] }
+  | { featureId: number; unit?: string; range: { min?: string; max?: string } };
+
 export interface ResolvedSearchInput {
   subCategoryId: number;
-  source: 'AD_SOURCE_DESKTOP';
+  source: 'AD_SOURCE_DESKTOP' | 'AD_SOURCE_DESKTOP_REDESIGN';
   filters: ReadonlyArray<{
     filterId: number;
-    features: ReadonlyArray<{ featureId: number; optionIds: number[] }>;
+    features: ReadonlyArray<ResolvedFeature>;
   }>;
 }
 
 export interface ResolvedFilter {
   searchInput: ResolvedSearchInput;
-  // Always non-optional — sentinel `Number.MAX_SAFE_INTEGER` denotes "no cap"
-  // so applyPostFilter (which expects a concrete cap pair) doesn't have to
-  // branch on undefined.
   postFilter: {
+    minPriceEur: number;
     maxPriceEur: number;
-    maxAreaSqm: number;
   };
 }
 
