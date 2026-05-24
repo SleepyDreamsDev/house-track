@@ -16,6 +16,8 @@ export interface ListingsTableRow {
   yearBuilt?: number;
   firstSeenAt: string;
   isNew?: boolean;
+  watchlist?: boolean;
+  excluded?: boolean;
 }
 
 const accessors: Accessors<ListingsTableRow> = {
@@ -34,6 +36,8 @@ export interface ListingsTableProps {
   defaultSort?: SortState | null;
   onRowClick?: (r: ListingsTableRow) => void;
   selectedId?: string | null;
+  onToggleFavorite?: (id: string, next: boolean) => void;
+  onToggleExclude?: (id: string, next: boolean) => void;
 }
 
 export const ListingsTable: React.FC<ListingsTableProps> = ({
@@ -41,6 +45,8 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
   defaultSort = { key: 'firstSeenAt', dir: 'desc' },
   onRowClick,
   selectedId,
+  onToggleFavorite,
+  onToggleExclude,
 }) => {
   const { sortedRows, sortKey, sortDir, requestSort } = useSortableTable({
     rows,
@@ -168,15 +174,41 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                   {fmt.rel(r.firstSeenAt)}
                 </td>
                 <td className="py-2 px-3 text-right">
-                  <a
-                    href={r.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="rounded-sm border border-neutral-300 px-2 py-0.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50"
-                  >
-                    Open ↗
-                  </a>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={r.watchlist ? 'Remove favorite' : 'Add favorite'}
+                      title={r.watchlist ? 'Remove favorite' : 'Add favorite'}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavorite?.(r.id, !r.watchlist);
+                      }}
+                      className={`text-base leading-none ${r.watchlist ? 'text-amber-500' : 'text-neutral-300 hover:text-neutral-500'}`}
+                    >
+                      {r.watchlist ? '★' : '☆'}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={r.excluded ? 'Unexclude' : 'Exclude'}
+                      title={r.excluded ? 'Unexclude' : 'Exclude'}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleExclude?.(r.id, !r.excluded);
+                      }}
+                      className={`text-[11px] leading-none rounded-sm border px-1.5 py-0.5 font-medium transition-colors ${r.excluded ? 'border-error/40 bg-error/10 text-error' : 'border-neutral-300 text-neutral-400 hover:border-neutral-400 hover:text-neutral-600'}`}
+                    >
+                      ✕
+                    </button>
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded-sm border border-neutral-300 px-2 py-0.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50"
+                    >
+                      Open ↗
+                    </a>
+                  </div>
                 </td>
               </tr>
             );
