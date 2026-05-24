@@ -9,6 +9,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { classifyListing, type DerivedType } from '../lib/listing-classification.js';
+import { deriveType } from '../lib/listing-type.js';
 import { getFeatureLabel, getFilterLabel, getOptionLabel } from '../taxonomy-labels.js';
 
 export interface FilterGroup {
@@ -56,6 +57,9 @@ export interface SearchListingsInput {
   lastFetchedAfter?: string | undefined;
   favorite?: boolean | undefined;
   includeExcluded?: boolean | undefined;
+  /** Derived property type (deriveType over title). No SQL form, so it's an
+   *  in-memory post-filter; `total` reflects the post-filter count. */
+  type?: string | undefined;
 }
 
 export interface SearchListingsEnvelope {
@@ -243,10 +247,16 @@ export async function searchListings(
     ListingWithSnapshots | Awaited<ReturnType<typeof prisma.listing.findMany>>[number]
   > = [];
 
+  // Derived type has no SQL column (deriveType is a regex over title), so it's
+  // always an in-memory post-filter. Compose it onto whichever fetch path runs.
+  const matchesType = (title: string) => input.type == null || deriveType(title) === input.type;
+
+  let total: number;
   if (input.flags === 'priceDrop') {
     // priceDrop filters AFTER fetching; pagination via offset would skip
     // rows that the post-filter would have dropped. Treat offset as best-
     // effort: applied to the pre-filter query, not the post-filter result.
+    // A `type` filter (if any) composes on top of the drop filter here.
     const rowsWithSnapshots = await prisma.listing.findMany({
       where,
       orderBy: orderBy(input.sort),
@@ -258,6 +268,7 @@ export async function searchListings(
     // Filter by price drop (>= 5% drop in past 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     for (const r of rowsWithSnapshots) {
+      if (!matchesType(r.title)) continue;
       const relevantSnapshots = r.snapshots.filter((s) => s.capturedAt >= sevenDaysAgo);
       if (relevantSnapshots.length < 2) continue; // Need both old and new
 
@@ -272,6 +283,16 @@ export async function searchListings(
         if (drop >= 5) rows.push(r);
       }
     }
+    total = await prisma.listing.count({ where });
+  } else if (input.type) {
+    // Fetch the full where-matched set, classify in memory, then paginate the
+    // filtered result. `total` is the post-filter count so pagination stays
+    // honest. Bounded by the active catalog size.
+    const allMatched = await prisma.listing.findMany({ where, orderBy: orderBy(input.sort) });
+    const typed = allMatched.filter((r) => matchesType(r.title));
+    total = typed.length;
+    const start = input.offset ?? 0;
+    rows.push(...typed.slice(start, start + (input.limit ?? DEFAULT_LIMIT)));
   } else {
     const allRows = await prisma.listing.findMany({
       where,
@@ -280,9 +301,8 @@ export async function searchListings(
       skip: input.offset ?? 0,
     });
     rows.push(...allRows);
+    total = await prisma.listing.count({ where });
   }
-
-  const total = await prisma.listing.count({ where });
 
   return {
     listings: rows.map((r) => {

@@ -91,7 +91,7 @@ export const Dashboard: React.FC = () => {
     <div className="space-y-6" data-screen-label="Dashboard">
       <PageHeader
         title="Dashboard"
-        subtitle={`last sweep ${latestSweep ? fmt.rel(latestSweep.startedAt) : '—'}`}
+        subtitle={`last sweep ${latestSweep?.startedAt ? fmt.rel(latestSweep.startedAt) : '—'}`}
       />
 
       <Card className="!p-0">

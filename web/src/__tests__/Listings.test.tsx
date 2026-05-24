@@ -15,9 +15,22 @@ describe('Listings', () => {
     queryClient.clear();
   });
 
-  it('renders the redesigned Houses page with filter rail', async () => {
+  it('renders the Listings page with the shared filter rail', async () => {
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint.startsWith('/listings/facets')) {
+        return Promise.resolve({
+          total: 1,
+          districts: ['Centru'],
+          price: { min: 50000, max: 200000 },
+          rooms: { min: 1, max: 5 },
+          areaSqm: { min: 30, max: 200 },
+          types: [],
+          roomsValues: [],
+        });
+      }
+      return Promise.resolve({ listings: [], total: 0 });
+    });
 
     const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
     render(
@@ -26,11 +39,12 @@ describe('Listings', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Houses')).toBeInTheDocument();
-    expect(screen.getByText('Search')).toBeInTheDocument();
-    expect(screen.getByText('Max price')).toBeInTheDocument();
-    expect(screen.getByText('District')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Listings' })).toBeInTheDocument();
+    expect(await screen.findByText('Max price')).toBeInTheDocument();
+    expect(screen.getByLabelText('Search listings')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Title, district…')).toBeInTheDocument();
+    // District appears once facets load (rail) and as a table column header.
+    expect(screen.getAllByText('District').length).toBeGreaterThan(0);
   });
 
   it('renders the sort segmented control', async () => {
@@ -174,7 +188,14 @@ describe('Listings', () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockImplementation((endpoint: string) => {
       if (endpoint.startsWith('/listings/facets')) {
-        return Promise.resolve({ total: 2, districts: [], price: {}, rooms: {}, areaSqm: {} });
+        return Promise.resolve({
+          total: 2,
+          districts: [],
+          price: {},
+          rooms: {},
+          areaSqm: {},
+          mislabeledCount: 1,
+        });
       }
       return Promise.resolve({
         listings: [

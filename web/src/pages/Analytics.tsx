@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
@@ -12,12 +12,9 @@ import {
   type OverviewResponse,
   type PriceDropRow,
 } from '@/components/analytics/types.js';
-import {
-  AnalyticsFilterRail,
-  type AnalyticsFacets,
-  Legend,
-  Segmented,
-} from '@/components/analytics/filters.js';
+import { Legend, Segmented } from '@/components/analytics/filters.js';
+import { FilterRail, type FilterFacets } from '@/components/filters/FilterRail.js';
+import { useBrowseFilters, type BrowseFilterState } from '@/lib/useBrowseFilters.js';
 import { BestBuysTable, PriceDropsTable } from '@/components/analytics/tables.js';
 import { MultiLineChart } from '@/components/analytics/MultiLineChart.js';
 import { Heatmap } from '@/components/analytics/Heatmap.js';
@@ -35,27 +32,16 @@ const SUBTITLES: Record<TabId, string> = {
 
 type DropPeriod = '7d' | '30d' | '90d';
 
-interface ListingsFacetsResponse extends AnalyticsFacets {
+interface ListingsFacetsResponse extends FilterFacets {
   total: number;
   rooms: { min: number | null; max: number | null };
   areaSqm: { min: number | null; max: number | null };
 }
 
-const PRICE_MAX_FALLBACK = 250000;
-
-interface FilterState {
-  q: string;
-  maxPrice: number;
-  districts: string[];
-  sectors: string[];
-  type: string;
-  rooms: string;
-}
-
 // Build the query string sent to /api/analytics/* — mirrors the filter set
 // Listings sends to /api/listings, so an operator who narrowed Listings sees
 // the same slice when they switch tabs.
-function buildQueryParams(state: FilterState, priceMax: number): URLSearchParams {
+function buildQueryParams(state: BrowseFilterState, priceMax: number): URLSearchParams {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
   if (state.maxPrice < priceMax) p.set('maxPrice', String(state.maxPrice));
@@ -63,55 +49,37 @@ function buildQueryParams(state: FilterState, priceMax: number): URLSearchParams
   if (state.sectors.length > 0) p.set('sector', state.sectors.join(','));
   if (state.type !== 'all') p.set('type', state.type);
   if (state.rooms !== 'all') {
+    // Bucket → inclusive min/max the backend honors. '5+' is open-ended (no max).
     const values = bucketToRoomsValues(state.rooms as RoomsBucket);
-    // Backend takes a single rooms integer; our buckets like '1–2' span
-    // multiple values. For now send the lowest-value match; future work can
-    // teach the backend to take a range.
-    if (values[0] != null) p.set('rooms', String(values[0]));
+    const min = values[0];
+    const max = values[values.length - 1];
+    if (min != null) p.set('minRooms', String(min));
+    if (state.rooms !== '5+' && max != null) p.set('maxRooms', String(max));
   }
+  if (state.favoritesOnly) p.set('favorite', 'true');
+  if (state.showExcluded) p.set('includeExcluded', 'true');
   return p;
 }
 
 export const Analytics: React.FC = () => {
   const [tab, setTab] = useState<TabId>('overview');
-  const [q, setQ] = useState('');
-  const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
-  const [maxPriceTouched, setMaxPriceTouched] = useState(false);
-  const [districts, setDistricts] = useState<string[]>([]);
-  const [sectors, setSectors] = useState<string[]>([]);
-  const [type, setType] = useState('all');
-  const [rooms, setRooms] = useState('all');
   const [dropPeriod, setDropPeriod] = useState<DropPeriod>('30d');
 
   const { data: facets } = useQuery<ListingsFacetsResponse>({
     queryKey: ['listings-facets'],
     queryFn: () => apiCall<ListingsFacetsResponse>('/listings/facets'),
   });
-  const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
 
-  // While the user hasn't touched the slider, mirror the facets-derived
-  // catalog max. This serves two needs: (a) on a fresh page, no maxPrice
-  // param is sent (slider is at max → buildQueryParams omits it), and
-  // (b) if the catalog max shrinks below our fallback, the slider clamps
-  // down. Once the user moves the slider, maxPriceTouched locks state so
-  // facets refreshes can't yank their selection.
-  useEffect(() => {
-    if (!facets || maxPriceTouched) return;
-    if (maxPrice !== priceMax) setMaxPrice(priceMax);
-  }, [facets, priceMax, maxPriceTouched, maxPrice]);
+  const filters = useBrowseFilters(facets);
+  const { state, priceMax } = filters;
+  const { q, maxPrice, districts, sectors, type, rooms, favoritesOnly, showExcluded } = state;
 
-  const handleSetMaxPrice = (v: number) => {
-    setMaxPriceTouched(true);
-    setMaxPrice(v);
-  };
-
-  const filterState: FilterState = { q, maxPrice, districts, sectors, type, rooms };
   const districtsKey = districts.join(',');
   const sectorsKey = sectors.join(',');
   const queryParams = useMemo(
-    () => buildQueryParams(filterState, priceMax).toString(),
+    () => buildQueryParams(state, priceMax).toString(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [q, maxPrice, districtsKey, sectorsKey, type, rooms, priceMax],
+    [q, maxPrice, districtsKey, sectorsKey, type, rooms, favoritesOnly, showExcluded, priceMax],
   );
 
   const overviewQ = useQuery<OverviewResponse>({
@@ -141,19 +109,25 @@ export const Analytics: React.FC = () => {
     enabled: tab === 'price-drops',
   });
 
+  // Analytics omits hideMislabeled — the FilterRail then hides that toggle
+  // (it filters rendered rows, which only the Listings view has).
   const railProps = {
     q,
-    setQ,
+    setQ: filters.setQ,
     maxPrice,
-    setMaxPrice: handleSetMaxPrice,
+    setMaxPrice: filters.setMaxPrice,
     districts,
-    setDistricts,
+    setDistricts: filters.setDistricts,
     sectors,
-    setSectors,
+    setSectors: filters.setSectors,
     type,
-    setType,
+    setType: filters.setType,
     rooms,
-    setRooms,
+    setRooms: filters.setRooms,
+    favoritesOnly,
+    setFavoritesOnly: filters.setFavoritesOnly,
+    showExcluded,
+    setShowExcluded: filters.setShowExcluded,
     facets,
   };
 
@@ -205,7 +179,7 @@ export const Analytics: React.FC = () => {
   );
 };
 
-type RailProps = Parameters<typeof AnalyticsFilterRail>[0];
+type RailProps = Parameters<typeof FilterRail>[0];
 
 const OverviewPanel: React.FC<{
   data: OverviewResponse | undefined;
@@ -264,7 +238,7 @@ const OverviewPanel: React.FC<{
 
       <div className="grid grid-cols-[260px_1fr] gap-5 mb-5">
         <Card className="self-start">
-          <AnalyticsFilterRail {...railProps} />
+          <FilterRail {...railProps} />
         </Card>
 
         <div className="space-y-5">
@@ -382,7 +356,7 @@ const BestBuysPanel: React.FC<{
 
       <div className="grid grid-cols-[260px_1fr] gap-5">
         <Card className="self-start">
-          <AnalyticsFilterRail {...railProps} />
+          <FilterRail {...railProps} />
         </Card>
 
         <Card>
@@ -471,7 +445,7 @@ const PriceDropsPanel: React.FC<{
 
       <div className="grid grid-cols-[260px_1fr] gap-5">
         <Card className="self-start">
-          <AnalyticsFilterRail {...railProps} extraSlot={periodSlot} />
+          <FilterRail {...railProps} extraSlot={periodSlot} />
         </Card>
 
         <Card>
