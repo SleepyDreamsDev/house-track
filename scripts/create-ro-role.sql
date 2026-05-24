@@ -14,16 +14,28 @@
 
 \set ON_ERROR_STOP on
 
-DO $ht$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'house_track_ro') THEN
-    EXECUTE format('CREATE ROLE house_track_ro LOGIN PASSWORD %L', :'ro_password');
-  ELSE
-    EXECUTE format('ALTER ROLE house_track_ro LOGIN PASSWORD %L', :'ro_password');
-  END IF;
-  EXECUTE format('GRANT CONNECT ON DATABASE %I TO house_track_ro', current_database());
-END
-$ht$;
+-- Fail closed: a missing or empty ro_password would otherwise create the role
+-- with a blank password. Print a hint when it's missing, then abort on empty
+-- via a runtime division-by-zero (ON_ERROR_STOP turns it into a non-zero exit).
+\if :{?ro_password}
+\else
+  \echo 'ERROR: create-ro-role.sql requires -v ro_password=<password>'
+  \set ro_password ''
+\endif
+SELECT 1 / (CASE WHEN :'ro_password' = '' THEN 0 ELSE 1 END) AS _require_ro_password;
+
+-- Create the role only if it doesn't exist (idempotent). psql variables are not
+-- interpolated inside DO $$…$$ blocks, so we drive the conditional CREATE with
+-- \gexec and set the password in a plain ALTER where :'ro_password' expands.
+SELECT 'CREATE ROLE house_track_ro LOGIN'
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'house_track_ro')
+\gexec
+
+ALTER ROLE house_track_ro LOGIN PASSWORD :'ro_password';
+
+-- current_database() isn't a constant, so build the GRANT and \gexec it.
+SELECT format('GRANT CONNECT ON DATABASE %I TO house_track_ro', current_database())
+\gexec
 
 GRANT USAGE ON SCHEMA public TO house_track_ro;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO house_track_ro;
