@@ -4,9 +4,11 @@ export const Toggle: React.FC<{
   checked: boolean;
   disabled?: boolean;
   onChange?: (v: boolean) => void;
-}> = ({ checked, disabled, onChange }) => (
+  'aria-label'?: string;
+}> = ({ checked, disabled, onChange, 'aria-label': ariaLabel }) => (
   <button
     type="button"
+    aria-label={ariaLabel}
     disabled={disabled}
     onClick={() => onChange?.(!checked)}
     className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${

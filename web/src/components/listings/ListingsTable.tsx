@@ -18,6 +18,10 @@ export interface ListingsTableRow {
   isNew?: boolean;
   watchlist?: boolean;
   excluded?: boolean;
+  derivedType?: 'House' | 'Villa' | 'Townhouse' | 'Duplex';
+  typeMismatch?: boolean;
+  regionMismatch?: boolean;
+  mismatchReasons?: string[];
 }
 
 const accessors: Accessors<ListingsTableRow> = {
@@ -149,6 +153,16 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                   <div className="flex items-center gap-2 min-w-0">
                     {r.isNew && <Badge variant="default">NEW</Badge>}
                     {drop !== null && drop > 0 && <Badge variant="warning">−{drop}%</Badge>}
+                    {r.typeMismatch && r.derivedType && (
+                      <Badge variant="warning" title={(r.mismatchReasons ?? []).join('; ')}>
+                        {r.derivedType}
+                      </Badge>
+                    )}
+                    {r.regionMismatch && (
+                      <Badge variant="warning" title={(r.mismatchReasons ?? []).join('; ')}>
+                        Out-of-region: {r.district ?? '?'}
+                      </Badge>
+                    )}
                     <span className="truncate font-medium text-neutral-800" title={r.title}>
                       {r.title}
                     </span>
