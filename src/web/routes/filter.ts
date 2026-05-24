@@ -4,9 +4,15 @@ import { z } from 'zod';
 import { resolveActiveFilter } from '../../filter-resolver.js';
 import { ACTIVE_SOURCE_SLUG, listSources } from '../../sources/index.js';
 import { UnknownGenericFilterValueError } from '../../sources/types.js';
-import { genericFilterSchema } from '../../types/filter.js';
+import { CATEGORIES, genericFilterSchema } from '../../types/filter.js';
+import type { Category } from '../../types/filter.js';
 import { setSetting } from '../../settings.js';
 import { buildTaxonomyResponse } from '../../taxonomy-labels.js';
+
+const CATEGORY_SUBCATEGORY_MAP: Record<Category, number> = {
+  house: 1406,
+  apartment: 1404,
+};
 
 export function registerFilterRoutes(app: Hono): void {
   app.get('/api/filter', async (c) => {
@@ -97,7 +103,20 @@ export function registerFilterRoutes(app: Hono): void {
     );
   });
 
-  app.get('/api/filter/taxonomy', (c) => {
-    return c.json(buildTaxonomyResponse());
+  app.get('/api/filter/taxonomy', async (c) => {
+    const categoryParam = c.req.query('category');
+    let subCategoryId: number;
+
+    if (categoryParam !== undefined && categoryParam !== '') {
+      if (!(CATEGORIES as readonly string[]).includes(categoryParam)) {
+        return c.json({ error: `Unknown category "${categoryParam}"` }, 400);
+      }
+      subCategoryId = CATEGORY_SUBCATEGORY_MAP[categoryParam as Category];
+    } else {
+      const active = await resolveActiveFilter();
+      subCategoryId = CATEGORY_SUBCATEGORY_MAP[active.generic.category];
+    }
+
+    return c.json(buildTaxonomyResponse(subCategoryId));
   });
 }

@@ -26,7 +26,7 @@ import {
 } from '../src/parse-taxonomy.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TAXONOMY_FIXTURE = join(REPO_ROOT, 'src/data/filter-taxonomy.json');
+const TAXONOMY_FIXTURE = join(REPO_ROOT, 'src/data/filter-taxonomy.1406.json');
 
 async function main(): Promise<void> {
   const dryRun = process.argv.includes('--dry-run');

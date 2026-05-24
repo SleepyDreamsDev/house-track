@@ -213,4 +213,32 @@ describe('GET /api/filter/taxonomy', () => {
     expect(price).toBeDefined();
     expect(price?.kind).toBe('range');
   });
+
+  it('?category=house returns house-specific filter 1207 (Stare casă) and not apartment-specific 1191 (Etaj)', async () => {
+    const res = await app.request('/api/filter/taxonomy?category=house');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ filterId: number }>;
+    expect(body.map((e) => e.filterId)).toContain(1207);
+    expect(body.map((e) => e.filterId)).not.toContain(1191);
+  });
+
+  it('?category=apartment returns apartment-specific filter 1191 (Etaj) and not house-specific 1207 (Stare casă)', async () => {
+    const res = await app.request('/api/filter/taxonomy?category=apartment');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ filterId: number }>;
+    expect(body.map((e) => e.filterId)).toContain(1191);
+    expect(body.map((e) => e.filterId)).not.toContain(1207);
+  });
+
+  it('unknown ?category returns 400', async () => {
+    const res = await app.request('/api/filter/taxonomy?category=cottage');
+    expect(res.status).toBe(400);
+  });
+
+  it('no ?category param defaults to house taxonomy (active filter default)', async () => {
+    const res = await app.request('/api/filter/taxonomy');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ filterId: number }>;
+    expect(body.map((e) => e.filterId)).toContain(1207);
+  });
 });

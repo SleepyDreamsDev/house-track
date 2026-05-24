@@ -26,19 +26,48 @@ export const Filter: React.FC = () => {
     queryFn: () => apiCall('/filter'),
   });
 
-  const { data: taxonomy, isLoading: taxonomyLoading } = useQuery<TaxonomyEntry[]>({
-    queryKey: ['filter-taxonomy'],
-    queryFn: () => apiCall('/filter/taxonomy'),
-  });
-
   const [draft, setDraft] = useState<GenericFilter | null>(null);
+  const [droppedCount, setDroppedCount] = useState<number>(0);
+  const [droppedCategory, setDroppedCategory] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+
+  // Use draft.category when available; fall back to saved data.generic.category while draft is null.
+  const taxonomyCategory = draft?.category ?? data?.generic?.category ?? 'house';
+
+  const { data: taxonomy, isLoading: taxonomyLoading } = useQuery<TaxonomyEntry[]>({
+    queryKey: ['filter-taxonomy', taxonomyCategory],
+    queryFn: () => apiCall(`/filter/taxonomy?category=${taxonomyCategory}`),
+  });
 
   useEffect(() => {
     if (data?.generic && draft === null) {
       setDraft(structuredClone(data.generic));
     }
   }, [data, draft]);
+
+  // Reconcile selections when the taxonomy for the draft's category has loaded.
+  // Drop any FilterSelection whose filterId is not present in the current taxonomy.
+  // Only run once taxonomy and draft are both ready, and only when they are in sync
+  // (taxonomyCategory matches draft.category — guards against stale taxonomy mid-flight).
+  useEffect(() => {
+    if (!taxonomy || !draft) return;
+    if (taxonomyCategory !== draft.category) return;
+
+    const validFilterIds = new Set(taxonomy.map((t) => t.filterId));
+    const kept = draft.filters.filter((f) => validFilterIds.has(f.filterId));
+    const dropped = draft.filters.length - kept.length;
+
+    if (dropped > 0) {
+      setDroppedCount(dropped);
+      setDroppedCategory(draft.category);
+      setDraft((prev) => (prev ? { ...prev, filters: kept } : prev));
+    } else {
+      // Clear any stale notice if no drops
+      setDroppedCount(0);
+      setDroppedCategory('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taxonomy, taxonomyCategory]);
 
   const save = useMutation<FilterResponse, Error, GenericFilter>({
     mutationFn: (payload) =>
@@ -173,6 +202,13 @@ export const Filter: React.FC = () => {
 
               <FilterForm taxonomy={taxonomy} draft={draft} onChange={setDraft} />
             </div>
+
+            {droppedCount > 0 && (
+              <div className="mt-2 rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                {droppedCount} filter{droppedCount !== 1 ? 's' : ''} not available for{' '}
+                {droppedCategory}
+              </div>
+            )}
 
             {error && (
               <div className="mt-3 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
