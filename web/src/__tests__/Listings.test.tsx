@@ -49,7 +49,7 @@ describe('Listings', () => {
     expect(screen.getByText('€/m² ↑')).toBeInTheDocument();
   });
 
-  it('exposes a Cards/Table view toggle with Cards selected by default', async () => {
+  it('exposes a Cards/Table view toggle with Table selected by default', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
 
@@ -62,8 +62,8 @@ describe('Listings', () => {
 
     const cardsTab = await screen.findByRole('tab', { name: 'Cards' });
     const tableTab = screen.getByRole('tab', { name: 'Table' });
-    expect(cardsTab).toHaveAttribute('aria-selected', 'true');
-    expect(tableTab).toHaveAttribute('aria-selected', 'false');
+    expect(tableTab).toHaveAttribute('aria-selected', 'true');
+    expect(cardsTab).toHaveAttribute('aria-selected', 'false');
   });
 
   it('switching to Table view renders the sortable listings table', async () => {
