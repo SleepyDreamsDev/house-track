@@ -1,10 +1,10 @@
-export type ListingType = 'House' | 'Villa' | 'Townhouse';
+import { detectType, type DerivedType } from './listing-classification.js';
+
+export type ListingType = DerivedType;
 export type RoomsBucket = '1–2' | '3' | '4' | '5+';
 
 export function deriveType(title: string): ListingType {
-  if (/vil[ăa]/i.test(title)) return 'Villa';
-  if (/townhouse/i.test(title)) return 'Townhouse';
-  return 'House';
+  return detectType(title);
 }
 
 export function roomsBucket(rooms: number | null): RoomsBucket {
