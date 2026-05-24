@@ -30,6 +30,14 @@ model Listing {
   // The sweep's backfill step picks the oldest NULL rows each tick.
   filterValuesEnrichedAt DateTime?
 
+  // Delist event: set when active flips true→false so realized DOM / absorption
+  // can be computed from a real endpoint instead of the staleness-inflated
+  // lastSeenAt proxy. Cleared on revival. delistReason is "stale_cutoff" for
+  // live events and "backfill_estimate" for rows migrated from lastSeenAt.
+  // 999.md never says *why* a listing vanished, so this is NOT a "sold" signal.
+  delistedAt   DateTime?
+  delistReason String?
+
   // Core fields (parsed)
   title       String
   priceEur    Int? // null if not parseable
@@ -60,6 +68,7 @@ model Listing {
   @@index([active, lastFetchedAt]) // stale-rotation picker
   @@index([sector])
   @@index([excluded])
+  @@index([delistedAt]) // absorption / gone-per-week bucketing
 }
 
 // One row per filter triple observed on a listing's detail response.

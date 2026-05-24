@@ -3,6 +3,25 @@ import type { Context } from 'hono';
 import type { Prisma } from '@prisma/client';
 import { getPrisma } from '../../db.js';
 import { deriveType, roomsBucket } from '../../lib/listing-type.js';
+import {
+  absorptionMonths,
+  iqr,
+  median,
+  medianDomClosed,
+  newListingPremium,
+  repricingVelocity,
+  segmentStats,
+  sellerMix,
+  stddev,
+  timeToFirstCutDays,
+  type SegmentDim,
+  type SegmentListing,
+  type SegmentRow,
+  type SellerMix,
+} from '../../lib/market-signals.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SEGMENT_DIMS: readonly SegmentDim[] = ['sector', 'rooms', 'priceBand', 'month'];
 
 export const analyticsRouter = new Hono();
 
@@ -13,6 +32,14 @@ interface OverviewResponse {
     medianDomDays: number;
     bestDealsCount: number;
     recentDropsCount: number;
+    // P0/P1 market-assessment signals.
+    iqrEurPerSqm: number; // €/m² dispersion = negotiation room
+    medianDomClosed: number; // realized DOM over delisted listings
+    absorptionMonths: number | null; // months of supply; null when no recent delists
+    repriceVelocity: number; // median mean-consecutive-delta across active listings
+    timeToFirstCutDays: number | null; // median days to first observed price cut
+    newListingPremium: number | null; // fresh ask €/m² ÷ standing median €/m²
+    sellerMix: SellerMix; // agency / private / unknown shares
   };
   trendByDistrict: Record<string, number[]>;
   months: string[];
@@ -156,25 +183,6 @@ function applyTypeFilter<T extends { title: string }>(rows: T[], type: string | 
   return rows.filter((r) => deriveType(r.title) === type);
 }
 
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    const a = sorted[mid - 1] ?? 0;
-    const b = sorted[mid] ?? 0;
-    return (a + b) / 2;
-  }
-  return sorted[mid] ?? 0;
-}
-
-function stddev(values: number[]): number {
-  if (values.length === 0) return 0;
-  const mean = values.reduce((s, v) => s + v, 0) / values.length;
-  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
-  return Math.sqrt(variance);
-}
-
 function relativeWhen(from: Date, now: Date): string {
   const diffMs = now.getTime() - from.getTime();
   const hours = Math.floor(diffMs / (60 * 60 * 1000));
@@ -201,15 +209,26 @@ analyticsRouter.get('/analytics/overview', async (c) => {
       rooms: true,
       district: true,
       firstSeenAt: true,
+      sellerType: true,
     },
   });
   const active = applyTypeFilter(allActive, filters.type);
+
+  // Closed (delisted) listings within the same filter slice — the basis for
+  // realized DOM, absorption, and the real gonePerWeek series. baseWhere forces
+  // active:true, so override it and require a stamped delist event.
+  const closedRaw = await prisma.listing.findMany({
+    where: { ...baseWhere, active: false, delistedAt: { not: null } },
+    select: { title: true, firstSeenAt: true, delistedAt: true },
+  });
+  const closed = applyTypeFilter(closedRaw, filters.type);
 
   const validForMedian = active.filter(
     (l): l is typeof l & { priceEur: number; areaSqm: number } =>
       l.priceEur != null && l.areaSqm != null && l.areaSqm > 0,
   );
-  const medianEurPerSqm = Math.round(median(validForMedian.map((l) => l.priceEur / l.areaSqm)));
+  const eurPerSqmValues = validForMedian.map((l) => l.priceEur / l.areaSqm);
+  const medianEurPerSqm = Math.round(median(eurPerSqmValues));
 
   const domDays = active.map((l) =>
     Math.max(0, Math.floor((now.getTime() - l.firstSeenAt.getTime()) / (24 * 60 * 60 * 1000))),
@@ -292,7 +311,11 @@ analyticsRouter.get('/analytics/overview', async (c) => {
     ).length;
     inventory12w.push(active.filter((l) => l.firstSeenAt < weekEnd).length);
     newPerWeek.push(newCount);
-    gonePerWeek.push(0);
+    gonePerWeek.push(
+      closed.filter(
+        (l) => l.delistedAt != null && l.delistedAt >= weekStart && l.delistedAt < weekEnd,
+      ).length,
+    );
   }
 
   const scatterRecent = [...active]
@@ -360,6 +383,55 @@ analyticsRouter.get('/analytics/overview', async (c) => {
     return (1 - l.priceEur / l.areaSqm / m) * 100 >= 15;
   }).length;
 
+  // ── P0/P1 market-assessment signals ──
+  const iqrEurPerSqm = Math.round(iqr(eurPerSqmValues));
+
+  // Realized DOM + absorption come from the closed slice, not active age.
+  const medianDomClosedVal = medianDomClosed(closed);
+  const since28d = new Date(now.getTime() - 28 * DAY_MS);
+  const delistsTrailing4wk = closed.filter(
+    (l) => l.delistedAt != null && l.delistedAt >= since28d,
+  ).length;
+  const absorptionMonthsVal = absorptionMonths(active.length, delistsTrailing4wk);
+
+  // Fresh (<2wk) ask €/m² vs the standing-inventory median.
+  const freshMs = 14 * DAY_MS;
+  const freshEurPerSqm: number[] = [];
+  const standingEurPerSqm: number[] = [];
+  for (const l of validForMedian) {
+    const value = l.priceEur / l.areaSqm;
+    if (now.getTime() - l.firstSeenAt.getTime() < freshMs) freshEurPerSqm.push(value);
+    else standingEurPerSqm.push(value);
+  }
+  const newListingPremiumVal = newListingPremium(freshEurPerSqm, standingEurPerSqm);
+
+  const sellerMixVal = sellerMix(active.map((l) => l.sellerType));
+
+  // Repricing velocity + time-to-first-cut need each active listing's full
+  // snapshot history (ordered ascending), aggregated via the median.
+  const activeWithSnapshots = activeIds.size
+    ? await prisma.listing.findMany({
+        where: { id: { in: [...activeIds] } },
+        select: {
+          firstSeenAt: true,
+          snapshots: {
+            orderBy: { capturedAt: 'asc' },
+            select: { priceEur: true, capturedAt: true },
+          },
+        },
+      })
+    : [];
+  const velocities: number[] = [];
+  const firstCuts: number[] = [];
+  for (const l of activeWithSnapshots) {
+    const prices = l.snapshots.map((s) => s.priceEur).filter((p): p is number => p != null);
+    if (prices.length >= 2) velocities.push(repricingVelocity(prices));
+    const ttc = timeToFirstCutDays(l.firstSeenAt, l.snapshots);
+    if (ttc != null) firstCuts.push(ttc);
+  }
+  const repriceVelocity = velocities.length > 0 ? Math.round(median(velocities)) : 0;
+  const timeToFirstCutDaysVal = firstCuts.length > 0 ? Math.round(median(firstCuts)) : null;
+
   const body: OverviewResponse = {
     kpis: {
       medianEurPerSqm,
@@ -367,6 +439,13 @@ analyticsRouter.get('/analytics/overview', async (c) => {
       medianDomDays,
       bestDealsCount,
       recentDropsCount,
+      iqrEurPerSqm,
+      medianDomClosed: medianDomClosedVal,
+      absorptionMonths: absorptionMonthsVal,
+      repriceVelocity,
+      timeToFirstCutDays: timeToFirstCutDaysVal,
+      newListingPremium: newListingPremiumVal,
+      sellerMix: sellerMixVal,
     },
     trendByDistrict,
     months: monthLabels,
@@ -378,6 +457,50 @@ analyticsRouter.get('/analytics/overview', async (c) => {
     scatter: scatterRecent,
   };
   return c.json(body);
+});
+
+// Per-segment table: €/m² median + IQR, seller mix, and realized DOM grouped by
+// any subset of sector/rooms/priceBand/month. Includes active + delisted rows in
+// the slice so realized DOM has data; segments below the small-sample floor are
+// suppressed inside segmentStats.
+analyticsRouter.get('/analytics/segments', async (c) => {
+  const prisma = getPrisma();
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
+
+  const requested = (c.req.query('by') ?? 'sector,rooms,priceBand')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const invalid = requested.filter((d) => !SEGMENT_DIMS.includes(d as SegmentDim));
+  if (requested.length === 0 || invalid.length > 0) {
+    return c.json({ error: `invalid by dimensions: ${invalid.join(',') || '(empty)'}` }, 400);
+  }
+  const dims = requested as SegmentDim[];
+
+  // Drop the active:true constraint baseWhere imposes — we want current
+  // inventory (for €/m²) plus closed listings (for realized DOM).
+  const where = buildListingWhere(filters);
+  delete where.active;
+  where.OR = [{ active: true }, { delistedAt: { not: null } }];
+
+  const rowsRaw = await prisma.listing.findMany({
+    where,
+    select: {
+      title: true,
+      sector: true,
+      rooms: true,
+      priceEur: true,
+      areaSqm: true,
+      sellerType: true,
+      firstSeenAt: true,
+      delistedAt: true,
+    },
+  });
+  const listings: SegmentListing[] = applyTypeFilter(rowsRaw, filters.type);
+  const segments: SegmentRow[] = segmentStats(listings, dims);
+  return c.json(segments);
 });
 
 analyticsRouter.get('/analytics/best-buys', async (c) => {
