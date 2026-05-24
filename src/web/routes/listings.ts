@@ -20,6 +20,14 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     const maxAreaSqm = c.req.query('maxAreaSqm')
       ? parseFloat(c.req.query('maxAreaSqm')!)
       : undefined;
+    const minLandAre = c.req.query('minLandAre')
+      ? parseFloat(c.req.query('minLandAre')!)
+      : undefined;
+    const maxLandAre = c.req.query('maxLandAre')
+      ? parseFloat(c.req.query('maxLandAre')!)
+      : undefined;
+    const minFloors = c.req.query('minFloors') ? parseInt(c.req.query('minFloors')!) : undefined;
+    const maxFloors = c.req.query('maxFloors') ? parseInt(c.req.query('maxFloors')!) : undefined;
     // Accept `?district=A,B` and `?district=A&district=B`. Reject the
     // present-but-empty shape (`?district=`, `?district=,,,`, `?district=%20`)
     // with 400 — otherwise it silently widens to "all districts" and masks
@@ -66,6 +74,10 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       maxRooms,
       minAreaSqm,
       maxAreaSqm,
+      minLandAre,
+      maxLandAre,
+      minFloors,
+      maxFloors,
       district,
       sector,
       sort,
@@ -96,8 +108,8 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
 
     const aggregates = await prisma.listing.aggregate({
       where: { active: true, excluded: false },
-      _min: { priceEur: true, rooms: true, areaSqm: true },
-      _max: { priceEur: true, rooms: true, areaSqm: true },
+      _min: { priceEur: true, rooms: true, areaSqm: true, landAre: true, floors: true },
+      _max: { priceEur: true, rooms: true, areaSqm: true, landAre: true, floors: true },
       _count: true,
     });
 
@@ -157,6 +169,8 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       price: { min: aggregates._min.priceEur, max: aggregates._max.priceEur },
       rooms: { min: aggregates._min.rooms, max: aggregates._max.rooms },
       areaSqm: { min: aggregates._min.areaSqm, max: aggregates._max.areaSqm },
+      landAre: { min: aggregates._min.landAre, max: aggregates._max.landAre },
+      floors: { min: aggregates._min.floors, max: aggregates._max.floors },
       types,
       roomsValues,
       favoritesCount,

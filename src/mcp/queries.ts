@@ -35,6 +35,10 @@ export interface SearchListingsInput {
   maxRooms?: number | undefined;
   minAreaSqm?: number | undefined;
   maxAreaSqm?: number | undefined;
+  minLandAre?: number | undefined;
+  maxLandAre?: number | undefined;
+  minFloors?: number | undefined;
+  maxFloors?: number | undefined;
   /** Single district, or comma-separated list, or array. Compiles to a SQL
    *  `IN (...)` when more than one value is supplied. */
   district?: string | string[] | undefined;
@@ -103,7 +107,7 @@ export interface GetListingResult {
   priceRaw: string | null;
   rooms: number | null;
   areaSqm: number | null;
-  landSqm: number | null;
+  landAre: number | null;
   district: string | null;
   street: string | null;
   floors: number | null;
@@ -201,6 +205,12 @@ export async function searchListings(
   }
   if (input.minAreaSqm !== undefined || input.maxAreaSqm !== undefined) {
     where['areaSqm'] = rangeWhere(input.minAreaSqm, input.maxAreaSqm);
+  }
+  if (input.minLandAre !== undefined || input.maxLandAre !== undefined) {
+    where['landAre'] = rangeWhere(input.minLandAre, input.maxLandAre);
+  }
+  if (input.minFloors !== undefined || input.maxFloors !== undefined) {
+    where['floors'] = rangeWhere(input.minFloors, input.maxFloors);
   }
   if (input.district) {
     const list = Array.isArray(input.district)
@@ -357,7 +367,7 @@ export async function getListing(
     priceRaw: row.priceRaw,
     rooms: row.rooms,
     areaSqm: row.areaSqm,
-    landSqm: row.landSqm,
+    landAre: row.landAre,
     district: row.district,
     street: row.street,
     floors: row.floors,

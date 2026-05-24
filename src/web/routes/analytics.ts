@@ -100,6 +100,10 @@ interface AnalyticsFilters {
   maxPrice: number | undefined;
   minAreaSqm: number | undefined;
   maxAreaSqm: number | undefined;
+  minLandAre: number | undefined;
+  maxLandAre: number | undefined;
+  minFloors: number | undefined;
+  maxFloors: number | undefined;
   districts: string[];
   sectors: string[];
   type: string | undefined;
@@ -144,6 +148,10 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
   const maxPrice = int('maxPrice');
   const minAreaSqm = float('minAreaSqm');
   const maxAreaSqm = float('maxAreaSqm');
+  const minLandAre = float('minLandAre');
+  const maxLandAre = float('maxLandAre');
+  const minFloors = int('minFloors');
+  const maxFloors = int('maxFloors');
   // Accept both `?district=A,B` and `?district=A&district=B`. The first form
   // is what the UI emits; the second is more natural for hand-written URLs
   // and external callers. queries() returns undefined when the param is
@@ -187,6 +195,10 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
       maxPrice,
       minAreaSqm,
       maxAreaSqm,
+      minLandAre,
+      maxLandAre,
+      minFloors,
+      maxFloors,
       districts,
       sectors,
       type,
@@ -223,6 +235,18 @@ function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
     where.areaSqm = {
       ...(f.minAreaSqm != null ? { gte: f.minAreaSqm } : {}),
       ...(f.maxAreaSqm != null ? { lte: f.maxAreaSqm } : {}),
+    };
+  }
+  if (f.minLandAre != null || f.maxLandAre != null) {
+    where.landAre = {
+      ...(f.minLandAre != null ? { gte: f.minLandAre } : {}),
+      ...(f.maxLandAre != null ? { lte: f.maxLandAre } : {}),
+    };
+  }
+  if (f.minFloors != null || f.maxFloors != null) {
+    where.floors = {
+      ...(f.minFloors != null ? { gte: f.minFloors } : {}),
+      ...(f.maxFloors != null ? { lte: f.maxFloors } : {}),
     };
   }
   const [only] = f.districts;

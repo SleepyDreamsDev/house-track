@@ -31,7 +31,7 @@ export interface ParsedDetail {
   priceRaw: string | null;
   rooms: number | null;
   areaSqm: number | null;
-  landSqm: number | null;
+  landAre: number | null;
   district: string | null;
   street: string | null;
   floors: number | null;

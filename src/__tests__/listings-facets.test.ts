@@ -113,6 +113,8 @@ describe('GET /api/listings/facets — toggle counts', () => {
     expect(f).toHaveProperty('areaSqm');
     expect(f).toHaveProperty('types');
     expect(f).toHaveProperty('roomsValues');
+    expect(f).toHaveProperty('landAre');
+    expect(f).toHaveProperty('floors');
   });
 
   it('reports zero counts on an empty catalog', async () => {

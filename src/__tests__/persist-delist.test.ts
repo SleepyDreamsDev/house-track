@@ -68,7 +68,7 @@ const detail = (id: string): ParsedDetail => ({
   priceRaw: '€100000',
   rooms: 4,
   areaSqm: 120,
-  landSqm: 600,
+  landAre: 600,
   district: 'Buiucani',
   street: 'Strada Test 1',
   floors: 2,

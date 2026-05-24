@@ -48,7 +48,7 @@ describe('Listings feed routes', () => {
             title: 'House with land, 200 m², Botanica',
             priceEur: 180_000,
             areaSqm: 200,
-            landSqm: 500,
+            landAre: 500,
             rooms: 4,
             district: 'Botanica',
             active: true,
@@ -80,7 +80,7 @@ describe('Listings feed routes', () => {
         priceEur: number | null;
         areaSqm: number | null;
         rooms: number | null;
-        landSqm?: number | null;
+        landAre?: number | null;
         district: string | null;
         street?: string | null;
         firstSeenAt: string;
@@ -103,8 +103,8 @@ describe('Listings feed routes', () => {
       expect(body[0]?.district).toBe('Botanica');
       expect(body[0]?.isNew).toBe(true);
 
-      // Verify landSqm is included when present
-      expect(body[0]?.landSqm).toBe(500);
+      // Verify landAre is included when present
+      expect(body[0]?.landAre).toBe(500);
 
       // Verify fields for the older one (h-today-1)
       expect(body[1]?.title).toBe('Apartment, 75 m², Centru · str. Main');

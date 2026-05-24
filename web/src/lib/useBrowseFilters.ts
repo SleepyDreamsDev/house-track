@@ -15,6 +15,8 @@ export interface FilterFacets {
   roomsValues: number[];
   price: Bounds;
   areaSqm?: Bounds;
+  landAre?: Bounds;
+  floors?: Bounds;
   favoritesCount?: number;
   excludedCount?: number;
   mislabeledCount?: number;
@@ -28,6 +30,10 @@ export interface BrowseFilterState {
   maxPrice: number | null;
   minArea: number | null;
   maxArea: number | null;
+  minLand: number | null;
+  maxLand: number | null;
+  minFloors: number | null;
+  maxFloors: number | null;
   districts: string[];
   sectors: string[];
   type: string; // 'all' | derived type
@@ -44,6 +50,10 @@ export interface UseBrowseFilters {
   setMaxPrice: (v: number | null) => void;
   setMinArea: (v: number | null) => void;
   setMaxArea: (v: number | null) => void;
+  setMinLand: (v: number | null) => void;
+  setMaxLand: (v: number | null) => void;
+  setMinFloors: (v: number | null) => void;
+  setMaxFloors: (v: number | null) => void;
   setDistricts: (v: string[]) => void;
   setSectors: (v: string[]) => void;
   setType: (v: string) => void;
@@ -62,6 +72,10 @@ export function useBrowseFilters(): UseBrowseFilters {
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
   const [minArea, setMinArea] = useState<number | null>(null);
   const [maxArea, setMaxArea] = useState<number | null>(null);
+  const [minLand, setMinLand] = useState<number | null>(null);
+  const [maxLand, setMaxLand] = useState<number | null>(null);
+  const [minFloors, setMinFloors] = useState<number | null>(null);
+  const [maxFloors, setMaxFloors] = useState<number | null>(null);
   const [districts, setDistrictsRaw] = useState<string[]>([]);
   const [sectors, setSectorsRaw] = useState<string[]>([]);
   const [type, setType] = useState('all');
@@ -82,6 +96,10 @@ export function useBrowseFilters(): UseBrowseFilters {
     maxPrice,
     minArea,
     maxArea,
+    minLand,
+    maxLand,
+    minFloors,
+    maxFloors,
     districts,
     sectors,
     type,
@@ -98,6 +116,10 @@ export function useBrowseFilters(): UseBrowseFilters {
     setMaxPrice,
     setMinArea,
     setMaxArea,
+    setMinLand,
+    setMaxLand,
+    setMinFloors,
+    setMaxFloors,
     setDistricts,
     setSectors,
     setType,

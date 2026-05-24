@@ -20,7 +20,7 @@ interface Listing {
   priceEur: number | null;
   priceWas?: number;
   areaSqm: number | null;
-  landSqm?: number;
+  landAre?: number;
   rooms: number | null;
   floors?: number;
   yearBuilt?: number;
@@ -70,6 +70,10 @@ export const Listings: React.FC = () => {
     maxPrice,
     minArea,
     maxArea,
+    minLand,
+    maxLand,
+    minFloors,
+    maxFloors,
     districts,
     sectors,
     type,
@@ -113,6 +117,10 @@ export const Listings: React.FC = () => {
     maxPrice,
     minArea,
     maxArea,
+    minLand,
+    maxLand,
+    minFloors,
+    maxFloors,
     districtsKey,
     sectorsKey,
     type,
@@ -133,6 +141,10 @@ export const Listings: React.FC = () => {
         maxPrice,
         minArea,
         maxArea,
+        minLand,
+        maxLand,
+        minFloors,
+        maxFloors,
         districtsKey,
         sectorsKey,
         type,
@@ -152,6 +164,10 @@ export const Listings: React.FC = () => {
       if (maxPrice != null) p.append('maxPrice', String(maxPrice));
       if (minArea != null) p.append('minAreaSqm', String(minArea));
       if (maxArea != null) p.append('maxAreaSqm', String(maxArea));
+      if (minLand != null) p.append('minLandAre', String(minLand));
+      if (maxLand != null) p.append('maxLandAre', String(maxLand));
+      if (minFloors != null) p.append('minFloors', String(minFloors));
+      if (maxFloors != null) p.append('maxFloors', String(maxFloors));
       if (districts.length > 0) p.append('district', districts.join(','));
       if (sectors.length > 0) p.append('sector', sectors.join(','));
       if (type !== 'all') p.append('type', type);
@@ -270,6 +286,14 @@ export const Listings: React.FC = () => {
             maxArea={maxArea}
             setMinArea={filters.setMinArea}
             setMaxArea={filters.setMaxArea}
+            minLand={minLand}
+            maxLand={maxLand}
+            setMinLand={filters.setMinLand}
+            setMaxLand={filters.setMaxLand}
+            minFloors={minFloors}
+            maxFloors={maxFloors}
+            setMinFloors={filters.setMinFloors}
+            setMaxFloors={filters.setMaxFloors}
             districts={districts}
             setDistricts={filters.setDistricts}
             sectors={sectors}
@@ -468,10 +492,10 @@ const ListingCard: React.FC<ListingCardProps> = ({ l, selected, autoScroll, onSe
             <span className="text-neutral-400">area </span>
             {l.areaSqm} m²
           </span>
-          {l.landSqm && (
+          {l.landAre && (
             <span>
               <span className="text-neutral-400">land </span>
-              {l.landSqm} m²
+              {l.landAre} ar
             </span>
           )}
           {l.rooms && (

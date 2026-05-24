@@ -48,6 +48,10 @@ function buildQueryParams(state: BrowseFilterState): URLSearchParams {
   if (state.maxPrice != null) p.set('maxPrice', String(state.maxPrice));
   if (state.minArea != null) p.set('minAreaSqm', String(state.minArea));
   if (state.maxArea != null) p.set('maxAreaSqm', String(state.maxArea));
+  if (state.minLand != null) p.set('minLandAre', String(state.minLand));
+  if (state.maxLand != null) p.set('maxLandAre', String(state.maxLand));
+  if (state.minFloors != null) p.set('minFloors', String(state.minFloors));
+  if (state.maxFloors != null) p.set('maxFloors', String(state.maxFloors));
   if (state.districts.length > 0) p.set('district', state.districts.join(','));
   if (state.sectors.length > 0) p.set('sector', state.sectors.join(','));
   if (state.type !== 'all') p.set('type', state.type);
@@ -81,6 +85,10 @@ export const Analytics: React.FC = () => {
     maxPrice,
     minArea,
     maxArea,
+    minLand,
+    maxLand,
+    minFloors,
+    maxFloors,
     districts,
     sectors,
     type,
@@ -100,6 +108,10 @@ export const Analytics: React.FC = () => {
       maxPrice,
       minArea,
       maxArea,
+      minLand,
+      maxLand,
+      minFloors,
+      maxFloors,
       districtsKey,
       sectorsKey,
       type,
@@ -149,6 +161,14 @@ export const Analytics: React.FC = () => {
     maxArea,
     setMinArea: filters.setMinArea,
     setMaxArea: filters.setMaxArea,
+    minLand,
+    maxLand,
+    setMinLand: filters.setMinLand,
+    setMaxLand: filters.setMaxLand,
+    minFloors,
+    maxFloors,
+    setMinFloors: filters.setMinFloors,
+    setMaxFloors: filters.setMaxFloors,
     districts,
     setDistricts: filters.setDistricts,
     sectors,

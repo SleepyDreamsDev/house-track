@@ -44,7 +44,7 @@ model Listing {
   priceRaw    String? // original price string for audit
   rooms       Int?
   areaSqm     Float?
-  landSqm     Float? // houses have land
+  landAre     Float? // houses: land plot size in ares (999.md feature 245)
   district    String? // raw value from breadcrumb/filter
   sector      String? // derived Chișinău city sector; null for communes + unclassified
   street      String?
