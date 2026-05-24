@@ -186,7 +186,12 @@ export const Listings: React.FC = () => {
         method: 'PUT',
         body: JSON.stringify({ excluded: next }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['listings'] }),
+    // Excluding changes the facet universe (district/sector options + price
+    // bounds), so refresh the rail too — not just the listing rows.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['listings'] });
+      void queryClient.invalidateQueries({ queryKey: ['listings-facets'] });
+    },
   });
 
   const total = data?.total ?? 0;

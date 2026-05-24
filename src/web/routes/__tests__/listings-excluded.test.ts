@@ -143,4 +143,31 @@ describe('Listing exclusion routes', () => {
       expect(body.listings.map((l) => l.id)).toContain('C');
     });
   });
+
+  describe('GET /api/listings/facets exclusion filter', () => {
+    it('omits an excluded listing district and price bound from the facets', async () => {
+      await prisma.listing.createMany({
+        data: [
+          { ...makeListing('NORMAL'), district: 'Centru', priceEur: 100_000 },
+          {
+            ...makeListing('EXCL', { excluded: true }),
+            district: 'SecretDistrict',
+            priceEur: 999_999,
+          },
+        ],
+      });
+
+      const res = await app.request('/api/listings/facets');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        districts: string[];
+        price: { min: number | null; max: number | null };
+      };
+
+      expect(body.districts).toContain('Centru');
+      expect(body.districts).not.toContain('SecretDistrict');
+      // The excluded listing's 999_999 price must not skew the rail's max bound.
+      expect(body.price.max).toBe(100_000);
+    });
+  });
 });
