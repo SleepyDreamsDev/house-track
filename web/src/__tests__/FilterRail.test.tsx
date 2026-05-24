@@ -17,25 +17,27 @@ const FULL_FACETS: FilterFacets = {
   types: ['House', 'Villa'],
   roomsValues: [1, 2, 3, 4, 5],
   price: { min: 50000, max: 200000 },
+  areaSqm: { min: 30, max: 300 },
   favoritesCount: 4,
   excludedCount: 2,
   mislabeledCount: 3,
 };
 
-function renderRail(
-  opts: {
-    facets?: FilterFacets;
-    withMislabeled?: boolean;
-  } = {},
-) {
-  const props = {
+function baseProps(overrides: Partial<FilterRailProps> = {}): FilterRailProps {
+  return {
     q: '',
     setQ: vi.fn(),
-    maxPrice: 200000,
+    minPrice: null,
+    maxPrice: null,
+    setMinPrice: vi.fn(),
     setMaxPrice: vi.fn(),
-    districts: [] as string[],
+    minArea: null,
+    maxArea: null,
+    setMinArea: vi.fn(),
+    setMaxArea: vi.fn(),
+    districts: [],
     setDistricts: vi.fn(),
-    sectors: [] as string[],
+    sectors: [],
     setSectors: vi.fn(),
     type: 'all',
     setType: vi.fn(),
@@ -45,17 +47,31 @@ function renderRail(
     setFavoritesOnly: vi.fn(),
     showExcluded: false,
     setShowExcluded: vi.fn(),
-    facets: opts.facets ?? FULL_FACETS,
-    ...(opts.withMislabeled ? { hideMislabeled: false, setHideMislabeled: vi.fn() } : {}),
+    facets: FULL_FACETS,
+    ...overrides,
   };
-  render(<FilterRail {...props} />);
+}
+
+function renderRail(opts: { facets?: FilterFacets; withMislabeled?: boolean } = {}) {
+  render(
+    <FilterRail
+      {...baseProps({
+        facets: opts.facets ?? FULL_FACETS,
+        ...(opts.withMislabeled ? { hideMislabeled: false, setHideMislabeled: vi.fn() } : {}),
+      })}
+    />,
+  );
 }
 
 describe('FilterRail — group visibility', () => {
   it('renders every group when all facets have data (Listings context)', () => {
     renderRail({ withMislabeled: true });
     expect(screen.getByLabelText('Search listings')).toBeInTheDocument();
-    expect(screen.getByText('Max price')).toBeInTheDocument();
+    expect(screen.getByText('Price (€)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Price min')).toBeInTheDocument();
+    expect(screen.getByLabelText('Price max')).toBeInTheDocument();
+    expect(screen.getByText('Surface area (m²)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Surface area min')).toBeInTheDocument();
     expect(screen.getByText('District')).toBeInTheDocument();
     expect(screen.getByText('Sector')).toBeInTheDocument();
     expect(screen.getByText('Property type')).toBeInTheDocument();
@@ -65,9 +81,15 @@ describe('FilterRail — group visibility', () => {
     expect(screen.getByLabelText('Hide mislabeled')).toBeInTheDocument();
   });
 
-  it('hides Max price when min equals max', () => {
+  it('hides Price when its bounds are a single value (min === max)', () => {
     renderRail({ facets: { ...FULL_FACETS, price: { min: 100000, max: 100000 } } });
-    expect(screen.queryByText('Max price')).not.toBeInTheDocument();
+    expect(screen.queryByText('Price (€)')).not.toBeInTheDocument();
+  });
+
+  it('hides Surface area when the facet has no area bounds', () => {
+    const { areaSqm: _omit, ...noArea } = FULL_FACETS;
+    renderRail({ facets: noArea });
+    expect(screen.queryByText('Surface area (m²)')).not.toBeInTheDocument();
   });
 
   it('hides District when there are no districts', () => {
@@ -114,6 +136,7 @@ describe('FilterRail — group visibility', () => {
       },
     });
     expect(screen.getByLabelText('Search listings')).toBeInTheDocument();
+    expect(screen.queryByText('Price (€)')).not.toBeInTheDocument();
   });
 });
 
@@ -134,39 +157,17 @@ describe('FilterRail — Hide mislabeled is Listings-only', () => {
   });
 });
 
-// Options sourcing + handler wiring (migrated from the old AnalyticsFilterRail
-// tests when that component was promoted to the shared FilterRail).
-function makeProps(overrides: Partial<FilterRailProps> = {}): FilterRailProps {
-  return {
-    q: '',
-    setQ: vi.fn(),
-    maxPrice: 500000,
-    setMaxPrice: vi.fn(),
-    districts: [],
-    setDistricts: vi.fn(),
-    sectors: [],
-    setSectors: vi.fn(),
-    type: 'all',
-    setType: vi.fn(),
-    rooms: 'all',
-    setRooms: vi.fn(),
-    favoritesOnly: false,
-    setFavoritesOnly: vi.fn(),
-    showExcluded: false,
-    setShowExcluded: vi.fn(),
-    facets: {
-      districts: ['Centru', 'Botanica'],
-      types: ['House', 'Villa'],
-      roomsValues: [3, 4, 5],
-      price: { min: 50000, max: 500000 },
-    },
-    ...overrides,
-  };
-}
-
 describe('FilterRail — options sourcing and handlers', () => {
+  const facets: FilterFacets = {
+    districts: ['Centru', 'Botanica'],
+    types: ['House', 'Villa'],
+    roomsValues: [3, 4, 5],
+    price: { min: 50000, max: 500000 },
+    areaSqm: { min: 40, max: 400 },
+  };
+
   it('District options are data-driven from facets', () => {
-    render(<FilterRail {...makeProps()} />);
+    render(<FilterRail {...baseProps({ facets })} />);
     const rail = screen.getByTestId('filter-rail');
     expect(within(rail).getByRole('button', { name: 'Centru' })).toBeInTheDocument();
     expect(within(rail).getByRole('button', { name: 'Botanica' })).toBeInTheDocument();
@@ -174,7 +175,7 @@ describe('FilterRail — options sourcing and handlers', () => {
   });
 
   it('Property type options are data-driven from facets', () => {
-    render(<FilterRail {...makeProps()} />);
+    render(<FilterRail {...baseProps({ facets })} />);
     const rail = screen.getByTestId('filter-rail');
     expect(within(rail).getByRole('button', { name: 'House' })).toBeInTheDocument();
     expect(within(rail).getByRole('button', { name: 'Villa' })).toBeInTheDocument();
@@ -182,7 +183,7 @@ describe('FilterRail — options sourcing and handlers', () => {
   });
 
   it('Rooms options derive from observed roomsValues via roomsBucket', () => {
-    render(<FilterRail {...makeProps()} />);
+    render(<FilterRail {...baseProps({ facets })} />);
     const rail = screen.getByTestId('filter-rail');
     // roomsValues=[3,4,5] → buckets '3','4','5+' (no '1–2')
     expect(within(rail).getByRole('button', { name: '3' })).toBeInTheDocument();
@@ -193,42 +194,51 @@ describe('FilterRail — options sourcing and handlers', () => {
 
   it('Search input invokes setQ on type', async () => {
     const setQ = vi.fn();
-    render(<FilterRail {...makeProps({ setQ })} />);
+    render(<FilterRail {...baseProps({ facets, setQ })} />);
     await userEvent.type(screen.getByLabelText('Search listings'), 'Centru');
     expect(setQ).toHaveBeenCalled();
   });
 
-  it('Max price slider invokes setMaxPrice on change', () => {
+  it('Price max input invokes setMaxPrice with the parsed number', () => {
     const setMaxPrice = vi.fn();
-    render(<FilterRail {...makeProps({ setMaxPrice })} />);
-    fireEvent.change(screen.getByLabelText('Max price'), { target: { value: '200000' } });
-    expect(setMaxPrice).toHaveBeenCalledWith(200000);
+    render(<FilterRail {...baseProps({ facets, setMaxPrice })} />);
+    fireEvent.change(screen.getByLabelText('Price max'), { target: { value: '120000' } });
+    expect(setMaxPrice).toHaveBeenCalledWith(120000);
+  });
+
+  it('clearing the Price max input invokes setMaxPrice(null)', () => {
+    const setMaxPrice = vi.fn();
+    render(<FilterRail {...baseProps({ facets, maxPrice: 120000, setMaxPrice })} />);
+    fireEvent.change(screen.getByLabelText('Price max'), { target: { value: '' } });
+    expect(setMaxPrice).toHaveBeenCalledWith(null);
+  });
+
+  it('Surface area min input invokes setMinArea', () => {
+    const setMinArea = vi.fn();
+    render(<FilterRail {...baseProps({ facets, setMinArea })} />);
+    fireEvent.change(screen.getByLabelText('Surface area min'), { target: { value: '80' } });
+    expect(setMinArea).toHaveBeenCalledWith(80);
   });
 
   it('renders without throwing when facets are undefined (loading state)', () => {
-    render(<FilterRail {...makeProps({ facets: undefined })} />);
+    render(<FilterRail {...baseProps({ facets: undefined })} />);
     expect(screen.getByTestId('filter-rail')).toBeInTheDocument();
-    // No facet data → only Search shows; option groups are gated out.
     expect(screen.getByLabelText('Search listings')).toBeInTheDocument();
     expect(screen.queryByText('District')).not.toBeInTheDocument();
+    expect(screen.queryByText('Price (€)')).not.toBeInTheDocument();
   });
 
   it('renders the extraSlot (used for the Period selector on Price Drops)', () => {
-    render(
-      <FilterRail {...makeProps({ extraSlot: <div data-testid="period-slot">period</div> })} />,
-    );
+    render(<FilterRail {...baseProps({ facets, extraSlot: <div data-testid="period-slot" /> })} />);
     expect(screen.getByTestId('period-slot')).toBeInTheDocument();
   });
 
   it('renders a Sector group scoped by testid when facets include sectors', () => {
     render(
       <FilterRail
-        {...makeProps({
+        {...baseProps({
           facets: {
-            districts: ['Centru', 'Botanica'],
-            types: ['House'],
-            roomsValues: [3],
-            price: { min: 50000, max: 500000 },
+            ...facets,
             sectors: [
               { name: 'Centru', count: 5 },
               { name: 'Botanica', count: 3 },

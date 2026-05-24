@@ -96,7 +96,10 @@ interface PriceDropRow {
 
 interface AnalyticsFilters {
   q: string | undefined;
+  minPrice: number | undefined;
   maxPrice: number | undefined;
+  minAreaSqm: number | undefined;
+  maxAreaSqm: number | undefined;
   districts: string[];
   sectors: string[];
   type: string | undefined;
@@ -125,8 +128,22 @@ type ParsedFilters = { ok: true; filters: AnalyticsFilters } | { ok: false; erro
 // query to "all districts", masking an operator-side bug.
 function parseAnalyticsFilters(c: Context): ParsedFilters {
   const q = c.req.query('q') || undefined;
-  const maxPriceRaw = c.req.query('maxPrice');
-  const maxPrice = maxPriceRaw ? Number.parseInt(maxPriceRaw, 10) : undefined;
+  const int = (name: string) => {
+    const raw = c.req.query(name);
+    if (!raw) return undefined;
+    const n = Number.parseInt(raw, 10);
+    return Number.isNaN(n) ? undefined : n;
+  };
+  const float = (name: string) => {
+    const raw = c.req.query(name);
+    if (!raw) return undefined;
+    const n = Number.parseFloat(raw);
+    return Number.isNaN(n) ? undefined : n;
+  };
+  const minPrice = int('minPrice');
+  const maxPrice = int('maxPrice');
+  const minAreaSqm = float('minAreaSqm');
+  const maxAreaSqm = float('maxAreaSqm');
   // Accept both `?district=A,B` and `?district=A&district=B`. The first form
   // is what the UI emits; the second is more natural for hand-written URLs
   // and external callers. queries() returns undefined when the param is
@@ -157,26 +174,25 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
     }
   }
   const type = c.req.query('type') || undefined;
-  const roomsRaw = c.req.query('rooms');
-  const rooms = roomsRaw ? Number.parseInt(roomsRaw, 10) : undefined;
-  const minRoomsRaw = c.req.query('minRooms');
-  const minRooms = minRoomsRaw ? Number.parseInt(minRoomsRaw, 10) : undefined;
-  const maxRoomsRaw = c.req.query('maxRooms');
-  const maxRooms = maxRoomsRaw ? Number.parseInt(maxRoomsRaw, 10) : undefined;
+  const rooms = int('rooms');
+  const minRooms = int('minRooms');
+  const maxRooms = int('maxRooms');
   const favorite = c.req.query('favorite') === 'true';
   const includeExcluded = c.req.query('includeExcluded') === 'true';
-  const num = (v: number | undefined) => (v != null && !Number.isNaN(v) ? v : undefined);
   return {
     ok: true,
     filters: {
       q,
-      maxPrice: num(maxPrice),
+      minPrice,
+      maxPrice,
+      minAreaSqm,
+      maxAreaSqm,
       districts,
       sectors,
       type,
-      rooms: num(rooms),
-      minRooms: num(minRooms),
-      maxRooms: num(maxRooms),
+      rooms,
+      minRooms,
+      maxRooms,
       favorite,
       includeExcluded,
     },
@@ -197,7 +213,18 @@ function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
   // via their own OR/override; excluded stays applied there too.
   if (!f.includeExcluded) where.excluded = false;
   if (f.favorite) where.watchlist = true;
-  if (f.maxPrice != null) where.priceEur = { lte: f.maxPrice };
+  if (f.minPrice != null || f.maxPrice != null) {
+    where.priceEur = {
+      ...(f.minPrice != null ? { gte: f.minPrice } : {}),
+      ...(f.maxPrice != null ? { lte: f.maxPrice } : {}),
+    };
+  }
+  if (f.minAreaSqm != null || f.maxAreaSqm != null) {
+    where.areaSqm = {
+      ...(f.minAreaSqm != null ? { gte: f.minAreaSqm } : {}),
+      ...(f.maxAreaSqm != null ? { lte: f.maxAreaSqm } : {}),
+    };
+  }
   const [only] = f.districts;
   if (f.districts.length === 1 && only !== undefined) {
     where.district = only;

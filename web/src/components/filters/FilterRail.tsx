@@ -1,12 +1,7 @@
 import React from 'react';
 import { Input } from '@/components/ui/Input.js';
-import { fmt } from '@/lib/format.js';
 import { roomsBucket, type RoomsBucket } from '@/lib/listing-type.js';
-import {
-  PRICE_MAX_FALLBACK,
-  PRICE_MIN_FALLBACK,
-  type FilterFacets,
-} from '@/lib/useBrowseFilters.js';
+import { type Bounds, type FilterFacets } from '@/lib/useBrowseFilters.js';
 
 export type { FilterFacets };
 
@@ -92,6 +87,56 @@ const MultiSelectGroupVertical: React.FC<{
   );
 };
 
+// Min/max numeric range. Empty input = unbounded (null). Placeholders show the
+// catalog bounds so the operator knows the available span without pre-filling
+// (which would otherwise send a redundant param).
+const RangeField: React.FC<{
+  label: string;
+  unit?: string;
+  bounds: Bounds;
+  min: number | null;
+  max: number | null;
+  setMin: (v: number | null) => void;
+  setMax: (v: number | null) => void;
+}> = ({ label, unit, bounds, min, max, setMin, setMax }) => {
+  const parse = (s: string) => {
+    if (s.trim() === '') return null;
+    const n = Number(s);
+    return Number.isNaN(n) ? null : n;
+  };
+  const inputCls =
+    'w-full rounded-md px-2 py-1 text-[12px] tabular-nums ring-1 ring-inset ring-neutral-200 focus:ring-neutral-400 focus:outline-none';
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+        {label}
+        {unit ? ` (${unit})` : ''}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          inputMode="numeric"
+          value={min ?? ''}
+          placeholder={bounds.min != null ? String(bounds.min) : 'min'}
+          aria-label={`${label} min`}
+          onChange={(e) => setMin(parse(e.target.value))}
+          className={inputCls}
+        />
+        <span className="text-[11px] text-neutral-400">–</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={max ?? ''}
+          placeholder={bounds.max != null ? String(bounds.max) : 'max'}
+          aria-label={`${label} max`}
+          onChange={(e) => setMax(parse(e.target.value))}
+          className={inputCls}
+        />
+      </div>
+    </div>
+  );
+};
+
 const ToggleCheckbox: React.FC<{
   label: string;
   checked: boolean;
@@ -117,11 +162,23 @@ function bucketsFromFacets(roomsValues: number[]): RoomsBucket[] {
   return (['1–2', '3', '4', '5+'] as RoomsBucket[]).filter((b) => set.has(b));
 }
 
+// A range filter is worth showing only when the catalog spans more than one
+// value (min < max); a single-valued or empty facet has nothing to narrow.
+function hasRange(b: Bounds | undefined): b is Bounds {
+  return b != null && b.min != null && b.max != null && b.max > b.min;
+}
+
 export interface FilterRailProps {
   q: string;
   setQ: (v: string) => void;
-  maxPrice: number;
-  setMaxPrice: (v: number) => void;
+  minPrice: number | null;
+  maxPrice: number | null;
+  setMinPrice: (v: number | null) => void;
+  setMaxPrice: (v: number | null) => void;
+  minArea: number | null;
+  maxArea: number | null;
+  setMinArea: (v: number | null) => void;
+  setMaxArea: (v: number | null) => void;
   districts: string[];
   setDistricts: (v: string[]) => void;
   sectors: string[];
@@ -149,8 +206,14 @@ export interface FilterRailProps {
 export const FilterRail: React.FC<FilterRailProps> = ({
   q,
   setQ,
+  minPrice,
   maxPrice,
+  setMinPrice,
   setMaxPrice,
+  minArea,
+  maxArea,
+  setMinArea,
+  setMaxArea,
   districts,
   setDistricts,
   sectors,
@@ -169,8 +232,6 @@ export const FilterRail: React.FC<FilterRailProps> = ({
   extraSlot,
   searchPlaceholder = 'Title…',
 }) => {
-  const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
-  const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
   const districtOptions = facets?.districts ?? [];
   const sectorOptions = (facets?.sectors ?? []).map((s) => s.name);
   const types = facets?.types ?? [];
@@ -195,25 +256,27 @@ export const FilterRail: React.FC<FilterRailProps> = ({
           aria-label="Search listings"
         />
       </div>
-      {priceMax > priceMin && (
-        <div>
-          <div className="mb-1.5 flex justify-between">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-              Max price
-            </label>
-            <span className="text-[11px] tabular-nums text-neutral-600">{fmt.eur(maxPrice)}</span>
-          </div>
-          <input
-            type="range"
-            min={Math.max(0, priceMin)}
-            max={priceMax}
-            step={Math.max(1000, Math.round((priceMax - priceMin) / 50))}
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(Number(e.target.value))}
-            className="w-full accent-accent"
-            aria-label="Max price"
-          />
-        </div>
+      {hasRange(facets?.price) && (
+        <RangeField
+          label="Price"
+          unit="€"
+          bounds={facets!.price}
+          min={minPrice}
+          max={maxPrice}
+          setMin={setMinPrice}
+          setMax={setMaxPrice}
+        />
+      )}
+      {hasRange(facets?.areaSqm) && (
+        <RangeField
+          label="Surface area"
+          unit="m²"
+          bounds={facets!.areaSqm!}
+          min={minArea}
+          max={maxArea}
+          setMin={setMinArea}
+          setMax={setMaxArea}
+        />
       )}
       {districtOptions.length > 0 && (
         <MultiSelectGroupVertical

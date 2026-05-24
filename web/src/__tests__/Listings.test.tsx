@@ -40,7 +40,7 @@ describe('Listings', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Listings' })).toBeInTheDocument();
-    expect(await screen.findByText('Max price')).toBeInTheDocument();
+    expect(await screen.findByText('Price (€)')).toBeInTheDocument();
     expect(screen.getByLabelText('Search listings')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Title, district…')).toBeInTheDocument();
     // District appears once facets load (rail) and as a table column header.
