@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { getPrisma } from '../../db.js';
 import { deriveType, roomsBucket } from '../../lib/listing-type.js';
 import { fitHedonic, residualPct, type HedonicSample } from '../../lib/hedonic.js';
+import { marketTemperature, type SegmentComponents } from '../../lib/market-index.js';
 import {
   DISTRESS_LEXICON,
   isWeekend,
@@ -731,6 +732,96 @@ analyticsRouter.get('/analytics/valuation', async (c) => {
     deals: scored.slice(0, 20), // most underpriced first
     overpriced: scored.slice(-20).reverse(), // most overpriced first
   });
+});
+
+// Composite Market Temperature Index (P6): the capstone. Per sector, assemble
+// the P0–P3 signals (realized DOM, absorption, distress share, new-listing
+// premium, inventory) and z-blend them into one temperature score + a
+// Buyer/Seller power label. Relative across the sectors in the filtered slice.
+const MARKET_INDEX_MIN_ACTIVE = 5;
+
+analyticsRouter.get('/analytics/market-index', async (c) => {
+  const prisma = getPrisma();
+  const now = new Date();
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
+  const baseWhere = buildListingWhere(filters);
+
+  const active = applyTypeFilter(
+    await prisma.listing.findMany({
+      where: baseWhere,
+      select: {
+        title: true,
+        sector: true,
+        priceEur: true,
+        areaSqm: true,
+        firstSeenAt: true,
+        description: true,
+      },
+    }),
+    filters.type,
+  );
+  const closed = applyTypeFilter(
+    await prisma.listing.findMany({
+      where: { ...baseWhere, active: false, delistedAt: { not: null } },
+      select: { title: true, sector: true, firstSeenAt: true, delistedAt: true },
+    }),
+    filters.type,
+  );
+
+  const activeBySector = new Map<string, typeof active>();
+  for (const l of active) {
+    if (!l.sector) continue;
+    const bucket = activeBySector.get(l.sector);
+    if (bucket) bucket.push(l);
+    else activeBySector.set(l.sector, [l]);
+  }
+  const closedBySector = new Map<string, typeof closed>();
+  for (const l of closed) {
+    if (!l.sector) continue;
+    const bucket = closedBySector.get(l.sector);
+    if (bucket) bucket.push(l);
+    else closedBySector.set(l.sector, [l]);
+  }
+
+  const since28d = new Date(now.getTime() - 28 * DAY_MS);
+  const freshMs = 14 * DAY_MS;
+  const components: SegmentComponents[] = [];
+  for (const [sector, listings] of activeBySector) {
+    if (listings.length < MARKET_INDEX_MIN_ACTIVE) continue;
+    const closedHere = closedBySector.get(sector) ?? [];
+
+    const delists4wk = closedHere.filter(
+      (l) => l.delistedAt != null && l.delistedAt >= since28d,
+    ).length;
+    const distressed = listings.filter((l) => scanDistress(l.description).distressed).length;
+
+    const fresh: number[] = [];
+    const standing: number[] = [];
+    for (const l of listings) {
+      if (l.priceEur == null || l.areaSqm == null || l.areaSqm <= 0) continue;
+      const eps = l.priceEur / l.areaSqm;
+      if (now.getTime() - l.firstSeenAt.getTime() < freshMs) fresh.push(eps);
+      else standing.push(eps);
+    }
+
+    components.push({
+      key: sector,
+      inventory: listings.length,
+      medianDomClosed:
+        closedHere.length > 0
+          ? medianDomClosed(
+              closedHere.map((l) => ({ firstSeenAt: l.firstSeenAt, delistedAt: l.delistedAt })),
+            )
+          : null,
+      absorptionMonths: absorptionMonths(listings.length, delists4wk),
+      distressShare: listings.length > 0 ? distressed / listings.length : 0,
+      newListingPremium: newListingPremium(fresh, standing),
+    });
+  }
+
+  return c.json(marketTemperature(components));
 });
 
 analyticsRouter.get('/analytics/best-buys', async (c) => {
