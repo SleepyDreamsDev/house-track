@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input.js';
 import { PhotoPlaceholder } from '@/components/ui/PhotoPlaceholder.js';
 import { PageHeader } from '@/components/ui/PageHeader.js';
 import { ListingsTable } from '@/components/listings/ListingsTable.js';
+import { Toggle } from '@/components/ui/Toggle.js';
 import { apiCall } from '@/lib/api.js';
 import { fmt } from '@/lib/format.js';
 
@@ -30,6 +31,10 @@ interface Listing {
   snapshots?: number;
   flags?: string[];
   isNew?: boolean;
+  derivedType?: 'House' | 'Villa' | 'Townhouse' | 'Duplex';
+  typeMismatch?: boolean;
+  regionMismatch?: boolean;
+  mismatchReasons?: string[];
 }
 
 const PAGE_SIZE = 50;
@@ -66,6 +71,7 @@ export const Listings: React.FC = () => {
   const sectors = sectorsRaw;
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const [view, setView] = useState<'cards' | 'table'>('cards');
+  const [hideMislabeled, setHideMislabeled] = useState(false);
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
 
@@ -146,6 +152,9 @@ export const Listings: React.FC = () => {
   };
 
   const total = data?.total ?? 0;
+  const visibleListings = (data?.listings ?? []).filter(
+    (l) => !hideMislabeled || !(l.typeMismatch || l.regionMismatch),
+  );
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const onLastPage = page >= pageCount - 1;
 
@@ -205,6 +214,16 @@ export const Listings: React.FC = () => {
                 placeholder="Title, district…"
               />
             </div>
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                Hide mislabeled
+              </span>
+              <Toggle
+                checked={hideMislabeled}
+                onChange={setHideMislabeled}
+                aria-label="Hide mislabeled"
+              />
+            </label>
             <div>
               <div className="flex justify-between mb-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
@@ -353,7 +372,7 @@ export const Listings: React.FC = () => {
           {isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
           {error && <p className="text-sm text-error">Error loading listings</p>}
           {view === 'cards' &&
-            data?.listings?.map((l) => (
+            visibleListings.map((l) => (
               <ListingCard
                 key={l.id}
                 l={l}
@@ -362,9 +381,9 @@ export const Listings: React.FC = () => {
                 onSelect={() => setSelectedId((cur) => (cur === l.id ? null : l.id))}
               />
             ))}
-          {view === 'table' && data?.listings && (
+          {view === 'table' && (
             <ListingsTable
-              rows={data.listings}
+              rows={visibleListings}
               selectedId={selectedId}
               onRowClick={(r) => setSelectedId((cur) => (cur === r.id ? null : r.id))}
             />
@@ -452,6 +471,16 @@ const ListingCard: React.FC<ListingCardProps> = ({ l, selected, autoScroll, onSe
         <div className="flex items-center gap-1.5 mb-1">
           {l.isNew && <Badge variant="default">NEW</Badge>}
           {drop && <Badge variant="warning">−{drop}%</Badge>}
+          {l.typeMismatch && l.derivedType && (
+            <Badge variant="warning" title={(l.mismatchReasons ?? []).join('; ')}>
+              {l.derivedType}
+            </Badge>
+          )}
+          {l.regionMismatch && (
+            <Badge variant="warning" title={(l.mismatchReasons ?? []).join('; ')}>
+              Out-of-region: {l.district ?? '?'}
+            </Badge>
+          )}
           <button
             type="button"
             onClick={(e) => {

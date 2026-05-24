@@ -124,4 +124,104 @@ describe('Listings', () => {
 
     expect(await screen.findByText('Casă, 130 m², Buiucani')).toBeInTheDocument();
   });
+
+  it('shows mislabel badges for a flagged listing', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint.startsWith('/listings/facets')) {
+        return Promise.resolve({
+          total: 1,
+          districts: ['Ialoveni'],
+          price: {},
+          rooms: {},
+          areaSqm: {},
+        });
+      }
+      return Promise.resolve({
+        listings: [
+          {
+            id: '1',
+            url: 'https://999.md/ro/1',
+            title: 'Casă tip duplex',
+            district: 'Ialoveni',
+            priceEur: 100000,
+            areaSqm: 100,
+            rooms: 3,
+            firstSeenAt: new Date().toISOString(),
+            derivedType: 'Duplex',
+            typeMismatch: true,
+            regionMismatch: true,
+            mismatchReasons: ['type: duplex', 'region: Ialoveni'],
+          },
+        ],
+        total: 1,
+      });
+    });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Duplex')).toBeInTheDocument();
+    expect(await screen.findByText(/Out-of-region/)).toBeInTheDocument();
+  });
+
+  it('hides flagged listings when the hide toggle is on', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint.startsWith('/listings/facets')) {
+        return Promise.resolve({ total: 2, districts: [], price: {}, rooms: {}, areaSqm: {} });
+      }
+      return Promise.resolve({
+        listings: [
+          {
+            id: '1',
+            url: 'u1',
+            title: 'Casă bună',
+            district: 'Durlești',
+            priceEur: 90000,
+            areaSqm: 90,
+            rooms: 3,
+            firstSeenAt: new Date().toISOString(),
+            derivedType: 'House',
+            typeMismatch: false,
+            regionMismatch: false,
+            mismatchReasons: [],
+          },
+          {
+            id: '2',
+            url: 'u2',
+            title: 'Casă duplex',
+            district: 'Durlești',
+            priceEur: 95000,
+            areaSqm: 95,
+            rooms: 3,
+            firstSeenAt: new Date().toISOString(),
+            derivedType: 'Duplex',
+            typeMismatch: true,
+            regionMismatch: false,
+            mismatchReasons: ['type: duplex'],
+          },
+        ],
+        total: 2,
+      });
+    });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const user = userEvent.setup();
+    expect(await screen.findByText('Casă duplex')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Hide mislabeled'));
+    expect(screen.queryByText('Casă duplex')).not.toBeInTheDocument();
+    expect(screen.getByText('Casă bună')).toBeInTheDocument();
+  });
 });
