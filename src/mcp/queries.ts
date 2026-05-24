@@ -78,6 +78,7 @@ export interface SearchListingsRow {
   priceEur: number | null;
   priceRaw: string | null;
   areaSqm: number | null;
+  landAre: number | null;
   rooms: number | null;
   district: string | null;
   firstSeenAt: string;
@@ -328,6 +329,7 @@ export async function searchListings(
         priceEur: r.priceEur,
         priceRaw: r.priceRaw,
         areaSqm: r.areaSqm,
+        landAre: r.landAre,
         rooms: r.rooms,
         district: r.district,
         firstSeenAt: r.firstSeenAt.toISOString(),

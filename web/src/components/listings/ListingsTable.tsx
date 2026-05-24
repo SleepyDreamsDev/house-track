@@ -12,8 +12,8 @@ export interface ListingsTableRow {
   priceEur: number | null;
   priceWas?: number;
   areaSqm: number | null;
+  landAre?: number | null;
   rooms: number | null;
-  yearBuilt?: number;
   firstSeenAt: string;
   isNew?: boolean;
   watchlist?: boolean;
@@ -30,8 +30,8 @@ const accessors: Accessors<ListingsTableRow> = {
   priceEur: (r) => r.priceEur,
   eurPerSqm: (r) => (r.areaSqm && r.priceEur ? Math.round(r.priceEur / r.areaSqm) : null),
   areaSqm: (r) => r.areaSqm,
+  landAre: (r) => r.landAre ?? null,
   rooms: (r) => r.rooms,
-  yearBuilt: (r) => r.yearBuilt ?? null,
   firstSeenAt: (r) => new Date(r.firstSeenAt).getTime(),
 };
 
@@ -116,8 +116,8 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               className="px-3"
             />
             <SortableTh
-              label="Year"
-              sortKey="yearBuilt"
+              label="Land"
+              sortKey="landAre"
               activeKey={sortKey}
               activeDir={sortDir}
               onSort={requestSort}
@@ -182,7 +182,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                   {r.rooms ?? '—'}
                 </td>
                 <td className="py-2 px-3 text-right tabular-nums text-neutral-500">
-                  {r.yearBuilt ?? '—'}
+                  {r.landAre != null ? `${r.landAre} ar` : '—'}
                 </td>
                 <td className="py-2 px-3 text-right tabular-nums text-neutral-500">
                   {fmt.rel(r.firstSeenAt)}
