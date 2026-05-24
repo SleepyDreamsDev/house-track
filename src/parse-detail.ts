@@ -16,6 +16,7 @@ interface RawAdvert {
   id?: string;
   title?: string;
   state?: string;
+  posted?: string;
   reseted?: string;
   price?: { value?: { measurement?: string; unit?: string; value?: number } };
   body?: { value?: { ro?: string; ru?: string; translated?: string } };
@@ -93,7 +94,7 @@ export function parseDetail(id: string, json: unknown): ParsedDetail {
     features: [],
     imageUrls: advert.images?.value ?? [],
     sellerType: null,
-    postedAt: null,
+    postedAt: parseRoDate(advert.posted),
     bumpedAt: parseRoDate(advert.reseted),
     ...extractGeo(advert),
     ...extractAuthor(advert),
