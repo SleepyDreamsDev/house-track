@@ -310,6 +310,21 @@ fragment AdvertFeatureValue on FeatureValue {
   __typename
 }`;
 
+// CAPTURE TODO (P2 seller identity): GET_ADVERT_QUERY selects only
+// `owner { __typename }`. On the next live capture (scripts/capture-session.ts),
+// extend it to the real owner fields — likely `owner { id name type __typename }`
+// — verified against an actual GetAdvert response. parse-detail's extractAuthor()
+// already reads id/name/type defensively, so once the selection lands the
+// columns populate with no further code change. Do NOT guess the field names
+// here: an unknown field makes the whole advert request error (project rule).
+
+// CAPTURE TODO (P2 phone, PII): phone is NOT in the advert payload — 999.md
+// reveals it via a separate operation. REPLACE-ME with the real query/mutation
+// captured from a live "show phone" click, then wire a politeness-budgeted
+// fetch in the detail trickle (one extra request per listing) that sets
+// Listing.phone. Until then this is an inert placeholder.
+export const ADVERT_PHONES_QUERY = `REPLACE-ME: captured GetAdvertPhones operation`;
+
 // REPLACE-ME — populated by scripts/capture-session.ts after a live capture.
 // 999.md's filter taxonomy operation name is unknown a priori; the script
 // discovers it at run time. Until populated, parseTaxonomy() falls back to

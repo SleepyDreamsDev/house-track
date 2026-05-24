@@ -58,6 +58,27 @@ model Listing {
   postedAt    DateTime?
   bumpedAt    DateTime?
 
+  // Geo (P2). Parsed from the advert's mapPoint (feature id 3). The raw value
+  // shape is opaque, so extraction is wired defensively and populated by the
+  // next live capture / details recap — null until then. Enables geo-proximity
+  // dedup.
+  lat Float?
+  lon Float?
+
+  // Seller identity (P2). The advert exposes an `owner` object; the GetAdvert
+  // selection currently fetches only __typename, so these populate once the
+  // next capture extends the owner selection. Feeds the seller-portfolio graph.
+  authorId   String?
+  authorName String?
+  authorType String? // private / agency, per the source's own owner classification
+  phone      String? // PII — captured via the separate phone-reveal op (next capture)
+
+  // Dedup cluster (P2). Points to the canonical (earliest-seen) listing id of
+  // this property's cluster; null for singletons. Set by recomputeClusters from
+  // image-URL / geo / address match edges. Lets every inventory count collapse
+  // cross-posted duplicates + relistings to one property.
+  canonicalId String?
+
   // Versioning: track price/desc changes over time
   snapshots    ListingSnapshot[]
   filterValues ListingFilterValue[]
@@ -69,6 +90,8 @@ model Listing {
   @@index([sector])
   @@index([excluded])
   @@index([delistedAt]) // absorption / gone-per-week bucketing
+  @@index([canonicalId]) // unique-inventory + duplicate-cluster lookups
+  @@index([authorId]) // seller-portfolio aggregation
 }
 
 // One row per filter triple observed on a listing's detail response.

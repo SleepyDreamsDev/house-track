@@ -22,6 +22,12 @@ interface RawAdvert {
   city?: { value?: { translated?: string } };
   street?: { value?: string };
   images?: { value?: string[] };
+  // mapPoint is feature(id 3); its `value` shape is opaque until the next live
+  // capture confirms it. extractGeo() reads it defensively across common keys.
+  mapPoint?: { value?: unknown };
+  // owner currently selects only __typename (see GET_ADVERT_QUERY). The next
+  // capture extends the selection; extractAuthor() reads whatever lands here.
+  owner?: { id?: string | number; name?: string; type?: string } | null;
   [key: string]: unknown;
 }
 
@@ -89,8 +95,50 @@ export function parseDetail(id: string, json: unknown): ParsedDetail {
     sellerType: null,
     postedAt: null,
     bumpedAt: parseRoDate(advert.reseted),
+    ...extractGeo(advert),
+    ...extractAuthor(advert),
+    phone: null, // populated by the phone-reveal op once the next capture wires it
     rawHtmlHash: hashStableFields(advert),
     filterValues: extractFilterValues(advert),
+  };
+}
+
+// Defensive geo extraction from the mapPoint feature value. The 999.md value
+// shape is opaque (REPLACE-ME: confirm on the next capture). We try the key
+// names classifieds commonly use and ignore anything non-finite, so this stays
+// null — never wrong — until a real payload pins the shape.
+function extractGeo(advert: RawAdvert): { lat: number | null; lon: number | null } {
+  const v = advert.mapPoint?.value;
+  if (!v || typeof v !== 'object') return { lat: null, lon: null };
+  const o = v as Record<string, unknown>;
+  const num = (...keys: string[]): number | null => {
+    for (const k of keys) {
+      const n = o[k];
+      if (typeof n === 'number' && Number.isFinite(n)) return n;
+    }
+    return null;
+  };
+  return {
+    lat: num('lat', 'latitude', 'y'),
+    lon: num('lon', 'lng', 'longitude', 'x'),
+  };
+}
+
+// Defensive seller-identity extraction from the owner object. Null until the
+// capture extends `owner { ... }` beyond __typename (REPLACE-ME).
+function extractAuthor(advert: RawAdvert): {
+  authorId: string | null;
+  authorName: string | null;
+  authorType: string | null;
+} {
+  const o = advert.owner;
+  if (!o || typeof o !== 'object') {
+    return { authorId: null, authorName: null, authorType: null };
+  }
+  return {
+    authorId: o.id != null ? String(o.id) : null,
+    authorName: typeof o.name === 'string' ? o.name : null,
+    authorType: typeof o.type === 'string' ? o.type : null,
   };
 }
 

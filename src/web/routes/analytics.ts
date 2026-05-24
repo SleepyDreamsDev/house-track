@@ -29,6 +29,7 @@ interface OverviewResponse {
   kpis: {
     medianEurPerSqm: number;
     activeInventory: number;
+    uniqueInventory: number; // active listings after collapsing dedup clusters (P2)
     medianDomDays: number;
     bestDealsCount: number;
     recentDropsCount: number;
@@ -210,9 +211,14 @@ analyticsRouter.get('/analytics/overview', async (c) => {
       district: true,
       firstSeenAt: true,
       sellerType: true,
+      canonicalId: true,
     },
   });
   const active = applyTypeFilter(allActive, filters.type);
+
+  // Unique inventory collapses dedup clusters: one count per distinct property
+  // (canonicalId, or the listing's own id when it's canonical/a singleton).
+  const uniqueInventory = new Set(active.map((l) => l.canonicalId ?? l.id)).size;
 
   // Closed (delisted) listings within the same filter slice — the basis for
   // realized DOM, absorption, and the real gonePerWeek series. baseWhere forces
@@ -436,6 +442,7 @@ analyticsRouter.get('/analytics/overview', async (c) => {
     kpis: {
       medianEurPerSqm,
       activeInventory: active.length,
+      uniqueInventory,
       medianDomDays,
       bestDealsCount,
       recentDropsCount,
@@ -501,6 +508,77 @@ analyticsRouter.get('/analytics/segments', async (c) => {
   const listings: SegmentListing[] = applyTypeFilter(rowsRaw, filters.type);
   const segments: SegmentRow[] = segmentStats(listings, dims);
   return c.json(segments);
+});
+
+// Dedup clusters: every listing whose canonicalId is set is a duplicate/relisting
+// of a canonical (earliest-seen) listing. Groups them for an operator to review.
+// Populated by Persistence.recomputeClusters().
+analyticsRouter.get('/analytics/duplicates', async (c) => {
+  const prisma = getPrisma();
+  const members = await prisma.listing.findMany({
+    where: { canonicalId: { not: null } },
+    select: { id: true, url: true, title: true, canonicalId: true },
+  });
+  const byCanonical = new Map<string, { id: string; url: string; title: string }[]>();
+  for (const m of members) {
+    if (m.canonicalId == null) continue;
+    const arr = byCanonical.get(m.canonicalId) ?? [];
+    arr.push({ id: m.id, url: m.url, title: m.title });
+    byCanonical.set(m.canonicalId, arr);
+  }
+  const canonicalIds = [...byCanonical.keys()];
+  const canonRows = canonicalIds.length
+    ? await prisma.listing.findMany({
+        where: { id: { in: canonicalIds } },
+        select: { id: true, url: true, title: true },
+      })
+    : [];
+  const canonById = new Map(canonRows.map((r) => [r.id, r]));
+  const clusters = canonicalIds
+    .map((cid) => {
+      const duplicates = byCanonical.get(cid) ?? [];
+      const canonical = canonById.get(cid) ?? null;
+      return { canonicalId: cid, canonical, duplicates, size: duplicates.length + 1 };
+    })
+    .sort((a, b) => b.size - a.size);
+  return c.json(clusters);
+});
+
+// Seller-portfolio graph: listings + sell-through (delisted ÷ total) by authorId.
+// Sparse until the next capture populates author identity — see graphql.ts.
+analyticsRouter.get('/analytics/sellers', async (c) => {
+  const prisma = getPrisma();
+  const rows = await prisma.listing.findMany({
+    where: { authorId: { not: null } },
+    select: { authorId: true, authorName: true, active: true, delistedAt: true },
+  });
+  const byAuthor = new Map<
+    string,
+    { name: string | null; total: number; delisted: number; active: number }
+  >();
+  for (const r of rows) {
+    if (r.authorId == null) continue;
+    const agg = byAuthor.get(r.authorId) ?? {
+      name: r.authorName,
+      total: 0,
+      delisted: 0,
+      active: 0,
+    };
+    agg.total++;
+    if (r.delistedAt != null) agg.delisted++;
+    if (r.active) agg.active++;
+    byAuthor.set(r.authorId, agg);
+  }
+  const sellers = [...byAuthor.entries()]
+    .map(([authorId, a]) => ({
+      authorId,
+      authorName: a.name,
+      listings: a.total,
+      activeListings: a.active,
+      sellThrough: a.total > 0 ? a.delisted / a.total : 0,
+    }))
+    .sort((x, y) => y.listings - x.listings);
+  return c.json(sellers);
 });
 
 analyticsRouter.get('/analytics/best-buys', async (c) => {
