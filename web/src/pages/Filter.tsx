@@ -5,48 +5,30 @@ import { Button } from '@/components/ui/Button.js';
 import { Card } from '@/components/ui/Card.js';
 import { PageHeader, SectionHeader } from '@/components/ui/PageHeader.js';
 import { apiCall } from '@/lib/api.js';
-import {
-  CATEGORIES,
-  type ExtraFilterTriple,
-  type GenericFilter,
-  genericFilterSchema,
-  LOCALITIES,
-  type Locality,
-  TRANSACTION_TYPES,
-} from '@/lib/filterSchema.js';
+import { CATEGORIES, type GenericFilter, genericFilterSchema } from '@/lib/filterSchema.js';
+import { FilterForm, type TaxonomyEntry } from '@/components/filters/FilterForm.js';
 
 interface FilterResponse {
   generic: GenericFilter;
   sources: Array<{ slug: string; name: string; active: boolean }>;
   resolved: {
     searchInput: { subCategoryId: number; filters: unknown };
-    postFilter: { maxPriceEur: number; maxAreaSqm: number };
+    postFilter: { maxPriceEur: number };
   };
   sourceSlug: string;
 }
 
-interface FilterFacet {
-  filterId: number;
-  featureId: number;
-  optionIds: number[];
-  listingCount: number;
-  sampleListingIds: string[];
-  filterLabel?: string | null;
-  featureLabel?: string | null;
-  optionLabels?: Record<number, string>;
-}
-
-const NUMERIC_FIELDS = ['priceMin', 'priceMax', 'sqmMin', 'sqmMax'] as const;
-
 export const Filter: React.FC = () => {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<FilterResponse>({
+
+  const { data, isLoading: filterLoading } = useQuery<FilterResponse>({
     queryKey: ['filter'],
     queryFn: () => apiCall('/filter'),
   });
-  const { data: facets } = useQuery<FilterFacet[]>({
-    queryKey: ['filter-facets'],
-    queryFn: () => apiCall('/filters'),
+
+  const { data: taxonomy, isLoading: taxonomyLoading } = useQuery<TaxonomyEntry[]>({
+    queryKey: ['filter-taxonomy'],
+    queryFn: () => apiCall('/filter/taxonomy'),
   });
 
   const [draft, setDraft] = useState<GenericFilter | null>(null);
@@ -54,14 +36,7 @@ export const Filter: React.FC = () => {
 
   useEffect(() => {
     if (data?.generic && draft === null) {
-      setDraft({
-        ...data.generic,
-        locality: [...data.generic.locality],
-        extraFilters: (data.generic.extraFilters ?? []).map((t) => ({
-          ...t,
-          optionIds: [...t.optionIds],
-        })),
-      });
+      setDraft(structuredClone(data.generic));
     }
   }, [data, draft]);
 
@@ -73,12 +48,13 @@ export const Filter: React.FC = () => {
       }),
     onSuccess: (next) => {
       qc.setQueryData(['filter'], next);
+      setDraft(structuredClone(next.generic));
       setError(null);
     },
     onError: (err) => setError(err.message),
   });
 
-  if (isLoading || !draft || !data) {
+  if (filterLoading || taxonomyLoading || !draft || !data || !taxonomy) {
     return (
       <div data-screen-label="Filter">
         <PageHeader title="Filter" subtitle="Loading…" />
@@ -87,53 +63,6 @@ export const Filter: React.FC = () => {
   }
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(data.generic);
-
-  function update<K extends keyof GenericFilter>(key: K, value: GenericFilter[K]) {
-    setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }
-
-  function setNumber(key: (typeof NUMERIC_FIELDS)[number], raw: string) {
-    if (raw === '') {
-      update(key, undefined as never);
-      return;
-    }
-    const n = Number(raw);
-    if (Number.isFinite(n)) update(key, n as never);
-  }
-
-  function toggleLocality(loc: Locality) {
-    if (!draft) return;
-    const has = draft.locality.includes(loc);
-    const next = has ? draft.locality.filter((l) => l !== loc) : [...draft.locality, loc];
-    update('locality', next);
-  }
-
-  function toggleExtraOption(filterId: number, featureId: number, optionId: number) {
-    if (!draft) return;
-    const matchIdx = draft.extraFilters.findIndex(
-      (t) => t.filterId === filterId && t.featureId === featureId,
-    );
-    const next = draft.extraFilters.map((t) => ({ ...t, optionIds: [...t.optionIds] }));
-    if (matchIdx === -1) {
-      next.push({ filterId, featureId, optionIds: [optionId] });
-    } else {
-      const current = next[matchIdx]!;
-      const has = current.optionIds.includes(optionId);
-      current.optionIds = has
-        ? current.optionIds.filter((o) => o !== optionId)
-        : [...current.optionIds, optionId];
-      if (current.optionIds.length === 0) next.splice(matchIdx, 1);
-    }
-    update('extraFilters', next);
-  }
-
-  function isExtraSelected(filterId: number, featureId: number, optionId: number): boolean {
-    if (!draft) return false;
-    const triple = draft.extraFilters.find(
-      (t) => t.filterId === filterId && t.featureId === featureId,
-    );
-    return triple?.optionIds.includes(optionId) ?? false;
-  }
 
   function onSave() {
     if (!draft) return;
@@ -149,15 +78,7 @@ export const Filter: React.FC = () => {
   }
 
   function onReset() {
-    if (data)
-      setDraft({
-        ...data.generic,
-        locality: [...data.generic.locality],
-        extraFilters: (data.generic.extraFilters ?? []).map((t) => ({
-          ...t,
-          optionIds: [...t.optionIds],
-        })),
-      });
+    if (data) setDraft(structuredClone(data.generic));
     setError(null);
   }
 
@@ -183,12 +104,6 @@ export const Filter: React.FC = () => {
             Generic filter
           </a>
           <a
-            href="#Dynamic"
-            className="block rounded-sm px-2.5 py-1.5 text-neutral-600 hover:bg-neutral-100"
-          >
-            Source filters
-          </a>
-          <a
             href="#Resolved"
             className="block rounded-sm px-2.5 py-1.5 text-neutral-600 hover:bg-neutral-100"
           >
@@ -207,7 +122,7 @@ export const Filter: React.FC = () => {
                 disabled={data.sources.length <= 1}
                 value={data.sourceSlug}
                 onChange={() => {
-                  /* single-source for now; future: PATCH /api/filter?source=… */
+                  /* future: PATCH /api/filter?source=… */
                 }}
                 className="h-8 w-full max-w-sm rounded-sm bg-white px-2 text-sm border border-neutral-200 disabled:bg-neutral-50 disabled:text-neutral-500"
               >
@@ -227,28 +142,26 @@ export const Filter: React.FC = () => {
 
           <Card id="Generic">
             <SectionHeader title="Generic filter" />
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-3">
-              <Field label="Transaction type">
-                <select
-                  value={draft.transactionType}
-                  onChange={(e) =>
-                    update('transactionType', e.target.value as GenericFilter['transactionType'])
-                  }
-                  className="h-8 w-full rounded-sm bg-white px-2 text-sm border border-neutral-200"
+            <div className="py-3 space-y-4">
+              <div>
+                <label
+                  htmlFor="category-select"
+                  className="block text-xs font-medium text-neutral-500 mb-1"
                 >
-                  {TRANSACTION_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Category">
+                  Category
+                </label>
                 <select
+                  id="category-select"
+                  aria-label="category"
                   value={draft.category}
-                  onChange={(e) => update('category', e.target.value as GenericFilter['category'])}
-                  className="h-8 w-full rounded-sm bg-white px-2 text-sm border border-neutral-200"
+                  onChange={(e) =>
+                    setDraft((prev) =>
+                      prev
+                        ? { ...prev, category: e.target.value as GenericFilter['category'] }
+                        : prev,
+                    )
+                  }
+                  className="h-8 w-full max-w-xs rounded-sm bg-white px-2 text-sm border border-neutral-200"
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c} value={c}>
@@ -256,59 +169,9 @@ export const Filter: React.FC = () => {
                     </option>
                   ))}
                 </select>
-              </Field>
+              </div>
 
-              <Field label="Locality" wide>
-                <div className="flex flex-wrap gap-1.5">
-                  {LOCALITIES.map((loc) => {
-                    const active = draft.locality.includes(loc);
-                    return (
-                      <button
-                        key={loc}
-                        type="button"
-                        onClick={() => toggleLocality(loc)}
-                        className={`rounded-sm px-2.5 py-1 text-xs font-medium border transition-colors ${
-                          active
-                            ? 'bg-neutral-900 text-white border-neutral-900'
-                            : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
-                        }`}
-                      >
-                        {loc}
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
-
-              <Field label="Price min (€)">
-                <NumberInput
-                  value={draft.priceMin}
-                  onChange={(v) => setNumber('priceMin', v)}
-                  placeholder="any"
-                />
-              </Field>
-              <Field label="Price max (€)">
-                <NumberInput
-                  value={draft.priceMax}
-                  onChange={(v) => setNumber('priceMax', v)}
-                  placeholder="any"
-                />
-              </Field>
-
-              <Field label="Sqm min">
-                <NumberInput
-                  value={draft.sqmMin}
-                  onChange={(v) => setNumber('sqmMin', v)}
-                  placeholder="any"
-                />
-              </Field>
-              <Field label="Sqm max">
-                <NumberInput
-                  value={draft.sqmMax}
-                  onChange={(v) => setNumber('sqmMax', v)}
-                  placeholder="any"
-                />
-              </Field>
+              <FilterForm taxonomy={taxonomy} draft={draft} onChange={setDraft} />
             </div>
 
             {error && (
@@ -330,83 +193,6 @@ export const Filter: React.FC = () => {
             </div>
           </Card>
 
-          <Card id="Dynamic">
-            <SectionHeader title={`Source filters · ${data.sourceSlug}`} />
-            <p className="mb-3 mt-1 text-xs text-neutral-500">
-              Filter triples observed in detail-fetched listings. Labels come from the captured
-              999.md taxonomy (<code>src/data/filter-taxonomy.json</code>); chips that fall back to
-              numbers are values 999.md added since the last capture — re-run{' '}
-              <code>scripts/capture-session.ts</code> to refresh. Selections AND across groups, OR
-              within optionIds.
-            </p>
-            {!facets ? (
-              <div className="py-3 text-xs text-neutral-400">Loading facets…</div>
-            ) : facets.length === 0 ? (
-              <div className="py-3 text-xs text-neutral-400">
-                No filter values observed yet. Run a sweep to populate.
-              </div>
-            ) : (
-              <div className="divide-y divide-neutral-100">
-                {facets.map((f) => {
-                  const selectedCount =
-                    draft.extraFilters.find(
-                      (t) => t.filterId === f.filterId && t.featureId === f.featureId,
-                    )?.optionIds.length ?? 0;
-                  return (
-                    <details
-                      key={`${f.filterId}:${f.featureId}`}
-                      className="py-2 group"
-                      open={selectedCount > 0}
-                    >
-                      <summary className="flex cursor-pointer items-center gap-2 text-sm">
-                        <span className="text-neutral-900 font-medium">
-                          {f.featureLabel ?? f.filterLabel ?? `filter ${f.filterId}`}
-                        </span>
-                        <span className="font-mono text-[10px] text-neutral-400">
-                          #{f.filterId}/{f.featureId}
-                        </span>
-                        <span className="text-xs text-neutral-400">
-                          {f.optionIds.length} options · {f.listingCount} listings
-                        </span>
-                        {selectedCount > 0 && (
-                          <span className="ml-auto rounded-sm bg-neutral-900 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                            {selectedCount} selected
-                          </span>
-                        )}
-                      </summary>
-                      <div className="mt-2 flex flex-wrap gap-1.5 pl-1">
-                        {f.optionIds
-                          .slice()
-                          .sort((a, b) => a - b)
-                          .map((opt) => {
-                            const active = isExtraSelected(f.filterId, f.featureId, opt);
-                            const label = f.optionLabels?.[opt];
-                            return (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => toggleExtraOption(f.filterId, f.featureId, opt)}
-                                title={label ? `optionId ${opt}` : undefined}
-                                className={`rounded-sm px-2 py-0.5 text-[11px] border transition-colors ${
-                                  label ? '' : 'font-mono tabular-nums'
-                                } ${
-                                  active
-                                    ? 'bg-neutral-900 text-white border-neutral-900'
-                                    : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
-                                }`}
-                              >
-                                {label ?? opt}
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
           <Card id="Resolved">
             <SectionHeader title="Resolved (source-specific)" />
             <div className="py-3 space-y-2 text-xs">
@@ -423,28 +209,3 @@ export const Filter: React.FC = () => {
     </div>
   );
 };
-
-const Field: React.FC<{ label: string; wide?: boolean; children: React.ReactNode }> = ({
-  label,
-  wide,
-  children,
-}) => (
-  <div className={wide ? 'col-span-2' : ''}>
-    <label className="block text-xs font-medium text-neutral-500 mb-1">{label}</label>
-    {children}
-  </div>
-);
-
-const NumberInput: React.FC<{
-  value: number | undefined;
-  onChange: (raw: string) => void;
-  placeholder?: string;
-}> = ({ value, onChange, placeholder }) => (
-  <input
-    type="number"
-    value={value === undefined ? '' : value}
-    onChange={(e) => onChange(e.target.value)}
-    placeholder={placeholder}
-    className="h-8 w-full rounded-sm bg-white px-2.5 text-sm text-right tabular-nums border border-neutral-200"
-  />
-);

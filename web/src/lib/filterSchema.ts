@@ -6,58 +6,67 @@
 
 import { z } from 'zod';
 
-export const TRANSACTION_TYPES = ['sale', 'rent'] as const;
 export const CATEGORIES = ['house', 'apartment'] as const;
-export const LOCALITIES = ['chisinau', 'durlesti', 'codru', 'colonita'] as const;
-export const CURRENCIES = ['EUR'] as const;
-
-export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 export type Category = (typeof CATEGORIES)[number];
-export type Locality = (typeof LOCALITIES)[number];
-export type Currency = (typeof CURRENCIES)[number];
 
-export interface ExtraFilterTriple {
-  filterId: number;
-  featureId: number;
-  optionIds: number[];
-}
+// ── FilterSelection discriminated union ──────────────────────────────────────
+// Note: z.discriminatedUnion requires plain ZodObject members (no .refine()).
+// Range-specific constraints (min≤max) are applied at GenericFilter level.
 
-export interface GenericFilter {
-  transactionType: TransactionType;
-  category: Category;
-  locality: Locality[];
-  currency: Currency;
-  priceMin?: number | undefined;
-  priceMax?: number | undefined;
-  sqmMin?: number | undefined;
-  sqmMax?: number | undefined;
-  extraFilters: ExtraFilterTriple[];
-}
-
-const extraFilterTripleSchema = z.object({
+const optionsSelectionSchema = z.object({
+  kind: z.literal('options'),
   filterId: z.number().int(),
   featureId: z.number().int(),
   optionIds: z.array(z.number().int()).min(1),
 });
 
-const baseSchema = z.object({
-  transactionType: z.enum(TRANSACTION_TYPES),
-  category: z.enum(CATEGORIES),
-  locality: z.array(z.enum(LOCALITIES)).min(1),
-  currency: z.enum(CURRENCIES).default('EUR'),
-  priceMin: z.number().nonnegative().optional(),
-  priceMax: z.number().positive().optional(),
-  sqmMin: z.number().nonnegative().optional(),
-  sqmMax: z.number().positive().optional(),
-  extraFilters: z.array(extraFilterTripleSchema).default([]),
+const rangeSelectionSchema = z.object({
+  kind: z.literal('range'),
+  filterId: z.number().int(),
+  featureId: z.number().int(),
+  unit: z.string().optional(),
+  min: z.string().optional(),
+  max: z.string().optional(),
 });
 
-export const genericFilterSchema = baseSchema
-  .refine((v) => v.priceMin === undefined || v.priceMax === undefined || v.priceMin <= v.priceMax, {
-    path: ['priceMin'],
-    message: 'priceMin must be ≤ priceMax',
-  })
-  .refine((v) => v.sqmMin === undefined || v.sqmMax === undefined || v.sqmMin <= v.sqmMax, {
-    path: ['sqmMin'],
-    message: 'sqmMin must be ≤ sqmMax',
+const booleanSelectionSchema = z.object({
+  kind: z.literal('boolean'),
+  filterId: z.number().int(),
+  featureId: z.number().int(),
+});
+
+export const filterSelectionSchema = z
+  .discriminatedUnion('kind', [
+    optionsSelectionSchema,
+    rangeSelectionSchema,
+    booleanSelectionSchema,
+  ])
+  // Applied after discriminator so it only runs on the matched variant.
+  // For range: at least one of min/max must be present, and min ≤ max.
+  .superRefine((val, ctx) => {
+    if (val.kind !== 'range') return;
+    if (val.min === undefined && val.max === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'range must have at least one of min or max',
+      });
+    }
+    if (val.min !== undefined && val.max !== undefined && Number(val.min) > Number(val.max)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['min'],
+        message: 'min must be ≤ max',
+      });
+    }
   });
+
+export type FilterSelection = z.infer<typeof filterSelectionSchema>;
+
+// ── GenericFilter ─────────────────────────────────────────────────────────────
+
+export const genericFilterSchema = z.object({
+  category: z.enum(CATEGORIES),
+  filters: z.array(filterSelectionSchema),
+});
+
+export type GenericFilter = z.infer<typeof genericFilterSchema>;
