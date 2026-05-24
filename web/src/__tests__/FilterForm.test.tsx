@@ -91,7 +91,9 @@ const FILTER_RESPONSE = {
 
 function mockApi(overrides?: Record<string, unknown>) {
   return async (endpoint: string) => {
-    if (endpoint === '/filter/taxonomy') return TAXONOMY;
+    // Support both the legacy endpoint and the new category-keyed endpoints
+    if (endpoint === '/filter/taxonomy' || endpoint.startsWith('/filter/taxonomy?category='))
+      return TAXONOMY;
     if (endpoint === '/filter') return overrides?.filter ?? FILTER_RESPONSE;
     if (endpoint === '/filters') return [];
     return null;
@@ -274,7 +276,8 @@ describe('Filter page — taxonomy-driven form', () => {
         putBody = JSON.parse(opts.body as string);
         return FILTER_RESPONSE;
       }
-      if (endpoint === '/filter/taxonomy') return areaTaxonomy;
+      if (endpoint === '/filter/taxonomy' || endpoint.startsWith('/filter/taxonomy?category='))
+        return areaTaxonomy;
       if (endpoint === '/filter')
         return { ...FILTER_RESPONSE, generic: { category: 'house', filters: [] } };
       return [];
@@ -472,7 +475,8 @@ describe('Filter page — taxonomy-driven form', () => {
       },
     ];
     (apiCall as any).mockImplementation(async (endpoint: string) => {
-      if (endpoint === '/filter/taxonomy') return bigTaxonomy;
+      if (endpoint === '/filter/taxonomy' || endpoint.startsWith('/filter/taxonomy?category='))
+        return bigTaxonomy;
       if (endpoint === '/filter')
         return { ...FILTER_RESPONSE, generic: { category: 'house', filters: [] } };
       return [];
@@ -501,7 +505,8 @@ describe('Filter page — taxonomy-driven form', () => {
       },
     ];
     (apiCall as any).mockImplementation(async (endpoint: string) => {
-      if (endpoint === '/filter/taxonomy') return bigTaxonomy;
+      if (endpoint === '/filter/taxonomy' || endpoint.startsWith('/filter/taxonomy?category='))
+        return bigTaxonomy;
       if (endpoint === '/filter')
         return { ...FILTER_RESPONSE, generic: { category: 'house', filters: [] } };
       return [];

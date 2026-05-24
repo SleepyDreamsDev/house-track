@@ -433,11 +433,11 @@ async function writeArtefacts(
     // production build — see taxonomy-labels.ts which imports it for
     // human-readable filter/option labels in the operator UI.
     await writeFile(
-      join(REPO_ROOT, 'src/data/filter-taxonomy.json'),
+      join(REPO_ROOT, 'src/data/filter-taxonomy.1406.json'),
       `${JSON.stringify(taxonomy.body, null, 2)}\n`,
       'utf8',
     );
-    console.error('· wrote filter-taxonomy.json');
+    console.error('· wrote filter-taxonomy.1406.json (houses; use capture-taxonomy for others)');
   }
 
   const searchDiff = diffVariables(search.variables, buildSearchVariables(0));

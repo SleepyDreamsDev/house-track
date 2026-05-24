@@ -258,6 +258,54 @@ describe('999md resolver — default resolves correctly', () => {
   });
 });
 
+describe('999md resolver — category-aware taxonomy validation', () => {
+  it('apartment-only filterId 1191 (Etaj) is accepted for category=apartment', () => {
+    const filter: GenericFilter = {
+      category: 'apartment',
+      filters: [
+        { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+        { kind: 'options', filterId: 32, featureId: 7, optionIds: [12900] },
+        { kind: 'options', filterId: 1191, featureId: 248, optionIds: [918] },
+      ],
+    };
+    expect(() => source999md.resolve(filter)).not.toThrow();
+  });
+
+  it('apartment-only filterId 1191 (Etaj) throws UnknownGenericFilterValueError for category=house', () => {
+    const filter: GenericFilter = {
+      category: 'house',
+      filters: [
+        { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+        { kind: 'options', filterId: 1191, featureId: 248, optionIds: [918] },
+      ],
+    };
+    expect(() => source999md.resolve(filter)).toThrow(UnknownGenericFilterValueError);
+  });
+
+  it('house-only filterId 1207 (Stare casă) is accepted for category=house', () => {
+    // featureId=254, optionId=1646 captured from filter-taxonomy.1406.json fixture
+    const filter: GenericFilter = {
+      category: 'house',
+      filters: [
+        { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+        { kind: 'options', filterId: 1207, featureId: 254, optionIds: [1646] },
+      ],
+    };
+    expect(() => source999md.resolve(filter)).not.toThrow();
+  });
+
+  it('house-only filterId 1207 (Stare casă) throws UnknownGenericFilterValueError for category=apartment', () => {
+    const filter: GenericFilter = {
+      category: 'apartment',
+      filters: [
+        { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+        { kind: 'options', filterId: 1207, featureId: 254, optionIds: [1] },
+      ],
+    };
+    expect(() => source999md.resolve(filter)).toThrow(UnknownGenericFilterValueError);
+  });
+});
+
 describe('999md resolver — AND-merge (multi-selection same filterId)', () => {
   it('two optionIds for same featureId are merged into one feature entry', () => {
     const filter: GenericFilter = {

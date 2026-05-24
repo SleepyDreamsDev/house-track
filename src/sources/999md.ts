@@ -1,11 +1,5 @@
-// 999.md adapter — translates GenericFilter into the GraphQL searchInput
-// shape that lives in src/config.ts FILTER.searchInput.
-//
-// Param IDs were captured from a real browser session per CLAUDE.md.
-// Each unmapped value at runtime throws UnknownGenericFilterValueError
-// rather than silently dropping — see src/types/filter.ts module header.
-
-import taxonomyJson from '../data/filter-taxonomy.json' with { type: 'json' };
+import taxonomy1404Json from '../data/filter-taxonomy.1404.json' with { type: 'json' };
+import taxonomy1406Json from '../data/filter-taxonomy.1406.json' with { type: 'json' };
 import type { Category, FilterSelection, GenericFilter } from '../types/filter.js';
 import type { ResolvedFeature, ResolvedFilter, Source } from './types.js';
 import { UnknownGenericFilterValueError } from './types.js';
@@ -41,10 +35,17 @@ interface RawTaxonomy {
   data?: { category?: { filters?: RawFilter[] } };
 }
 
-const taxonomy = (taxonomyJson as RawTaxonomy).data?.category?.filters ?? [];
-const filterById = new Map<number, RawFilter>(taxonomy.map((f) => [f.id, f]));
+function buildFilterMap(json: unknown): Map<number, RawFilter> {
+  const filters = (json as RawTaxonomy).data?.category?.filters ?? [];
+  return new Map(filters.map((f) => [f.id, f]));
+}
 
-function getFilter(filterId: number): RawFilter {
+const TAXONOMY_BY_SUBCATEGORY = new Map<number, Map<number, RawFilter>>([
+  [1406, buildFilterMap(taxonomy1406Json)],
+  [1404, buildFilterMap(taxonomy1404Json)],
+]);
+
+function getFilter(filterById: Map<number, RawFilter>, filterId: number): RawFilter {
   const f = filterById.get(filterId);
   if (!f) throw new UnknownGenericFilterValueError('filterId', String(filterId));
   return f;
@@ -88,14 +89,12 @@ function mergeIntoFilters(
     byFeatureId.set(key, feature);
     return;
   }
-  // Merge optionIds for options features
   if ('optionIds' in existing && 'optionIds' in feature) {
     for (const id of feature.optionIds) {
       if (!existing.optionIds.includes(id)) existing.optionIds.push(id);
     }
     return;
   }
-  // For range and boolean: last write wins (they're single-valued per featureId)
   byFeatureId.set(key, feature);
 }
 
@@ -110,9 +109,10 @@ function buildFilters(
 }
 
 function translateSelection(
+  filterById: Map<number, RawFilter>,
   sel: FilterSelection,
 ): { filterId: number; featureId: number; feature: ResolvedFeature } | null {
-  const filter = getFilter(sel.filterId);
+  const filter = getFilter(filterById, sel.filterId);
   const feat = getFeature(filter, sel.featureId);
 
   if (sel.kind === 'options') {
@@ -159,21 +159,25 @@ function resolve(generic: GenericFilter): ResolvedFilter {
     throw new UnknownGenericFilterValueError('category', String(generic.category));
   }
 
+  const filterById = TAXONOMY_BY_SUBCATEGORY.get(subCategoryId);
+  if (!filterById) {
+    throw new UnknownGenericFilterValueError('category', String(generic.category));
+  }
+
   const byFilterId = new Map<number, Map<string, ResolvedFeature>>();
   let minPriceEur = 0;
   let maxPriceEur = Number.MAX_SAFE_INTEGER;
 
   for (const sel of generic.filters) {
     if (sel.kind === 'range' && sel.filterId === PRICE_FILTER_ID) {
-      // Validate taxonomy first
-      const filter = getFilter(sel.filterId);
+      const filter = getFilter(filterById, sel.filterId);
       getFeature(filter, sel.featureId);
       if (sel.unit !== undefined) validateUnit(filter, sel.unit);
       if (sel.min !== undefined) minPriceEur = Number(sel.min);
       if (sel.max !== undefined) maxPriceEur = Number(sel.max);
       continue;
     }
-    const translated = translateSelection(sel);
+    const translated = translateSelection(filterById, sel);
     if (translated !== null) {
       mergeIntoFilters(byFilterId, translated.filterId, translated.featureId, translated.feature);
     }

@@ -1,13 +1,5 @@
-// Human-readable labels for 999.md filter triples (filterId, featureId,
-// optionId). Loaded once at module load from the captured filter-taxonomy
-// response in src/data/. The /api/filters route enriches its FilterGroup
-// payload with these so the operator UI can render "Vând" instead of "776".
-//
-// This is a static distillation: 999.md's taxonomy doesn't change often,
-// and re-capturing it (scripts/capture-session.ts → src/data/filter-taxonomy.json)
-// is the supported refresh path.
-
-import taxonomyJson from './data/filter-taxonomy.json' with { type: 'json' };
+import taxonomy1404Json from './data/filter-taxonomy.1404.json' with { type: 'json' };
+import taxonomy1406Json from './data/filter-taxonomy.1406.json' with { type: 'json' };
 
 interface RawTitle {
   translated?: string;
@@ -41,12 +33,19 @@ interface RawTaxonomy {
   };
 }
 
-const filterLabels = new Map<number, string>();
-const featureLabels = new Map<string, string>(); // key: `${filterId}:${featureId}`
-const optionLabels = new Map<string, string>(); // key: `${filterId}:${featureId}:${optionId}`
+interface TaxonomyIndex {
+  filterLabels: Map<number, string>;
+  featureLabels: Map<string, string>;
+  optionLabels: Map<string, string>;
+  rawFilters: RawFilter[];
+}
 
-function ingest(): void {
-  const root = taxonomyJson as RawTaxonomy;
+function buildIndex(json: unknown): TaxonomyIndex {
+  const filterLabels = new Map<number, string>();
+  const featureLabels = new Map<string, string>();
+  const optionLabels = new Map<string, string>();
+
+  const root = json as RawTaxonomy;
   const filters = root.data?.category?.filters ?? [];
   for (const f of filters) {
     if (typeof f.id !== 'number') continue;
@@ -63,24 +62,38 @@ function ingest(): void {
       }
     }
   }
+
+  return { filterLabels, featureLabels, optionLabels, rawFilters: filters };
 }
 
-ingest();
+const REGISTRY = new Map<number, TaxonomyIndex>([
+  [1406, buildIndex(taxonomy1406Json)],
+  [1404, buildIndex(taxonomy1404Json)],
+]);
 
-export function getFilterLabel(filterId: number): string | null {
-  return filterLabels.get(filterId) ?? null;
+function getIndex(subCategoryId: number): TaxonomyIndex | undefined {
+  return REGISTRY.get(subCategoryId);
 }
 
-export function getFeatureLabel(filterId: number, featureId: number): string | null {
-  return featureLabels.get(`${filterId}:${featureId}`) ?? null;
+export function getFilterLabel(filterId: number, subCategoryId = 1406): string | null {
+  return getIndex(subCategoryId)?.filterLabels.get(filterId) ?? null;
+}
+
+export function getFeatureLabel(
+  filterId: number,
+  featureId: number,
+  subCategoryId = 1406,
+): string | null {
+  return getIndex(subCategoryId)?.featureLabels.get(`${filterId}:${featureId}`) ?? null;
 }
 
 export function getOptionLabel(
   filterId: number,
   featureId: number,
   optionId: number,
+  subCategoryId = 1406,
 ): string | null {
-  return optionLabels.get(`${filterId}:${featureId}:${optionId}`) ?? null;
+  return getIndex(subCategoryId)?.optionLabels.get(`${filterId}:${featureId}:${optionId}`) ?? null;
 }
 
 export interface TaxonomyStats {
@@ -90,10 +103,11 @@ export interface TaxonomyStats {
 }
 
 export function taxonomyStats(): TaxonomyStats {
+  const idx = getIndex(1406);
   return {
-    filters: filterLabels.size,
-    features: featureLabels.size,
-    options: optionLabels.size,
+    filters: idx?.filterLabels.size ?? 0,
+    features: idx?.featureLabels.size ?? 0,
+    options: idx?.optionLabels.size ?? 0,
   };
 }
 
@@ -120,12 +134,13 @@ const FILTER_KIND_MAP: Record<string, TaxonomyFilter['kind']> = {
   FILTER_TYPE_FEATURES_AND: 'boolean',
 };
 
-export function buildTaxonomyResponse(): TaxonomyFilter[] {
-  const root = taxonomyJson as RawTaxonomy;
-  const rawFilters = root.data?.category?.filters ?? [];
+export function buildTaxonomyResponse(subCategoryId: number): TaxonomyFilter[] {
+  const idx = getIndex(subCategoryId);
+  if (!idx) return [];
+
   const result: TaxonomyFilter[] = [];
 
-  for (const f of rawFilters) {
+  for (const f of idx.rawFilters) {
     if (typeof f.id !== 'number') continue;
     const kind = FILTER_KIND_MAP[f.type ?? ''];
     if (!kind) continue;
