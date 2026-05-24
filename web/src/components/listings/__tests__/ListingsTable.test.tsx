@@ -52,7 +52,7 @@ describe('ListingsTable', () => {
       '€/m²',
       'Area',
       'Rooms',
-      'Year',
+      'Land',
       'First seen',
     ]) {
       expect(screen.getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
