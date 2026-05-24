@@ -1,0 +1,36 @@
+{
+  "_comment": "Canonical 999.md Ads_SearchInput filter serialization, captured from a real Firefox session 2026-05-24 (see docs/captured-filter-serialization.md). Golden reference for the source-adapter resolver (sub-project B). featureId/optionId/unit values come from src/data/filter-taxonomy.json.",
+  "envelope": {
+    "source": "AD_SOURCE_DESKTOP_REDESIGN",
+    "sort": "SORT_ADS_DATE_DESC",
+    "subCategoryId": 1406,
+    "filters": [],
+    "pagination": { "limit": 78, "skip": 0 }
+  },
+  "options": {
+    "_type": "FILTER_TYPE_OPTIONS",
+    "_example": "building type (Tip clădire) = Panou",
+    "filterId": 1193,
+    "features": [{ "featureId": 247, "optionIds": [897] }]
+  },
+  "rangeInt": {
+    "_type": "FILTER_TYPE_RANGE / FEATURE_INT",
+    "_example": "rooms (Număr de camere) 2–4; min and max are independent strings",
+    "filterId": 1201,
+    "features": [{ "featureId": 588, "range": { "min": "2", "max": "4" } }]
+  },
+  "rangeUnit": {
+    "_type": "FILTER_TYPE_RANGE / FEATURE_INT_UNIT",
+    "_example": "total area (Suprafață totală) 50–200 m²; carries unit from the taxonomy filter's units[]",
+    "filterId": 1073,
+    "features": [
+      { "featureId": 244, "unit": "UNIT_METER_SQUARE", "range": { "min": "50", "max": "200" } }
+    ]
+  },
+  "boolean": {
+    "_type": "FILTER_TYPE_FEATURES_AND / FEATURE_BOOLEAN",
+    "_example": "amenity (Adăugător) = Gata de mutat; bare featureId, presence means ON",
+    "filterId": 4132,
+    "features": [{ "featureId": 171 }]
+  }
+}
