@@ -28,6 +28,7 @@ interface Listing {
   firstSeenAt: string;
   lastFetchedAt?: string;
   watchlist?: boolean;
+  excluded?: boolean;
   snapshots?: number;
   flags?: string[];
   isNew?: boolean;
@@ -73,6 +74,8 @@ export const Listings: React.FC = () => {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [hideMislabeled, setHideMislabeled] = useState(false);
   const [page, setPage] = useState(0);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [showExcluded, setShowExcluded] = useState(false);
   const queryClient = useQueryClient();
 
   // Observed-data facets — districts and price bounds come from the actual
@@ -121,12 +124,33 @@ export const Listings: React.FC = () => {
   const sectorsKey = sectors.join(',');
   useEffect(() => {
     setPage(0);
-  }, [q, maxPrice, districtsKey, sectorsKey, sort, firstSeenAfter, lastFetchedAfter]);
+  }, [
+    q,
+    maxPrice,
+    districtsKey,
+    sectorsKey,
+    sort,
+    firstSeenAfter,
+    lastFetchedAfter,
+    favoritesOnly,
+    showExcluded,
+  ]);
 
   const { data, isLoading, error } = useQuery<{ listings: Listing[]; total: number }>({
     queryKey: [
       'listings',
-      { q, maxPrice, districtsKey, sectorsKey, sort, page, firstSeenAfter, lastFetchedAfter },
+      {
+        q,
+        maxPrice,
+        districtsKey,
+        sectorsKey,
+        sort,
+        page,
+        firstSeenAfter,
+        lastFetchedAfter,
+        favoritesOnly,
+        showExcluded,
+      },
     ],
     queryFn: () => {
       const p = new URLSearchParams();
@@ -136,6 +160,8 @@ export const Listings: React.FC = () => {
       if (sectors.length > 0) p.append('sector', sectors.join(','));
       if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       if (lastFetchedAfter) p.append('lastFetchedAfter', lastFetchedAfter);
+      if (favoritesOnly) p.append('favorite', 'true');
+      if (showExcluded) p.append('includeExcluded', 'true');
       p.append('sort', sort);
       p.append('limit', String(PAGE_SIZE));
       p.append('offset', String(page * PAGE_SIZE));
@@ -150,6 +176,29 @@ export const Listings: React.FC = () => {
     next.delete('fromSweep');
     setSearchParams(next);
   };
+
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: boolean }) =>
+      apiCall(`/listings/${id}/watchlist`, {
+        method: 'PUT',
+        body: JSON.stringify({ watchlist: next }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['listings'] }),
+  });
+
+  const toggleExcludeMutation = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: boolean }) =>
+      apiCall(`/listings/${id}/excluded`, {
+        method: 'PUT',
+        body: JSON.stringify({ excluded: next }),
+      }),
+    // Excluding changes the facet universe (district/sector options + price
+    // bounds), so refresh the rail too — not just the listing rows.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['listings'] });
+      void queryClient.invalidateQueries({ queryKey: ['listings-facets'] });
+    },
+  });
 
   const total = data?.total ?? 0;
   const visibleListings = (data?.listings ?? []).filter(
@@ -326,6 +375,28 @@ export const Listings: React.FC = () => {
                 </div>
               </div>
             )}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={favoritesOnly}
+                  onChange={(e) => setFavoritesOnly(e.target.checked)}
+                  aria-label="Favorites only"
+                  className="accent-accent"
+                />
+                Favorites only
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={showExcluded}
+                  onChange={(e) => setShowExcluded(e.target.checked)}
+                  aria-label="Show excluded"
+                  className="accent-accent"
+                />
+                Show excluded
+              </label>
+            </div>
           </div>
         </Card>
 
@@ -387,6 +458,8 @@ export const Listings: React.FC = () => {
               rows={visibleListings}
               selectedId={selectedId}
               onRowClick={(r) => setSelectedId((cur) => (cur === r.id ? null : r.id))}
+              onToggleFavorite={(id, next) => toggleFavoriteMutation.mutate({ id, next })}
+              onToggleExclude={(id, next) => toggleExcludeMutation.mutate({ id, next })}
             />
           )}
 

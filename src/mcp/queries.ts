@@ -54,6 +54,8 @@ export interface SearchListingsInput {
   /** Inclusive lower bound on lastFetchedAt — used to link a sweep's HTTP
    *  log to all listings it fetched (new + updated). ISO-8601 string. */
   lastFetchedAfter?: string | undefined;
+  favorite?: boolean | undefined;
+  includeExcluded?: boolean | undefined;
 }
 
 export interface SearchListingsEnvelope {
@@ -74,6 +76,7 @@ export interface SearchListingsRow {
   lastSeenAt: string;
   lastFetchedAt: string;
   watchlist: boolean;
+  excluded: boolean;
   derivedType: DerivedType;
   typeMismatch: boolean;
   regionMismatch: boolean;
@@ -182,6 +185,9 @@ export async function searchListings(
 ): Promise<SearchListingsEnvelope> {
   const where: Record<string, unknown> = { active: true };
   const filterAnds: unknown[] = [];
+
+  if (input.includeExcluded !== true) where['excluded'] = false;
+  if (input.favorite === true) where['watchlist'] = true;
 
   if (input.minPrice !== undefined || input.maxPrice !== undefined) {
     where['priceEur'] = rangeWhere(input.minPrice, input.maxPrice);
@@ -298,6 +304,7 @@ export async function searchListings(
         lastSeenAt: r.lastSeenAt.toISOString(),
         lastFetchedAt: r.lastFetchedAt.toISOString(),
         watchlist: r.watchlist,
+        excluded: r.excluded,
         derivedType: cls.derivedType,
         typeMismatch: cls.typeMismatch,
         regionMismatch: cls.regionMismatch,
