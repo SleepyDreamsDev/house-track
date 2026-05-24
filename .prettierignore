@@ -14,3 +14,7 @@ pnpm-lock.yaml
 # identical for the sync workflow. The POC spec is project-specific but
 # treated the same way for consistency.
 docs/
+
+# UI-redesign mockups — standalone prototype JSX/HTML, not part of the build.
+# Excluded so an unrelated `pnpm format` can't rewrite them and balloon a diff.
+design/
