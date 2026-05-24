@@ -25,6 +25,11 @@ interface RawAdvert {
   images?: { value?: string[] };
   // mapPoint is feature(id 3); value shape confirmed from live traffic:
   // { lat, lon, zoom }. extractGeo() reads lat/lon (with fallbacks).
+  // floors is FEATURE_OPTIONS (id 249) — value.value is the option id, mapped
+  // to a count below. landArea is the land-plot range feature (id 245), stored
+  // in ares (999.md's unit for this feature) — no m² conversion.
+  floors?: { value?: unknown };
+  landArea?: { value?: unknown };
   mapPoint?: { value?: unknown };
   // owner is an Account (shape confirmed from live traffic). business.plan is
   // non-null for business/agency accounts → our private/agency signal.
@@ -89,10 +94,10 @@ export function parseDetail(id: string, json: unknown): ParsedDetail {
     priceRaw,
     rooms: null,
     areaSqm: parseAreaFromTitle(title),
-    landSqm: null,
+    landAre: featureNumber(advert.landArea),
     district: advert.city?.value?.translated ?? null,
     street: advert.street?.value ?? null,
-    floors: null,
+    floors: extractFloors(advert),
     yearBuilt: null,
     heatingType: null,
     description: advert.body?.value?.ro ?? null,
@@ -107,6 +112,43 @@ export function parseDetail(id: string, json: unknown): ParsedDetail {
     rawHtmlHash: hashStableFields(advert),
     filterValues: extractFilterValues(advert),
   };
+}
+
+// 999.md "Număr de etaje" (feature 249) is an options enum, not a raw count —
+// map each option id to the floor number it represents. "4 și mai multe etaje"
+// (1652) collapses to 4 (treated as 4+). IDs copied from filter-taxonomy.1406.
+const FLOOR_OPTION_TO_COUNT: Record<number, number> = {
+  1641: 1,
+  1643: 2,
+  1644: 3,
+  1652: 4,
+};
+
+// Reads the option id out of a FEATURE_OPTIONS entry ({ value: { value: <id> } }).
+function featureOptionId(entry: { value?: unknown } | undefined): number | null {
+  const v = entry?.value;
+  if (v && typeof v === 'object' && 'value' in v) {
+    const inner = (v as { value: unknown }).value;
+    if (typeof inner === 'number') return inner;
+  }
+  return null;
+}
+
+// Reads a plain numeric feature value, tolerating both `value: <n>` (FEATURE_INT)
+// and `value: { value: <n> }` shapes.
+function featureNumber(entry: { value?: unknown } | undefined): number | null {
+  const v = entry?.value;
+  if (typeof v === 'number') return v;
+  if (v && typeof v === 'object' && 'value' in v) {
+    const inner = (v as { value: unknown }).value;
+    if (typeof inner === 'number') return inner;
+  }
+  return null;
+}
+
+function extractFloors(advert: RawAdvert): number | null {
+  const optionId = featureOptionId(advert.floors);
+  return optionId != null ? (FLOOR_OPTION_TO_COUNT[optionId] ?? null) : null;
 }
 
 // Defensive geo extraction from the mapPoint feature value. The 999.md value

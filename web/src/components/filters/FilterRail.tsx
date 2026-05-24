@@ -179,6 +179,14 @@ export interface FilterRailProps {
   maxArea: number | null;
   setMinArea: (v: number | null) => void;
   setMaxArea: (v: number | null) => void;
+  minLand: number | null;
+  maxLand: number | null;
+  setMinLand: (v: number | null) => void;
+  setMaxLand: (v: number | null) => void;
+  minFloors: number | null;
+  maxFloors: number | null;
+  setMinFloors: (v: number | null) => void;
+  setMaxFloors: (v: number | null) => void;
   districts: string[];
   setDistricts: (v: string[]) => void;
   sectors: string[];
@@ -214,6 +222,14 @@ export const FilterRail: React.FC<FilterRailProps> = ({
   maxArea,
   setMinArea,
   setMaxArea,
+  minLand,
+  maxLand,
+  setMinLand,
+  setMaxLand,
+  minFloors,
+  maxFloors,
+  setMinFloors,
+  setMaxFloors,
   districts,
   setDistricts,
   sectors,
@@ -276,6 +292,27 @@ export const FilterRail: React.FC<FilterRailProps> = ({
           max={maxArea}
           setMin={setMinArea}
           setMax={setMaxArea}
+        />
+      )}
+      {hasRange(facets?.landAre) && (
+        <RangeField
+          label="Land area"
+          unit="ar"
+          bounds={facets!.landAre!}
+          min={minLand}
+          max={maxLand}
+          setMin={setMinLand}
+          setMax={setMaxLand}
+        />
+      )}
+      {hasRange(facets?.floors) && (
+        <RangeField
+          label="Floors"
+          bounds={facets!.floors!}
+          min={minFloors}
+          max={maxFloors}
+          setMin={setMinFloors}
+          setMax={setMaxFloors}
         />
       )}
       {districtOptions.length > 0 && (

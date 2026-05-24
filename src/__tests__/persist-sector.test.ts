@@ -31,7 +31,7 @@ function detail(overrides: Partial<ParsedDetail>): ParsedDetail {
     priceRaw: '100000 EUR',
     rooms: null,
     areaSqm: 100,
-    landSqm: null,
+    landAre: null,
     district: 'Chișinău',
     street: 'str. Test',
     floors: null,

@@ -12,7 +12,7 @@ interface NewTodayListing {
   priceEur: number | null;
   areaSqm: number | null;
   rooms: number | null;
-  landSqm?: number | null;
+  landAre?: number | null;
   district: string | null;
   street?: string | null;
   firstSeenAt: string;
@@ -52,7 +52,7 @@ listingsFeedRouter.get('/listings/new-today', async (c) => {
       priceEur: true,
       areaSqm: true,
       rooms: true,
-      landSqm: true,
+      landAre: true,
       district: true,
       street: true,
       firstSeenAt: true,
@@ -66,7 +66,7 @@ listingsFeedRouter.get('/listings/new-today', async (c) => {
     priceEur: listing.priceEur,
     areaSqm: listing.areaSqm,
     rooms: listing.rooms,
-    landSqm: listing.landSqm,
+    landAre: listing.landAre,
     district: listing.district,
     street: listing.street,
     firstSeenAt: listing.firstSeenAt.toISOString(),

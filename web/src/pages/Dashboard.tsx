@@ -19,7 +19,7 @@ interface Listing {
   priceEur: number | null;
   priceWas?: number | null;
   areaSqm: number | null;
-  landSqm?: number | null;
+  landAre?: number | null;
   rooms: number | null;
   floors?: number;
   district: string | null;

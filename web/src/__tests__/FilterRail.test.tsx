@@ -18,6 +18,8 @@ const FULL_FACETS: FilterFacets = {
   roomsValues: [1, 2, 3, 4, 5],
   price: { min: 50000, max: 200000 },
   areaSqm: { min: 30, max: 300 },
+  landAre: { min: 1, max: 50 },
+  floors: { min: 1, max: 4 },
   favoritesCount: 4,
   excludedCount: 2,
   mislabeledCount: 3,
@@ -35,6 +37,14 @@ function baseProps(overrides: Partial<FilterRailProps> = {}): FilterRailProps {
     maxArea: null,
     setMinArea: vi.fn(),
     setMaxArea: vi.fn(),
+    minLand: null,
+    maxLand: null,
+    setMinLand: vi.fn(),
+    setMaxLand: vi.fn(),
+    minFloors: null,
+    maxFloors: null,
+    setMinFloors: vi.fn(),
+    setMaxFloors: vi.fn(),
     districts: [],
     setDistricts: vi.fn(),
     sectors: [],
@@ -72,6 +82,10 @@ describe('FilterRail — group visibility', () => {
     expect(screen.getByLabelText('Price max')).toBeInTheDocument();
     expect(screen.getByText('Surface area (m²)')).toBeInTheDocument();
     expect(screen.getByLabelText('Surface area min')).toBeInTheDocument();
+    expect(screen.getByText('Land area (ar)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Land area max')).toBeInTheDocument();
+    expect(screen.getByText('Floors')).toBeInTheDocument();
+    expect(screen.getByLabelText('Floors min')).toBeInTheDocument();
     expect(screen.getByText('District')).toBeInTheDocument();
     expect(screen.getByText('Sector')).toBeInTheDocument();
     expect(screen.getByText('Property type')).toBeInTheDocument();

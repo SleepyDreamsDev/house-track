@@ -86,19 +86,75 @@ describe('parseDetail', () => {
     expect(bumped.getMinutes()).toBe(34);
   });
 
-  it('Leaves unknown fields null (rooms, landSqm, floors, yearBuilt, heatingType, sellerType, postedAt)', async () => {
+  it('Leaves unknown fields null when the advert omits them (rooms, landAre, floors, yearBuilt, heatingType, sellerType, postedAt)', async () => {
     const json = await loadAdvert();
 
     const d = parseDetail(ID, json);
 
     expect(d.rooms).toBeNull();
-    expect(d.landSqm).toBeNull();
+    expect(d.landAre).toBeNull();
     expect(d.floors).toBeNull();
     expect(d.yearBuilt).toBeNull();
     expect(d.heatingType).toBeNull();
     expect(d.sellerType).toBeNull();
     expect(d.postedAt).toBeNull(); // fixture has no `posted` field
     expect(d.features).toEqual([]);
+  });
+
+  it('Maps the floors options enum (feature 249) to a floor count', () => {
+    // optionId 1643 → "2 etaje"; 1652 → "4 și mai multe etaje" → 4
+    const two = parseDetail(ID, {
+      data: {
+        advert: {
+          id: ID,
+          title: 'x',
+          floors: { id: 249, type: 'FEATURE_OPTIONS', value: { value: 1643 } },
+        },
+      },
+    });
+    expect(two.floors).toBe(2);
+
+    const fourPlus = parseDetail(ID, {
+      data: {
+        advert: {
+          id: ID,
+          title: 'x',
+          floors: { id: 249, type: 'FEATURE_OPTIONS', value: { value: 1652 } },
+        },
+      },
+    });
+    expect(fourPlus.floors).toBe(4);
+
+    const unknownOpt = parseDetail(ID, {
+      data: {
+        advert: {
+          id: ID,
+          title: 'x',
+          floors: { id: 249, type: 'FEATURE_OPTIONS', value: { value: 99999 } },
+        },
+      },
+    });
+    expect(unknownOpt.floors).toBeNull();
+  });
+
+  it('Reads land area (feature 245) as ares, tolerating number or {value} shapes', () => {
+    const wrapped = parseDetail(ID, {
+      data: {
+        advert: {
+          id: ID,
+          title: 'x',
+          landArea: { id: 245, type: 'FEATURE_INT', value: { value: 6 } },
+        },
+      },
+    });
+    expect(wrapped.landAre).toBe(6);
+
+    const plain = parseDetail(ID, {
+      data: {
+        advert: { id: ID, title: 'x', landArea: { id: 245, type: 'FEATURE_INT', value: 8 } },
+      },
+    });
+    expect(plain.landAre).toBe(8);
   });
 
   it('Parses postedAt from the advert `posted` date when present', async () => {

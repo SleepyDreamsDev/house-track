@@ -15,6 +15,10 @@ describe('useBrowseFilters — defaults', () => {
     expect(s.maxPrice).toBeNull();
     expect(s.minArea).toBeNull();
     expect(s.maxArea).toBeNull();
+    expect(s.minLand).toBeNull();
+    expect(s.maxLand).toBeNull();
+    expect(s.minFloors).toBeNull();
+    expect(s.maxFloors).toBeNull();
     expect(s.districts).toEqual([]);
     expect(s.sectors).toEqual([]);
     expect(s.type).toBe('all');

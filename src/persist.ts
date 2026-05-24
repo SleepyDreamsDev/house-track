@@ -178,7 +178,7 @@ export class Persistence {
       priceRaw: detail.priceRaw,
       rooms: detail.rooms,
       areaSqm: detail.areaSqm,
-      landSqm: detail.landSqm,
+      landAre: detail.landAre,
       district: detail.district,
       sector: deriveSector({
         district: detail.district,

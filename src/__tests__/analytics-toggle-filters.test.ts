@@ -36,6 +36,8 @@ interface SeedListing {
   rooms?: number;
   priceEur?: number;
   areaSqm?: number;
+  landAre?: number;
+  floors?: number;
 }
 
 async function seed(s: SeedListing) {
@@ -55,6 +57,8 @@ async function seed(s: SeedListing) {
       priceEur: s.priceEur ?? 100000,
       areaSqm: s.areaSqm ?? 100,
       rooms: s.rooms ?? 3,
+      ...(s.landAre != null ? { landAre: s.landAre } : {}),
+      ...(s.floors != null ? { floors: s.floors } : {}),
     },
   });
 }
@@ -137,5 +141,25 @@ describe('analytics overview — price and area ranges', () => {
 
     const body = await overview('?minAreaSqm=60&maxAreaSqm=120');
     expect(body.kpis.activeInventory).toBe(1); // 90
+  });
+});
+
+describe('analytics overview — land (ares) and floors ranges', () => {
+  it('honors minLandAre/maxLandAre', async () => {
+    await seed({ id: 'l1', landAre: 2 });
+    await seed({ id: 'l2', landAre: 6 });
+    await seed({ id: 'l3', landAre: 15 });
+
+    const body = await overview('?minLandAre=5&maxLandAre=10');
+    expect(body.kpis.activeInventory).toBe(1); // 6 ares
+  });
+
+  it('honors minFloors/maxFloors', async () => {
+    await seed({ id: 'f1', floors: 1 });
+    await seed({ id: 'f2', floors: 2 });
+    await seed({ id: 'f3', floors: 4 });
+
+    const body = await overview('?minFloors=2&maxFloors=3');
+    expect(body.kpis.activeInventory).toBe(1); // 2
   });
 });
