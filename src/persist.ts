@@ -57,12 +57,13 @@ export class Persistence {
     const ids = stubs.map((s) => s.id);
     const existing = await this.prisma.listing.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: { id: true, excluded: true },
     });
     const known = new Set(existing.map((e) => e.id));
+    const excludedIds = new Set(existing.filter((e) => e.excluded).map((e) => e.id));
     return {
       new: stubs.filter((s) => !known.has(s.id)),
-      seen: stubs.filter((s) => known.has(s.id)),
+      seen: stubs.filter((s) => known.has(s.id) && !excludedIds.has(s.id)),
     };
   }
 
@@ -167,7 +168,7 @@ export class Persistence {
   async findUnenrichedListings(limit: number): Promise<string[]> {
     if (limit <= 0) return [];
     const rows = await this.prisma.listing.findMany({
-      where: { filterValuesEnrichedAt: null, active: true },
+      where: { filterValuesEnrichedAt: null, active: true, excluded: false },
       orderBy: { lastFetchedAt: 'asc' },
       select: { id: true },
       take: limit,
@@ -187,7 +188,12 @@ export class Persistence {
   async findStaleListings(opts: { limit: number; sinceFetched: Date }): Promise<string[]> {
     if (opts.limit <= 0) return [];
     const watchlist = await this.prisma.listing.findMany({
-      where: { active: true, watchlist: true, lastFetchedAt: { lt: opts.sinceFetched } },
+      where: {
+        active: true,
+        excluded: false,
+        watchlist: true,
+        lastFetchedAt: { lt: opts.sinceFetched },
+      },
       orderBy: { lastFetchedAt: 'asc' },
       select: { id: true },
       take: opts.limit,
@@ -197,6 +203,7 @@ export class Persistence {
     const stale = await this.prisma.listing.findMany({
       where: {
         active: true,
+        excluded: false,
         watchlist: false,
         lastFetchedAt: { lt: opts.sinceFetched },
       },
@@ -209,6 +216,10 @@ export class Persistence {
 
   async setWatchlist(id: string, watchlist: boolean): Promise<void> {
     await this.prisma.listing.update({ where: { id }, data: { watchlist } });
+  }
+
+  async setExcluded(id: string, excluded: boolean): Promise<void> {
+    await this.prisma.listing.update({ where: { id }, data: { excluded } });
   }
 
   async startSweep(opts?: {

@@ -52,6 +52,8 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     const flags = c.req.query('flags');
     const firstSeenAfter = c.req.query('firstSeenAfter');
     const lastFetchedAfter = c.req.query('lastFetchedAfter');
+    const favorite = c.req.query('favorite') === 'true' ? true : undefined;
+    const includeExcluded = c.req.query('includeExcluded') === 'true' ? true : undefined;
 
     const results = await searchListings(prisma, {
       limit,
@@ -69,6 +71,8 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       flags,
       firstSeenAfter,
       lastFetchedAfter,
+      favorite,
+      includeExcluded,
     });
 
     return c.json(results);
@@ -80,7 +84,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   // catalog evolves — sourcing from the DB keeps the rail accurate.
   app.get('/api/listings/facets', async (c) => {
     const districtRows = await prisma.listing.findMany({
-      where: { active: true, district: { not: null } },
+      where: { active: true, excluded: false, district: { not: null } },
       distinct: ['district'],
       select: { district: true },
       orderBy: { district: 'asc' },
@@ -88,7 +92,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     const districts = districtRows.map((r) => r.district).filter((d): d is string => d !== null);
 
     const aggregates = await prisma.listing.aggregate({
-      where: { active: true },
+      where: { active: true, excluded: false },
       _min: { priceEur: true, rooms: true, areaSqm: true },
       _max: { priceEur: true, rooms: true, areaSqm: true },
       _count: true,
@@ -99,14 +103,14 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     // must read titles, but distinct titles bounds the row count regardless
     // of catalog size. Then bucket in memory.
     const titleRows = await prisma.listing.findMany({
-      where: { active: true },
+      where: { active: true, excluded: false },
       distinct: ['title'],
       select: { title: true },
     });
     const types = Array.from(new Set(titleRows.map((r) => deriveType(r.title)))).sort();
 
     const roomsRows = await prisma.listing.findMany({
-      where: { active: true, rooms: { not: null } },
+      where: { active: true, excluded: false, rooms: { not: null } },
       distinct: ['rooms'],
       select: { rooms: true },
       orderBy: { rooms: 'asc' },
@@ -115,7 +119,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
 
     const sectorRows = await prisma.listing.groupBy({
       by: ['sector'],
-      where: { active: true, sector: { not: null } },
+      where: { active: true, excluded: false, sector: { not: null } },
       _count: { _all: true },
     });
     const sectors = sectorRows
@@ -162,5 +166,24 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       return c.json({ error: 'Listing not found' }, 404);
     }
     return c.json({ id, watchlist: body.watchlist });
+  });
+
+  // Freeze a listing the operator isn't interested in: excluded rows are
+  // dropped from every sweep's detail re-fetch (saving the politeness budget)
+  // and hidden from the default Listings view + facets. Reversible — set false
+  // to resume tracking. Body: { excluded: boolean }.
+  app.put('/api/listings/:id/excluded', async (c) => {
+    const id = c.req.param('id');
+    const body = (await c.req.json().catch(() => null)) as { excluded?: unknown } | null;
+    if (!body || typeof body.excluded !== 'boolean') {
+      return c.json({ error: 'Body must be { excluded: boolean }' }, 400);
+    }
+    const persist = new Persistence(prisma);
+    try {
+      await persist.setExcluded(id, body.excluded);
+    } catch {
+      return c.json({ error: 'Listing not found' }, 404);
+    }
+    return c.json({ id, excluded: body.excluded });
   });
 }
