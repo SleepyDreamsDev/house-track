@@ -44,7 +44,7 @@ server.registerTool(
   'search_listings',
   {
     description:
-      "Search Chișinău houses for sale in the local DB. Range filters (minPrice/maxPrice/minRooms/maxRooms/minAreaSqm/maxAreaSqm) and `district` are AND-ed. The `filters` array AND-s across (featureId, optionIds) groups and OR-s within each group's optionIds. Returns clickable https://999.md/ro/<id> URLs.",
+      'Search Chișinău houses for sale in the local DB. Range filters (minPrice/maxPrice/minRooms/maxRooms/minAreaSqm/maxAreaSqm), `district`, and `sector` are AND-ed. Use `sector` for a Chișinău sub-area (e.g. "Buiucani", "Centru", "Botanica", "Telecentru") — that\'s where those names live; `district` is the broader region (e.g. "Chișinău", "Ialoveni"). Both accept a single value or a comma-separated list. The `filters` array AND-s across (featureId, optionIds) groups and OR-s within each group\'s optionIds. Returns clickable https://999.md/ro/<id> URLs.',
     inputSchema: {
       minPrice: z.number().optional(),
       maxPrice: z.number().optional(),
@@ -53,6 +53,7 @@ server.registerTool(
       minAreaSqm: z.number().optional(),
       maxAreaSqm: z.number().optional(),
       district: z.string().optional(),
+      sector: z.string().optional(),
       filters: z
         .array(
           z.object({

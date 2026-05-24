@@ -27,6 +27,7 @@ interface SeedListing {
   rooms?: number | null;
   areaSqm?: number | null;
   district?: string | null;
+  sector?: string | null;
   active?: boolean;
   firstSeenAt?: Date;
   filterValues?: Array<{
@@ -53,6 +54,7 @@ async function seed(s: SeedListing) {
       rooms: s.rooms ?? null,
       areaSqm: s.areaSqm ?? null,
       district: s.district ?? null,
+      sector: s.sector ?? null,
       ...(s.filterValues
         ? {
             filterValues: {
@@ -169,6 +171,36 @@ describe('searchListings', () => {
   it('Filters by district', async () => {
     const { listings } = await searchListings(prisma, { district: 'Botanica' });
     expect(listings.map((x) => x.id).sort()).toEqual(['1', '2']);
+  });
+
+  it('Filters by sector (Chișinău sub-area)', async () => {
+    await prisma.listing.deleteMany();
+    await seed({ id: 'b1', priceEur: 89_000, sector: 'Buiucani' });
+    await seed({ id: 'b2', priceEur: 120_000, sector: 'Buiucani' });
+    await seed({ id: 'c1', priceEur: 95_000, sector: 'Centru' });
+
+    const { listings } = await searchListings(prisma, { sector: 'Buiucani' });
+    expect(listings.map((x) => x.id).sort()).toEqual(['b1', 'b2']);
+  });
+
+  it('Filters by multiple sectors (comma-separated → IN)', async () => {
+    await prisma.listing.deleteMany();
+    await seed({ id: 'b1', sector: 'Buiucani' });
+    await seed({ id: 'c1', sector: 'Centru' });
+    await seed({ id: 't1', sector: 'Telecentru' });
+
+    const { listings } = await searchListings(prisma, { sector: 'Buiucani, Centru' });
+    expect(listings.map((x) => x.id).sort()).toEqual(['b1', 'c1']);
+  });
+
+  it('Sector and district are AND-ed together', async () => {
+    await prisma.listing.deleteMany();
+    await seed({ id: 'm1', district: 'Chișinău', sector: 'Buiucani' });
+    await seed({ id: 'm2', district: 'Chișinău', sector: 'Centru' });
+    await seed({ id: 'm3', district: 'Ialoveni', sector: 'Buiucani' });
+
+    const { listings } = await searchListings(prisma, { district: 'Chișinău', sector: 'Buiucani' });
+    expect(listings.map((x) => x.id)).toEqual(['m1']);
   });
 
   it('Excludes inactive listings by default', async () => {
