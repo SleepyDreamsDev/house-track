@@ -52,6 +52,9 @@ function fallback(sourceSlug: string): ResolvedActiveFilter {
         })),
       })),
     },
-    postFilter: { ...FILTER.postFilter },
+    postFilter: {
+      minPriceEur: FILTER.postFilter.minPriceEur,
+      maxPriceEur: FILTER.postFilter.maxPriceEur,
+    },
   };
 }

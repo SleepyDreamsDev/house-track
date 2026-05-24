@@ -6,6 +6,7 @@ import { ACTIVE_SOURCE_SLUG, listSources } from '../../sources/index.js';
 import { UnknownGenericFilterValueError } from '../../sources/types.js';
 import { genericFilterSchema } from '../../types/filter.js';
 import { setSetting } from '../../settings.js';
+import { buildTaxonomyResponse } from '../../taxonomy-labels.js';
 
 export function registerFilterRoutes(app: Hono): void {
   app.get('/api/filter', async (c) => {
@@ -94,5 +95,9 @@ export function registerFilterRoutes(app: Hono): void {
         active: s.slug === ACTIVE_SOURCE_SLUG,
       })),
     );
+  });
+
+  app.get('/api/filter/taxonomy', (c) => {
+    return c.json(buildTaxonomyResponse());
   });
 }

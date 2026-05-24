@@ -41,10 +41,18 @@ describe('GET /api/filter', () => {
 
 describe('PUT /api/filter', () => {
   it('persists a valid generic filter and returns the resolved view', async () => {
+    const newFilter = {
+      category: 'house',
+      filters: [
+        { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+        { kind: 'options', filterId: 32, featureId: 7, optionIds: [12900] },
+        { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_EUR', max: '180000' },
+      ],
+    };
     const res = await app.request('/api/filter', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ generic: { ...defaultGenericFilter, priceMax: 180_000 } }),
+      body: JSON.stringify({ generic: newFilter }),
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -53,40 +61,49 @@ describe('PUT /api/filter', () => {
     expect(body.resolved.postFilter.maxPriceEur).toBe(180_000);
 
     const re = await app.request('/api/filter');
-    const reBody = (await re.json()) as { generic: { priceMax: number } };
-    expect(reBody.generic.priceMax).toBe(180_000);
+    const reBody = (await re.json()) as { generic: { category: string } };
+    expect(reBody.generic.category).toBe('house');
   });
 
   it('accepts a top-level body shape (not wrapped in {generic})', async () => {
     const res = await app.request('/api/filter', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...defaultGenericFilter, priceMax: 200_000 }),
+      body: JSON.stringify({ ...defaultGenericFilter }),
     });
     expect(res.status).toBe(200);
   });
 
-  it('rejects priceMin > priceMax with a 400 carrying field path', async () => {
+  it('rejects range with min > max with 400 carrying a validation error', async () => {
     const res = await app.request('/api/filter', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        generic: { ...defaultGenericFilter, priceMin: 300_000, priceMax: 100_000 },
+        generic: {
+          category: 'house',
+          filters: [
+            { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+            { kind: 'range', filterId: 1201, featureId: 588, min: '10', max: '2' },
+          ],
+        },
       }),
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { details: Array<{ path: string }> };
-    expect(body.details.some((d) => d.path === 'priceMin')).toBe(true);
   });
 
-  it('rejects an unmapped locality with a 400', async () => {
+  it('rejects an unknown filterId with a 400', async () => {
     const res = await app.request('/api/filter', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ generic: { ...defaultGenericFilter, locality: ['atlantis'] } }),
+      body: JSON.stringify({
+        generic: {
+          category: 'house',
+          filters: [{ kind: 'options', filterId: 99999, featureId: 1, optionIds: [776] }],
+        },
+      }),
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { details?: Array<{ path: string }>; error: string };
+    const body = (await res.json()) as { error: string };
     expect(typeof body.error).toBe('string');
   });
 

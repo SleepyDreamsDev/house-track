@@ -1,75 +1,89 @@
 import { describe, expect, it } from 'vitest';
 
-import { FILTER } from '../../config.js';
 import { source999md } from '../../sources/999md.js';
 import { getSource, listSources } from '../../sources/index.js';
 import { UnknownGenericFilterValueError } from '../../sources/types.js';
 import { defaultGenericFilter } from '../../types/filter.js';
+import type { GenericFilter } from '../../types/filter.js';
+
+const base: GenericFilter = {
+  category: 'house',
+  filters: [
+    { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+    { kind: 'options', filterId: 32, featureId: 7, optionIds: [12900] },
+  ],
+};
 
 describe('999md source adapter', () => {
-  it("resolves the default generic filter to today's exact searchInput", () => {
-    const resolved = source999md.resolve(defaultGenericFilter);
-    expect(resolved.searchInput.subCategoryId).toBe(FILTER.searchInput.subCategoryId);
-    expect(resolved.searchInput.source).toBe(FILTER.searchInput.source);
-
-    const expectedFilters = JSON.parse(JSON.stringify(FILTER.searchInput.filters));
-    const actualFilters = JSON.parse(JSON.stringify(resolved.searchInput.filters));
-    expect(actualFilters).toEqual(expectedFilters);
+  it('resolves the default generic filter without error', () => {
+    expect(() => source999md.resolve(defaultGenericFilter)).not.toThrow();
   });
 
-  it("resolves the default generic filter to today's exact postFilter", () => {
+  it('resolves to subCategoryId 1406 for house category', () => {
     const resolved = source999md.resolve(defaultGenericFilter);
-    expect(resolved.postFilter.maxPriceEur).toBe(FILTER.postFilter.maxPriceEur);
-    expect(resolved.postFilter.maxAreaSqm).toBe(FILTER.postFilter.maxAreaSqm);
+    expect(resolved.searchInput.subCategoryId).toBe(1406);
   });
 
-  it('999md adapter throws UnknownGenericFilterValueError on an unmapped locality', () => {
+  it('source is AD_SOURCE_DESKTOP_REDESIGN', () => {
+    const resolved = source999md.resolve(defaultGenericFilter);
+    expect(resolved.searchInput.source).toBe('AD_SOURCE_DESKTOP_REDESIGN');
+  });
+
+  it('999md adapter throws UnknownGenericFilterValueError on an unknown filterId', () => {
     expect(() =>
       source999md.resolve({
-        ...defaultGenericFilter,
-        // Cast required because the public type bars values not in LOCALITIES;
-        // the test simulates a defense-in-depth case where the schema is
-        // bypassed (e.g., direct setSetting from an admin script).
-        locality: ['atlantis' as never],
+        ...base,
+        filters: [
+          ...base.filters,
+          { kind: 'options', filterId: 99999, featureId: 1, optionIds: [776] },
+        ],
       }),
     ).toThrow(UnknownGenericFilterValueError);
   });
 
-  it('999md adapter derives postFilter from priceMax and sqmMax', () => {
+  it('999md adapter routes price max to postFilter', () => {
     const resolved = source999md.resolve({
-      ...defaultGenericFilter,
-      priceMax: 180_000,
-      sqmMax: 150,
-    });
-    expect(resolved.postFilter).toEqual({ maxPriceEur: 180_000, maxAreaSqm: 150 });
-  });
-
-  it('merges extraFilters into the resolved searchInput.filters', () => {
-    const resolved = source999md.resolve({
-      ...defaultGenericFilter,
-      extraFilters: [
-        { filterId: 100, featureId: 200, optionIds: [1, 2, 3] },
-        { filterId: 101, featureId: 201, optionIds: [42] },
+      ...base,
+      filters: [
+        ...base.filters,
+        { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_EUR', max: '180000' },
       ],
     });
-    const findGroup = (fid: number) => resolved.searchInput.filters.find((f) => f.filterId === fid);
-    const g100 = findGroup(100);
-    const g101 = findGroup(101);
-    expect(g100?.features[0]?.featureId).toBe(200);
-    expect(g100?.features[0]?.optionIds).toEqual([1, 2, 3]);
-    expect(g101?.features[0]?.featureId).toBe(201);
-    expect(g101?.features[0]?.optionIds).toEqual([42]);
+    expect(resolved.postFilter.maxPriceEur).toBe(180_000);
   });
 
-  it('extraFilter optionIds dedupe against well-known triples on the same featureId', () => {
-    // sale = filterId 16 / featureId 1 / optionId 776 (already added by transactionType)
-    // user also picks 776 via the dynamic UI on the same triple
-    const resolved = source999md.resolve({
-      ...defaultGenericFilter,
-      extraFilters: [{ filterId: 16, featureId: 1, optionIds: [776, 999] }],
+  it('no price selection gives sentinel postFilter', () => {
+    const resolved = source999md.resolve(base);
+    expect(resolved.postFilter).toEqual({
+      minPriceEur: 0,
+      maxPriceEur: Number.MAX_SAFE_INTEGER,
     });
-    const saleGroup = resolved.searchInput.filters.find((f) => f.filterId === 16);
-    expect(saleGroup?.features[0]?.optionIds).toEqual([776, 999]);
+  });
+
+  it('merges range selection into the resolved searchInput.filters', () => {
+    const resolved = source999md.resolve({
+      ...base,
+      filters: [
+        ...base.filters,
+        { kind: 'range', filterId: 1201, featureId: 588, min: '2', max: '4' },
+      ],
+    });
+    const g = resolved.searchInput.filters.find((f) => f.filterId === 1201);
+    expect(g?.features[0]).toMatchObject({ featureId: 588, range: { min: '2', max: '4' } });
+  });
+
+  it('merges multiple optionIds for the same featureId', () => {
+    const resolved = source999md.resolve({
+      category: 'house',
+      filters: [
+        { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
+        { kind: 'options', filterId: 32, featureId: 7, optionIds: [12900, 12885] },
+      ],
+    });
+    const regionGroup = resolved.searchInput.filters.find((f) => f.filterId === 32);
+    const feat = regionGroup?.features[0] as { featureId: number; optionIds: number[] } | undefined;
+    expect(feat?.optionIds).toContain(12900);
+    expect(feat?.optionIds).toContain(12885);
   });
 });
 

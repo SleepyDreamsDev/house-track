@@ -11,8 +11,8 @@ import { FILTER } from './config.js';
 import type { ListingStub } from './types.js';
 
 export interface PostFilter {
+  minPriceEur: number;
   maxPriceEur: number;
-  maxAreaSqm: number;
 }
 
 interface RawAd {
@@ -37,8 +37,8 @@ export function parseIndex(json: unknown): ListingStub[] {
 
 export function applyPostFilter(stubs: ListingStub[], filter: PostFilter): ListingStub[] {
   return stubs.filter((s) => {
+    if (s.priceEur !== null && s.priceEur < filter.minPriceEur) return false;
     if (s.priceEur !== null && s.priceEur > filter.maxPriceEur) return false;
-    if (s.areaSqm !== null && s.areaSqm > filter.maxAreaSqm) return false;
     return true;
   });
 }
