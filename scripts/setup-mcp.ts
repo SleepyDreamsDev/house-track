@@ -55,10 +55,15 @@ async function main(): Promise<void> {
   }
 
   const databaseUrl = await resolveDatabaseUrl();
+  const databaseUrlRo = await resolveEnvVar('DATABASE_URL_RO');
   const entry: McpServerEntry = {
     command: 'node',
     args: [SERVER_JS],
-    env: { DATABASE_URL: databaseUrl },
+    env: {
+      DATABASE_URL: databaseUrl,
+      // Optional — enables the run_sql tool. Omitted if not configured.
+      ...(databaseUrlRo ? { DATABASE_URL_RO: databaseUrlRo } : {}),
+    },
   };
 
   const existing = await loadConfig();
@@ -82,6 +87,11 @@ async function main(): Promise<void> {
   console.error(`✓ wrote ${CONFIG_PATH}`);
   console.error(`  mcpServers.${SERVER_KEY}.args[0] = ${SERVER_JS}`);
   console.error(`  mcpServers.${SERVER_KEY}.env.DATABASE_URL = ${redact(databaseUrl)}`);
+  console.error(
+    `  mcpServers.${SERVER_KEY}.env.DATABASE_URL_RO = ${
+      databaseUrlRo ? redact(databaseUrlRo) : '(unset — run_sql disabled)'
+    }`,
+  );
   if (otherKeys.length > 0) {
     console.error(`  other servers preserved: ${otherKeys.join(', ')}`);
   }
@@ -89,15 +99,22 @@ async function main(): Promise<void> {
 }
 
 async function resolveDatabaseUrl(): Promise<string> {
-  for (const fname of ['.env', '.env.local', '.env.example']) {
-    const path = join(REPO_ROOT, fname);
-    if (!existsSync(path)) continue;
-    const value = parseDotenv(await readFile(path, 'utf8'))['DATABASE_URL'];
-    if (value) return value;
-  }
+  const value = await resolveEnvVar('DATABASE_URL');
+  if (value) return value;
   throw new Error(
     `DATABASE_URL not found in .env, .env.local, or .env.example.\n  Set it in .env (e.g. \`postgresql://house_track:changeme@127.0.0.1:5432/house_track\`).`,
   );
+}
+
+// First non-empty value for `key` across the dotenv files, or undefined.
+async function resolveEnvVar(key: string): Promise<string | undefined> {
+  for (const fname of ['.env', '.env.local', '.env.example']) {
+    const path = join(REPO_ROOT, fname);
+    if (!existsSync(path)) continue;
+    const value = parseDotenv(await readFile(path, 'utf8'))[key];
+    if (value) return value;
+  }
+  return undefined;
 }
 
 function parseDotenv(content: string): Record<string, string> {

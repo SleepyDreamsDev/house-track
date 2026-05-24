@@ -1,10 +1,14 @@
-// Local stdio MCP server. Spawned by Claude Desktop on demand; reads the same
-// SQLite file the crawler writes to. Read-only — no mutations exposed.
+// Local stdio MCP server. Spawned by Claude Desktop on demand; reads the
+// PostgreSQL database the crawler writes to. Read-only — no mutations exposed.
 //
-// Three tools:
+// Curated tools (Prisma-backed, see queries.ts):
 //   list_filters()  — observed (filterId, featureId) → optionIds universe
 //   search_listings — multi-criteria query returning clickable 999.md URLs
 //   get_listing(id) — full record + filter triples for one listing
+//
+// Open-ended "ask the data" (pg-backed, see sql-runner.ts):
+//   run_sql(sql)    — single guarded read-only SELECT, capped + cached
+//   schema://house-track resource — the Prisma schema, so Claude can compose SQL
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -12,12 +16,15 @@ import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
 import { getListing, listFilters, searchListings } from './queries.js';
+import { SCHEMA_RESOURCE_URI, loadSchemaText } from './schema-resource.js';
+import { SqlRunner } from './sql-runner.js';
 
 const prisma = new PrismaClient();
+const sqlRunner = new SqlRunner(); // reads DATABASE_URL_RO from env (lazy pool)
 
 const server = new McpServer(
   { name: 'house-track', version: '0.1.0' },
-  { capabilities: { tools: {} } },
+  { capabilities: { tools: {}, resources: {} } },
 );
 
 server.registerTool(
@@ -83,6 +90,45 @@ server.registerTool(
     return { content: [{ type: 'text', text: JSON.stringify(listing, null, 2) }] };
   },
 );
+
+server.registerResource(
+  'schema',
+  SCHEMA_RESOURCE_URI,
+  {
+    title: 'house-track database schema',
+    description:
+      'PostgreSQL/Prisma schema (tables, columns, indexes, semantics). Read this before composing a run_sql query.',
+    mimeType: 'text/plain',
+  },
+  (uri) => ({
+    contents: [{ uri: uri.href, mimeType: 'text/plain', text: loadSchemaText() }],
+  }),
+);
+
+server.registerTool(
+  'run_sql',
+  {
+    description:
+      'Run ONE read-only SQL query (SELECT, or WITH … SELECT) against the house-track Postgres DB; returns rows as JSON. Read the schema://house-track resource first for tables/columns. Prefer aggregates (count/avg/GROUP BY) over dumping rows — results are capped at 500 rows / ~100 KB and the envelope reports `truncated`. Writes, multiple statements, and non-SELECT are rejected. Identifiers are case-sensitive — quote them, e.g. SELECT "priceEur" FROM "Listing".',
+    inputSchema: { sql: z.string() },
+  },
+  async ({ sql }) => {
+    try {
+      const result = await sqlRunner.run(sql);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: 'text', text: scrubError(err) }] };
+    }
+  },
+);
+
+// Surface a readable message without leaking any connection-string credentials.
+// Greedy `[^\s]*@` scrubs through the LAST `@` in the credential run, so an
+// unencoded `@` inside the password can't leak its tail.
+function scrubError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.replace(/(postgres(?:ql)?:\/\/)[^\s]*@/gi, '$1***@');
+}
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
