@@ -23,12 +23,17 @@ interface RawAdvert {
   city?: { value?: { translated?: string } };
   street?: { value?: string };
   images?: { value?: string[] };
-  // mapPoint is feature(id 3); its `value` shape is opaque until the next live
-  // capture confirms it. extractGeo() reads it defensively across common keys.
+  // mapPoint is feature(id 3); value shape confirmed from live traffic:
+  // { lat, lon, zoom }. extractGeo() reads lat/lon (with fallbacks).
   mapPoint?: { value?: unknown };
-  // owner currently selects only __typename (see GET_ADVERT_QUERY). The next
-  // capture extends the selection; extractAuthor() reads whatever lands here.
-  owner?: { id?: string | number; name?: string; type?: string } | null;
+  // owner is an Account (shape confirmed from live traffic). business.plan is
+  // non-null for business/agency accounts → our private/agency signal.
+  owner?: {
+    id?: string | number;
+    login?: string;
+    business?: { plan?: string | null } | null;
+    verification?: { isVerified?: boolean } | null;
+  } | null;
   [key: string]: unknown;
 }
 
@@ -125,8 +130,8 @@ function extractGeo(advert: RawAdvert): { lat: number | null; lon: number | null
   };
 }
 
-// Defensive seller-identity extraction from the owner object. Null until the
-// capture extends `owner { ... }` beyond __typename (REPLACE-ME).
+// Seller identity from the owner Account. authorName is the account login;
+// authorType is "agency" when the account has a business plan, else "private".
 function extractAuthor(advert: RawAdvert): {
   authorId: string | null;
   authorName: string | null;
@@ -136,10 +141,11 @@ function extractAuthor(advert: RawAdvert): {
   if (!o || typeof o !== 'object') {
     return { authorId: null, authorName: null, authorType: null };
   }
+  const isBusiness = o.business != null && o.business.plan != null;
   return {
     authorId: o.id != null ? String(o.id) : null,
-    authorName: typeof o.name === 'string' ? o.name : null,
-    authorType: typeof o.type === 'string' ? o.type : null,
+    authorName: typeof o.login === 'string' ? o.login : null,
+    authorType: isBusiness ? 'agency' : 'private',
   };
 }
 

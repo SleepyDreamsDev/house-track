@@ -295,7 +295,13 @@ export const GET_ADVERT_QUERY = `query GetAdvert($input: AdvertInput!) {
     mapPoint: feature(id: 3) { ...AdvertFeatureValue __typename }
     images: feature(id: 14) { ...AdvertFeatureValue __typename }
     offerType: feature(id: 1) { ...AdvertFeatureValue __typename }
-    owner { __typename }
+    owner {
+      id
+      login
+      business { plan id __typename }
+      verification { isVerified __typename }
+      __typename
+    }
     autoRepublish { __typename }
     moderation { __typename }
     package { __typename }
@@ -310,20 +316,15 @@ fragment AdvertFeatureValue on FeatureValue {
   __typename
 }`;
 
-// CAPTURE TODO (P2 seller identity): GET_ADVERT_QUERY selects only
-// `owner { __typename }`. On the next live capture (scripts/capture-session.ts),
-// extend it to the real owner fields — likely `owner { id name type __typename }`
-// — verified against an actual GetAdvert response. parse-detail's extractAuthor()
-// already reads id/name/type defensively, so once the selection lands the
-// columns populate with no further code change. Do NOT guess the field names
-// here: an unknown field makes the whole advert request error (project rule).
-
-// CAPTURE TODO (P2 phone, PII): phone is NOT in the advert payload — 999.md
-// reveals it via a separate operation. REPLACE-ME with the real query/mutation
-// captured from a live "show phone" click, then wire a politeness-budgeted
-// fetch in the detail trickle (one extra request per listing) that sets
-// Listing.phone. Until then this is an inert placeholder.
-export const ADVERT_PHONES_QUERY = `REPLACE-ME: captured GetAdvertPhones operation`;
+// Seller identity (P2): owner is an `Account`. Fields confirmed from live
+// browser traffic (AccountFragment) — id, login, business{plan}, verification.
+// These ride the existing GetAdvert request (no extra calls). parse-detail's
+// extractAuthor maps login→authorName and business.plan→agency/private.
+//
+// Phone is deliberately NOT captured: 999.md reveals it via a separate
+// "show phone" operation, and we avoid extra per-listing requests (browser-like
+// only). View counts (AdViews) and FX (GetMainCurrenciesRates) are likewise
+// separate ops — left as future opt-ins, not wired into the crawler.
 
 // REPLACE-ME — populated by scripts/capture-session.ts after a live capture.
 // 999.md's filter taxonomy operation name is unknown a priori; the script

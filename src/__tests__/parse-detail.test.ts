@@ -109,6 +109,50 @@ describe('parseDetail', () => {
     expect(d.postedAt).toEqual(new Date(2026, 3, 26, 18, 34, 0, 0));
   });
 
+  it('Extracts lat/lon from the mapPoint feature value', async () => {
+    const json = {
+      data: {
+        advert: {
+          id: ID,
+          title: 'x',
+          mapPoint: { value: { lat: 47.053986, lon: 28.948309, zoom: 16 } },
+        },
+      },
+    };
+
+    const d = parseDetail(ID, json);
+
+    expect(d.lat).toBeCloseTo(47.053986, 6);
+    expect(d.lon).toBeCloseTo(28.948309, 6);
+  });
+
+  it('Extracts author identity from the owner Account; business plan ⇒ agency', async () => {
+    const json = {
+      data: {
+        advert: {
+          id: ID,
+          title: 'x',
+          owner: { id: 555, login: 'osea', business: { plan: 'PRO', id: 9 } },
+        },
+      },
+    };
+
+    const d = parseDetail(ID, json);
+
+    expect(d.authorId).toBe('555');
+    expect(d.authorName).toBe('osea');
+    expect(d.authorType).toBe('agency');
+  });
+
+  it('Classifies an owner without a business plan as private', async () => {
+    const json = { data: { advert: { id: ID, title: 'x', owner: { id: 7, login: 'ion' } } } };
+
+    const d = parseDetail(ID, json);
+
+    expect(d.authorType).toBe('private');
+    expect(d.authorName).toBe('ion');
+  });
+
   it('rawHtmlHash is a sha256 hex string and is stable across irrelevant field changes', async () => {
     const json = (await loadAdvert()) as { data: { advert: Record<string, unknown> } };
     const baseHash = parseDetail(ID, json).rawHtmlHash;
