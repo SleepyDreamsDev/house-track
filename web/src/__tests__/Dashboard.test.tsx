@@ -12,6 +12,9 @@ vi.mock('../lib/api.js', () => ({
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Shared singleton queryClient — clear between tests so one test's resolved
+    // data can't leak into the next (which mocks different endpoint shapes).
+    queryClient.clear();
   });
 
   it('renders the redesigned KPI strip and side widgets', async () => {

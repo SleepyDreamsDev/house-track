@@ -101,6 +101,15 @@ interface AnalyticsFilters {
   sectors: string[];
   type: string | undefined;
   rooms: number | undefined;
+  // Inclusive rooms range — the rail's bucket ('1–2','5+') maps to these.
+  // Takes precedence over the legacy single `rooms` exact-match param.
+  minRooms: number | undefined;
+  maxRooms: number | undefined;
+  // Mirrors the Listings rail's "cheap" toggles. favorite restricts to
+  // watchlisted rows; includeExcluded opts back into excluded rows (off by
+  // default, matching Listings — analytics previously counted them).
+  favorite: boolean;
+  includeExcluded: boolean;
 }
 
 type ParsedFilters = { ok: true; filters: AnalyticsFilters } | { ok: false; error: string };
@@ -150,15 +159,26 @@ function parseAnalyticsFilters(c: Context): ParsedFilters {
   const type = c.req.query('type') || undefined;
   const roomsRaw = c.req.query('rooms');
   const rooms = roomsRaw ? Number.parseInt(roomsRaw, 10) : undefined;
+  const minRoomsRaw = c.req.query('minRooms');
+  const minRooms = minRoomsRaw ? Number.parseInt(minRoomsRaw, 10) : undefined;
+  const maxRoomsRaw = c.req.query('maxRooms');
+  const maxRooms = maxRoomsRaw ? Number.parseInt(maxRoomsRaw, 10) : undefined;
+  const favorite = c.req.query('favorite') === 'true';
+  const includeExcluded = c.req.query('includeExcluded') === 'true';
+  const num = (v: number | undefined) => (v != null && !Number.isNaN(v) ? v : undefined);
   return {
     ok: true,
     filters: {
       q,
-      maxPrice: maxPrice != null && !Number.isNaN(maxPrice) ? maxPrice : undefined,
+      maxPrice: num(maxPrice),
       districts,
       sectors,
       type,
-      rooms: rooms != null && !Number.isNaN(rooms) ? rooms : undefined,
+      rooms: num(rooms),
+      minRooms: num(minRooms),
+      maxRooms: num(maxRooms),
+      favorite,
+      includeExcluded,
     },
   };
 }
@@ -172,6 +192,11 @@ function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
     throw new TypeError('AnalyticsFilters.districts must be an array');
   }
   const where: Prisma.ListingWhereInput = { active: true };
+  // Default to non-excluded so analytics aggregates match the Listings view.
+  // The closed-listing branches (segments/overview) merge active:false back in
+  // via their own OR/override; excluded stays applied there too.
+  if (!f.includeExcluded) where.excluded = false;
+  if (f.favorite) where.watchlist = true;
   if (f.maxPrice != null) where.priceEur = { lte: f.maxPrice };
   const [only] = f.districts;
   if (f.districts.length === 1 && only !== undefined) {
@@ -182,7 +207,15 @@ function buildListingWhere(f: AnalyticsFilters): Prisma.ListingWhereInput {
   const [onlySector] = f.sectors;
   if (f.sectors.length === 1 && onlySector !== undefined) where.sector = onlySector;
   else if (f.sectors.length > 1) where.sector = { in: f.sectors };
-  if (f.rooms != null) where.rooms = f.rooms;
+  // Range takes precedence over the legacy exact-match `rooms`.
+  if (f.minRooms != null || f.maxRooms != null) {
+    where.rooms = {
+      ...(f.minRooms != null ? { gte: f.minRooms } : {}),
+      ...(f.maxRooms != null ? { lte: f.maxRooms } : {}),
+    };
+  } else if (f.rooms != null) {
+    where.rooms = f.rooms;
+  }
   // Mirrors searchListings (src/mcp/queries.ts) — case-insensitive title contains.
   if (f.q) where.title = { contains: f.q, mode: 'insensitive' };
   return where;

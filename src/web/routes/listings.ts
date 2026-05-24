@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { searchListings, getListing } from '../../mcp/queries.js';
 import { Persistence } from '../../persist.js';
 import { deriveType } from '../../lib/listing-type.js';
+import { classifyListing } from '../../lib/listing-classification.js';
 
 export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   app.get('/api/listings', async (c) => {
@@ -48,6 +49,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       sector = parts.join(',');
     }
     const sort = c.req.query('sort') as 'newest' | 'price' | 'eurm2' | undefined;
+    const type = c.req.query('type') || undefined;
     const q = c.req.query('q');
     const flags = c.req.query('flags');
     const firstSeenAfter = c.req.query('firstSeenAfter');
@@ -67,6 +69,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       district,
       sector,
       sort,
+      type,
       q,
       flags,
       firstSeenAfter,
@@ -126,6 +129,27 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       .map((r) => ({ name: r.sector as string, count: r._count._all }))
       .sort((a, b) => b.count - a.count);
 
+    // Counts backing the rail's boolean toggles. The unified FilterRail hides a
+    // toggle when its count is 0 ("no data in current view"): no favorites → no
+    // Favorites toggle, no excluded rows → no Show-excluded toggle, etc.
+    const favoritesCount = await prisma.listing.count({
+      where: { active: true, excluded: false, watchlist: true },
+    });
+    const excludedCount = await prisma.listing.count({
+      where: { active: true, excluded: true },
+    });
+    // mislabeledCount needs classifyListing (JS regex over title/description +
+    // a region allowlist) — no clean SQL form. Bounded by the active catalog
+    // size, so reading these three columns and classifying in memory is cheap.
+    const mislabelRows = await prisma.listing.findMany({
+      where: { active: true, excluded: false },
+      select: { title: true, description: true, district: true },
+    });
+    const mislabeledCount = mislabelRows.filter((r) => {
+      const cls = classifyListing(r);
+      return cls.typeMismatch || cls.regionMismatch;
+    }).length;
+
     return c.json({
       total: aggregates._count,
       districts,
@@ -135,6 +159,9 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       areaSqm: { min: aggregates._min.areaSqm, max: aggregates._max.areaSqm },
       types,
       roomsValues,
+      favoritesCount,
+      excludedCount,
+      mislabeledCount,
     });
   });
 

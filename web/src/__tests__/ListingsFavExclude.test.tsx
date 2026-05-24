@@ -111,12 +111,17 @@ describe('Listings favorite / exclude mutations', () => {
   it('toggling "Show excluded" adds includeExcluded=true to the listings request', async () => {
     const user = userEvent.setup();
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as ReturnType<typeof vi.fn>).mockResolvedValue({ listings: [], total: 0 });
+    (apiCall as ReturnType<typeof vi.fn>).mockImplementation((endpoint: string) => {
+      if (typeof endpoint === 'string' && endpoint.startsWith('/listings/facets')) {
+        return Promise.resolve({ total: 0, districts: [], price: {}, excludedCount: 2 });
+      }
+      return Promise.resolve({ listings: [], total: 0 });
+    });
 
     renderListings(qc);
     await screen.findByText('Listings');
 
-    const showExcludedToggle = screen.getByRole('checkbox', { name: /show excluded/i });
+    const showExcludedToggle = await screen.findByRole('checkbox', { name: /show excluded/i });
     await user.click(showExcludedToggle);
 
     const calls = (apiCall as ReturnType<typeof vi.fn>).mock.calls as [string, ...unknown[]][];
@@ -129,12 +134,17 @@ describe('Listings favorite / exclude mutations', () => {
   it('toggling "Favorites only" adds favorite=true to the listings request', async () => {
     const user = userEvent.setup();
     const { apiCall } = await import('../lib/api.js');
-    (apiCall as ReturnType<typeof vi.fn>).mockResolvedValue({ listings: [], total: 0 });
+    (apiCall as ReturnType<typeof vi.fn>).mockImplementation((endpoint: string) => {
+      if (typeof endpoint === 'string' && endpoint.startsWith('/listings/facets')) {
+        return Promise.resolve({ total: 0, districts: [], price: {}, favoritesCount: 3 });
+      }
+      return Promise.resolve({ listings: [], total: 0 });
+    });
 
     renderListings(qc);
     await screen.findByText('Listings');
 
-    const favOnlyToggle = screen.getByRole('checkbox', { name: /favorites only/i });
+    const favOnlyToggle = await screen.findByRole('checkbox', { name: /favorites only/i });
     await user.click(favOnlyToggle);
 
     const calls = (apiCall as ReturnType<typeof vi.fn>).mock.calls as [string, ...unknown[]][];

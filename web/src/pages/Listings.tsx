@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
-import { Input } from '@/components/ui/Input.js';
 import { PhotoPlaceholder } from '@/components/ui/PhotoPlaceholder.js';
 import { PageHeader } from '@/components/ui/PageHeader.js';
 import { ListingsTable } from '@/components/listings/ListingsTable.js';
-import { Toggle } from '@/components/ui/Toggle.js';
+import { FilterRail, type FilterFacets } from '@/components/filters/FilterRail.js';
+import { useBrowseFilters } from '@/lib/useBrowseFilters.js';
+import { bucketToRoomsValues, type RoomsBucket } from '@/lib/listing-type.js';
 import { apiCall } from '@/lib/api.js';
 import { fmt } from '@/lib/format.js';
 
@@ -40,61 +41,40 @@ interface Listing {
 
 const PAGE_SIZE = 50;
 
-// Fallback bounds while facets are loading; server-derived bounds replace
-// these once /api/listings/facets responds. Slightly generous so the rail
-// renders sensibly on a fresh DB before any sweep has run.
-const PRICE_MAX_FALLBACK = 250000;
-const PRICE_MIN_FALLBACK = 0;
-
-interface ListingsFacets {
+interface ListingsFacetsResponse extends FilterFacets {
   total: number;
-  districts: string[];
-  sectors?: { name: string; count: number }[];
-  price: { min: number | null; max: number | null };
   rooms: { min: number | null; max: number | null };
   areaSqm: { min: number | null; max: number | null };
 }
 
 export const Listings: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [q, setQ] = useState('');
-  const [maxPrice, setMaxPrice] = useState(PRICE_MAX_FALLBACK);
-  // Empty array == "All districts". Multiple values send `district=A,B` to the
-  // backend, which compiles to a SQL `IN (...)` clause (see searchListings).
-  const [districtsRaw, setDistrictsRaw] = useState<string[]>([]);
-  // De-dupe at the setter so any future entry point (URL hydration, "select
-  // all", paste-from-saved-filter) can't produce duplicate chips that the
-  // SQL IN clause would silently collapse.
-  const setDistricts = (next: string[]) => setDistrictsRaw(Array.from(new Set(next)));
-  const districts = districtsRaw;
-  const [sectorsRaw, setSectorsRaw] = useState<string[]>([]);
-  const setSectors = (next: string[]) => setSectorsRaw(Array.from(new Set(next)));
-  const sectors = sectorsRaw;
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
   const [view, setView] = useState<'cards' | 'table'>('table');
-  const [hideMislabeled, setHideMislabeled] = useState(false);
   const [page, setPage] = useState(0);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [showExcluded, setShowExcluded] = useState(false);
   const queryClient = useQueryClient();
 
-  // Observed-data facets — districts and price bounds come from the actual
-  // catalog rather than hardcoded values. Once loaded, the slider snaps to
-  // the data's max if the user hasn't already moved it past it.
-  const { data: facets } = useQuery<ListingsFacets>({
+  // Observed-data facets — districts, price bounds, type/rooms options, and the
+  // boolean-toggle counts all come from the catalog (GET /api/listings/facets)
+  // rather than hardcoded values.
+  const { data: facets } = useQuery<ListingsFacetsResponse>({
     queryKey: ['listings-facets'],
     queryFn: () => apiCall('/listings/facets'),
   });
-  const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
-  const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
-  const districtOptions = facets?.districts ?? [];
-  const sectorOptions = facets?.sectors ?? [];
-  // If the server's max is below the slider's current position, clamp down.
-  useEffect(() => {
-    if (facets && maxPrice > priceMax) setMaxPrice(priceMax);
-    // initial-only clamp; intentionally exclude maxPrice
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facets]);
+
+  const filters = useBrowseFilters(facets);
+  const { state, priceMax } = filters;
+  const {
+    q,
+    maxPrice,
+    districts,
+    sectors,
+    type,
+    rooms,
+    favoritesOnly,
+    showExcluded,
+    hideMislabeled,
+  } = state;
 
   // Sweep-row links set ?firstSeenAfter (new only) or ?lastFetchedAfter
   // (touched by sweep) plus ?fromSweep=<id> for the breadcrumb chip.
@@ -129,6 +109,8 @@ export const Listings: React.FC = () => {
     maxPrice,
     districtsKey,
     sectorsKey,
+    type,
+    rooms,
     sort,
     firstSeenAfter,
     lastFetchedAfter,
@@ -144,6 +126,8 @@ export const Listings: React.FC = () => {
         maxPrice,
         districtsKey,
         sectorsKey,
+        type,
+        rooms,
         sort,
         page,
         firstSeenAfter,
@@ -158,6 +142,16 @@ export const Listings: React.FC = () => {
       if (maxPrice < priceMax) p.append('maxPrice', String(maxPrice));
       if (districts.length > 0) p.append('district', districts.join(','));
       if (sectors.length > 0) p.append('sector', sectors.join(','));
+      if (type !== 'all') p.append('type', type);
+      // Rooms bucket → min/max integers the listings endpoint already supports.
+      // The open-ended '5+' bucket sends only a lower bound.
+      if (rooms !== 'all') {
+        const values = bucketToRoomsValues(rooms as RoomsBucket);
+        const min = values[0];
+        const max = values[values.length - 1];
+        if (min != null) p.append('minRooms', String(min));
+        if (rooms !== '5+' && max != null) p.append('maxRooms', String(max));
+      }
       if (firstSeenAfter) p.append('firstSeenAfter', firstSeenAfter);
       if (lastFetchedAfter) p.append('lastFetchedAfter', lastFetchedAfter);
       if (favoritesOnly) p.append('favorite', 'true');
@@ -253,151 +247,28 @@ export const Listings: React.FC = () => {
 
       <div className="grid grid-cols-[240px_1fr] gap-6">
         <Card className="self-start">
-          <div className="space-y-5 text-sm">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
-                Search
-              </label>
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Title, district…"
-              />
-            </div>
-            <label className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                Hide mislabeled
-              </span>
-              <Toggle
-                checked={hideMislabeled}
-                onChange={setHideMislabeled}
-                aria-label="Hide mislabeled"
-              />
-            </label>
-            <div>
-              <div className="flex justify-between mb-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                  Max price
-                </label>
-                <span className="text-xs tabular-nums text-neutral-600">{fmt.eur(maxPrice)}</span>
-              </div>
-              <input
-                type="range"
-                min={Math.max(0, priceMin)}
-                max={priceMax}
-                step={Math.max(1000, Math.round((priceMax - priceMin) / 50))}
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(Number(e.target.value))}
-                className="w-full accent-accent"
-              />
-            </div>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                  District
-                </span>
-                {districts.length > 0 && (
-                  <button
-                    onClick={() => setDistricts([])}
-                    className="text-[11px] text-neutral-500 hover:text-neutral-800"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => setDistricts([])}
-                  aria-pressed={districts.length === 0}
-                  className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${districts.length === 0 ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
-                >
-                  All districts
-                </button>
-                {districtOptions.map((d) => {
-                  const active = districts.includes(d);
-                  return (
-                    <button
-                      key={d}
-                      onClick={() =>
-                        setDistricts(active ? districts.filter((x) => x !== d) : [...districts, d])
-                      }
-                      aria-pressed={active}
-                      className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors ${active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
-                    >
-                      <span
-                        className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border ${active ? 'border-white bg-white text-neutral-900' : 'border-neutral-300 bg-white'}`}
-                        aria-hidden
-                      >
-                        {active && <span className="text-[10px] leading-none">✓</span>}
-                      </span>
-                      <span>{d}</span>
-                    </button>
-                  );
-                })}
-                {!facets && (
-                  <p className="px-2 py-1.5 text-xs text-neutral-400">Loading districts…</p>
-                )}
-              </div>
-            </div>
-            {sectorOptions.length > 0 && (
-              <div className="mt-4" data-testid="sector-filter">
-                <div className="mb-1.5 flex justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                    Sector
-                  </span>
-                  {sectors.length > 0 && (
-                    <button
-                      className="text-[11px] text-neutral-500 hover:text-neutral-900"
-                      onClick={() => setSectors([])}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-0.5">
-                  {sectorOptions.map(({ name }) => {
-                    const active = sectors.includes(name);
-                    return (
-                      <button
-                        key={name}
-                        aria-pressed={active}
-                        onClick={() =>
-                          setSectors(
-                            active ? sectors.filter((x) => x !== name) : [...sectors, name],
-                          )
-                        }
-                        className={`w-full text-left rounded-sm px-2 py-1.5 text-sm transition-colors ${active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
-                      >
-                        {name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-neutral-700">
-                <input
-                  type="checkbox"
-                  checked={favoritesOnly}
-                  onChange={(e) => setFavoritesOnly(e.target.checked)}
-                  aria-label="Favorites only"
-                  className="accent-accent"
-                />
-                Favorites only
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-neutral-700">
-                <input
-                  type="checkbox"
-                  checked={showExcluded}
-                  onChange={(e) => setShowExcluded(e.target.checked)}
-                  aria-label="Show excluded"
-                  className="accent-accent"
-                />
-                Show excluded
-              </label>
-            </div>
-          </div>
+          <FilterRail
+            q={q}
+            setQ={filters.setQ}
+            maxPrice={maxPrice}
+            setMaxPrice={filters.setMaxPrice}
+            districts={districts}
+            setDistricts={filters.setDistricts}
+            sectors={sectors}
+            setSectors={filters.setSectors}
+            type={type}
+            setType={filters.setType}
+            rooms={rooms}
+            setRooms={filters.setRooms}
+            favoritesOnly={favoritesOnly}
+            setFavoritesOnly={filters.setFavoritesOnly}
+            showExcluded={showExcluded}
+            setShowExcluded={filters.setShowExcluded}
+            hideMislabeled={hideMislabeled}
+            setHideMislabeled={filters.setHideMislabeled}
+            facets={facets}
+            searchPlaceholder="Title, district…"
+          />
         </Card>
 
         <div className="space-y-3">
