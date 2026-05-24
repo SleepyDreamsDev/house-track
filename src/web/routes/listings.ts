@@ -168,6 +168,10 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     return c.json({ id, watchlist: body.watchlist });
   });
 
+  // Freeze a listing the operator isn't interested in: excluded rows are
+  // dropped from every sweep's detail re-fetch (saving the politeness budget)
+  // and hidden from the default Listings view + facets. Reversible — set false
+  // to resume tracking. Body: { excluded: boolean }.
   app.put('/api/listings/:id/excluded', async (c) => {
     const id = c.req.param('id');
     const body = (await c.req.json().catch(() => null)) as { excluded?: unknown } | null;
