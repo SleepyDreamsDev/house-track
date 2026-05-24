@@ -52,6 +52,8 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     const flags = c.req.query('flags');
     const firstSeenAfter = c.req.query('firstSeenAfter');
     const lastFetchedAfter = c.req.query('lastFetchedAfter');
+    const favorite = c.req.query('favorite') === 'true' ? true : undefined;
+    const includeExcluded = c.req.query('includeExcluded') === 'true' ? true : undefined;
 
     const results = await searchListings(prisma, {
       limit,
@@ -69,6 +71,8 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       flags,
       firstSeenAfter,
       lastFetchedAfter,
+      favorite,
+      includeExcluded,
     });
 
     return c.json(results);
@@ -162,5 +166,20 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       return c.json({ error: 'Listing not found' }, 404);
     }
     return c.json({ id, watchlist: body.watchlist });
+  });
+
+  app.put('/api/listings/:id/excluded', async (c) => {
+    const id = c.req.param('id');
+    const body = (await c.req.json().catch(() => null)) as { excluded?: unknown } | null;
+    if (!body || typeof body.excluded !== 'boolean') {
+      return c.json({ error: 'Body must be { excluded: boolean }' }, 400);
+    }
+    const persist = new Persistence(prisma);
+    try {
+      await persist.setExcluded(id, body.excluded);
+    } catch {
+      return c.json({ error: 'Listing not found' }, 404);
+    }
+    return c.json({ id, excluded: body.excluded });
   });
 }
