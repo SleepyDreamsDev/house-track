@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import type { Prisma } from '@prisma/client';
 import { getPrisma } from '../../db.js';
 import { deriveType, roomsBucket } from '../../lib/listing-type.js';
+import { fitHedonic, residualPct, type HedonicSample } from '../../lib/hedonic.js';
 import {
   DISTRESS_LEXICON,
   isWeekend,
@@ -643,6 +644,92 @@ analyticsRouter.get('/analytics/distress', async (c) => {
     closedCount: closed.length,
     weekendDelistShare,
     postingHour,
+  });
+});
+
+// Hedonic valuation / AVM (P4): fit log(price) ~ attributes over the active
+// slice, then score each listing by residual (actual vs model-expected price).
+// Strongly negative residual = a deal (priced below what its attributes
+// warrant); positive = aspirational. Recalibrates automatically as geo/author
+// features land. Cross-portal "sold-price" calibration is a later (P5) slice.
+const VALUATION_MIN_SAMPLES = 10;
+
+analyticsRouter.get('/analytics/valuation', async (c) => {
+  const prisma = getPrisma();
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
+  const baseWhere = buildListingWhere(filters);
+
+  const rows = applyTypeFilter(
+    await prisma.listing.findMany({
+      where: baseWhere,
+      select: {
+        id: true,
+        url: true,
+        title: true,
+        priceEur: true,
+        areaSqm: true,
+        rooms: true,
+        yearBuilt: true,
+        sector: true,
+        heatingType: true,
+      },
+    }),
+    filters.type,
+  );
+
+  const toSample = (r: (typeof rows)[number]): HedonicSample => ({
+    priceEur: r.priceEur,
+    areaSqm: r.areaSqm,
+    rooms: r.rooms,
+    yearBuilt: r.yearBuilt,
+    sector: r.sector,
+    heatingType: r.heatingType,
+    type: deriveType(r.title),
+  });
+
+  const model = fitHedonic(rows.map(toSample));
+  if (!model || model.n < VALUATION_MIN_SAMPLES) {
+    return c.json({
+      n: model?.n ?? 0,
+      minSamples: VALUATION_MIN_SAMPLES,
+      insufficientData: true,
+      rSquared: null,
+      deals: [],
+      overpriced: [],
+    });
+  }
+
+  const scored = rows
+    .map((r) => {
+      if (r.priceEur == null || r.areaSqm == null || r.areaSqm <= 0) return null;
+      const predicted = model.predict(toSample(r));
+      if (predicted == null || predicted <= 0) return null;
+      return {
+        id: r.id,
+        url: r.url,
+        title: r.title,
+        priceEur: r.priceEur,
+        predictedEur: Math.round(predicted),
+        residualPct: Math.round(residualPct(r.priceEur, predicted) * 1000) / 1000,
+        sector: r.sector,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+    .sort((a, b) => a.residualPct - b.residualPct);
+
+  const coefficients: Record<string, number> = {};
+  model.featureNames.forEach((name, i) => {
+    coefficients[name] = Math.round((model.coefficients[i] ?? 0) * 1e6) / 1e6;
+  });
+
+  return c.json({
+    n: model.n,
+    rSquared: Math.round(model.rSquared * 1000) / 1000,
+    coefficients,
+    deals: scored.slice(0, 20), // most underpriced first
+    overpriced: scored.slice(-20).reverse(), // most overpriced first
   });
 });
 
