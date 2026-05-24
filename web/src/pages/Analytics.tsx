@@ -41,10 +41,13 @@ interface ListingsFacetsResponse extends FilterFacets {
 // Build the query string sent to /api/analytics/* — mirrors the filter set
 // Listings sends to /api/listings, so an operator who narrowed Listings sees
 // the same slice when they switch tabs.
-function buildQueryParams(state: BrowseFilterState, priceMax: number): URLSearchParams {
+function buildQueryParams(state: BrowseFilterState): URLSearchParams {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
-  if (state.maxPrice < priceMax) p.set('maxPrice', String(state.maxPrice));
+  if (state.minPrice != null) p.set('minPrice', String(state.minPrice));
+  if (state.maxPrice != null) p.set('maxPrice', String(state.maxPrice));
+  if (state.minArea != null) p.set('minAreaSqm', String(state.minArea));
+  if (state.maxArea != null) p.set('maxAreaSqm', String(state.maxArea));
   if (state.districts.length > 0) p.set('district', state.districts.join(','));
   if (state.sectors.length > 0) p.set('sector', state.sectors.join(','));
   if (state.type !== 'all') p.set('type', state.type);
@@ -70,16 +73,40 @@ export const Analytics: React.FC = () => {
     queryFn: () => apiCall<ListingsFacetsResponse>('/listings/facets'),
   });
 
-  const filters = useBrowseFilters(facets);
-  const { state, priceMax } = filters;
-  const { q, maxPrice, districts, sectors, type, rooms, favoritesOnly, showExcluded } = state;
+  const filters = useBrowseFilters();
+  const { state } = filters;
+  const {
+    q,
+    minPrice,
+    maxPrice,
+    minArea,
+    maxArea,
+    districts,
+    sectors,
+    type,
+    rooms,
+    favoritesOnly,
+    showExcluded,
+  } = state;
 
   const districtsKey = districts.join(',');
   const sectorsKey = sectors.join(',');
   const queryParams = useMemo(
-    () => buildQueryParams(state, priceMax).toString(),
+    () => buildQueryParams(state).toString(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [q, maxPrice, districtsKey, sectorsKey, type, rooms, favoritesOnly, showExcluded, priceMax],
+    [
+      q,
+      minPrice,
+      maxPrice,
+      minArea,
+      maxArea,
+      districtsKey,
+      sectorsKey,
+      type,
+      rooms,
+      favoritesOnly,
+      showExcluded,
+    ],
   );
 
   const overviewQ = useQuery<OverviewResponse>({
@@ -114,8 +141,14 @@ export const Analytics: React.FC = () => {
   const railProps = {
     q,
     setQ: filters.setQ,
+    minPrice,
     maxPrice,
+    setMinPrice: filters.setMinPrice,
     setMaxPrice: filters.setMaxPrice,
+    minArea,
+    maxArea,
+    setMinArea: filters.setMinArea,
+    setMaxArea: filters.setMaxArea,
     districts,
     setDistricts: filters.setDistricts,
     sectors,

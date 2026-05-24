@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
-// Fallback price bounds used until /api/listings/facets responds. Slightly
-// generous so the rail renders sensibly on a fresh DB before any sweep.
-export const PRICE_MAX_FALLBACK = 250000;
-export const PRICE_MIN_FALLBACK = 0;
+export interface Bounds {
+  min: number | null;
+  max: number | null;
+}
 
 // The facet payload from GET /api/listings/facets. Drives both the rail's
 // option lists and its "hide if no data" visibility. Both Listings and
@@ -13,7 +13,8 @@ export interface FilterFacets {
   sectors?: { name: string; count: number }[];
   types: string[];
   roomsValues: number[];
-  price: { min: number | null; max: number | null };
+  price: Bounds;
+  areaSqm?: Bounds;
   favoritesCount?: number;
   excludedCount?: number;
   mislabeledCount?: number;
@@ -21,7 +22,12 @@ export interface FilterFacets {
 
 export interface BrowseFilterState {
   q: string;
-  maxPrice: number;
+  // Range filters: null means "unbounded" (the input is empty) — so a fresh
+  // page sends no price/area params at all.
+  minPrice: number | null;
+  maxPrice: number | null;
+  minArea: number | null;
+  maxArea: number | null;
   districts: string[];
   sectors: string[];
   type: string; // 'all' | derived type
@@ -34,7 +40,10 @@ export interface BrowseFilterState {
 export interface UseBrowseFilters {
   state: BrowseFilterState;
   setQ: (v: string) => void;
-  setMaxPrice: (v: number) => void;
+  setMinPrice: (v: number | null) => void;
+  setMaxPrice: (v: number | null) => void;
+  setMinArea: (v: number | null) => void;
+  setMaxArea: (v: number | null) => void;
   setDistricts: (v: string[]) => void;
   setSectors: (v: string[]) => void;
   setType: (v: string) => void;
@@ -42,17 +51,17 @@ export interface UseBrowseFilters {
   setFavoritesOnly: (v: boolean) => void;
   setShowExcluded: (v: boolean) => void;
   setHideMislabeled: (v: boolean) => void;
-  priceMin: number;
-  priceMax: number;
 }
 
-// Owns the browse-filter state shared by the Listings and Analytics pages, plus
-// the maxPrice/facet clamp logic that previously lived (subtly differently) in
-// both. Each page instantiates its own — state is per-page and resets on nav.
-export function useBrowseFilters(facets: FilterFacets | undefined): UseBrowseFilters {
+// Owns the browse-filter state shared by the Listings and Analytics pages. Each
+// page instantiates its own — state is per-page and resets on nav. Range
+// filters default to null (unbounded); the rail seeds bounds as placeholders.
+export function useBrowseFilters(): UseBrowseFilters {
   const [q, setQ] = useState('');
-  const [maxPrice, setMaxPriceRaw] = useState(PRICE_MAX_FALLBACK);
-  const [maxPriceTouched, setMaxPriceTouched] = useState(false);
+  const [minPrice, setMinPrice] = useState<number | null>(null);
+  const [maxPrice, setMaxPrice] = useState<number | null>(null);
+  const [minArea, setMinArea] = useState<number | null>(null);
+  const [maxArea, setMaxArea] = useState<number | null>(null);
   const [districts, setDistrictsRaw] = useState<string[]>([]);
   const [sectors, setSectorsRaw] = useState<string[]>([]);
   const [type, setType] = useState('all');
@@ -61,22 +70,6 @@ export function useBrowseFilters(facets: FilterFacets | undefined): UseBrowseFil
   const [showExcluded, setShowExcluded] = useState(false);
   const [hideMislabeled, setHideMislabeled] = useState(false);
 
-  const priceMax = facets?.price?.max ?? PRICE_MAX_FALLBACK;
-  const priceMin = facets?.price?.min ?? PRICE_MIN_FALLBACK;
-
-  // While the slider is untouched, track the catalog max: a fresh page sends no
-  // maxPrice param (slider sits at max), and a shrinking catalog clamps the
-  // slider down. Once the user moves it, maxPriceTouched locks their choice so
-  // facet refreshes can't yank it.
-  useEffect(() => {
-    if (!facets || maxPriceTouched) return;
-    if (maxPrice !== priceMax) setMaxPriceRaw(priceMax);
-  }, [facets, priceMax, maxPriceTouched, maxPrice]);
-
-  const setMaxPrice = (v: number) => {
-    setMaxPriceTouched(true);
-    setMaxPriceRaw(v);
-  };
   // De-dupe at the setter so any entry point (URL hydration, "select all",
   // paste-from-saved-filter) can't produce duplicate chips that a SQL IN clause
   // would silently collapse.
@@ -85,7 +78,10 @@ export function useBrowseFilters(facets: FilterFacets | undefined): UseBrowseFil
 
   const state: BrowseFilterState = {
     q,
+    minPrice,
     maxPrice,
+    minArea,
+    maxArea,
     districts,
     sectors,
     type,
@@ -98,7 +94,10 @@ export function useBrowseFilters(facets: FilterFacets | undefined): UseBrowseFil
   return {
     state,
     setQ,
+    setMinPrice,
     setMaxPrice,
+    setMinArea,
+    setMaxArea,
     setDistricts,
     setSectors,
     setType,
@@ -106,7 +105,5 @@ export function useBrowseFilters(facets: FilterFacets | undefined): UseBrowseFil
     setFavoritesOnly,
     setShowExcluded,
     setHideMislabeled,
-    priceMin,
-    priceMax,
   };
 }

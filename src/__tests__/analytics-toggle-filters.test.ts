@@ -34,6 +34,8 @@ interface SeedListing {
   excluded?: boolean;
   watchlist?: boolean;
   rooms?: number;
+  priceEur?: number;
+  areaSqm?: number;
 }
 
 async function seed(s: SeedListing) {
@@ -50,8 +52,8 @@ async function seed(s: SeedListing) {
       excluded: s.excluded ?? false,
       watchlist: s.watchlist ?? false,
       district: 'Chișinău',
-      priceEur: 100000,
-      areaSqm: 100,
+      priceEur: s.priceEur ?? 100000,
+      areaSqm: s.areaSqm ?? 100,
       rooms: s.rooms ?? 3,
     },
   });
@@ -114,5 +116,26 @@ describe('analytics overview — rooms range', () => {
 
     const body = await overview('?minRooms=5');
     expect(body.kpis.activeInventory).toBe(2);
+  });
+});
+
+describe('analytics overview — price and area ranges', () => {
+  it('honors minPrice/maxPrice as an inclusive range', async () => {
+    await seed({ id: 'p1', priceEur: 40000 });
+    await seed({ id: 'p2', priceEur: 80000 });
+    await seed({ id: 'p3', priceEur: 120000 });
+    await seed({ id: 'p4', priceEur: 300000 });
+
+    const body = await overview('?minPrice=50000&maxPrice=150000');
+    expect(body.kpis.activeInventory).toBe(2); // 80k, 120k
+  });
+
+  it('honors minAreaSqm/maxAreaSqm as an inclusive range', async () => {
+    await seed({ id: 'a1', areaSqm: 40 });
+    await seed({ id: 'a2', areaSqm: 90 });
+    await seed({ id: 'a3', areaSqm: 250 });
+
+    const body = await overview('?minAreaSqm=60&maxAreaSqm=120');
+    expect(body.kpis.activeInventory).toBe(1); // 90
   });
 });

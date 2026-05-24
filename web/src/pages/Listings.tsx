@@ -62,11 +62,14 @@ export const Listings: React.FC = () => {
     queryFn: () => apiCall('/listings/facets'),
   });
 
-  const filters = useBrowseFilters(facets);
-  const { state, priceMax } = filters;
+  const filters = useBrowseFilters();
+  const { state } = filters;
   const {
     q,
+    minPrice,
     maxPrice,
+    minArea,
+    maxArea,
     districts,
     sectors,
     type,
@@ -106,7 +109,10 @@ export const Listings: React.FC = () => {
     setPage(0);
   }, [
     q,
+    minPrice,
     maxPrice,
+    minArea,
+    maxArea,
     districtsKey,
     sectorsKey,
     type,
@@ -123,7 +129,10 @@ export const Listings: React.FC = () => {
       'listings',
       {
         q,
+        minPrice,
         maxPrice,
+        minArea,
+        maxArea,
         districtsKey,
         sectorsKey,
         type,
@@ -139,7 +148,10 @@ export const Listings: React.FC = () => {
     queryFn: () => {
       const p = new URLSearchParams();
       if (q) p.append('q', q);
-      if (maxPrice < priceMax) p.append('maxPrice', String(maxPrice));
+      if (minPrice != null) p.append('minPrice', String(minPrice));
+      if (maxPrice != null) p.append('maxPrice', String(maxPrice));
+      if (minArea != null) p.append('minAreaSqm', String(minArea));
+      if (maxArea != null) p.append('maxAreaSqm', String(maxArea));
       if (districts.length > 0) p.append('district', districts.join(','));
       if (sectors.length > 0) p.append('sector', sectors.join(','));
       if (type !== 'all') p.append('type', type);
@@ -206,7 +218,7 @@ export const Listings: React.FC = () => {
     <div data-screen-label="Listings">
       <PageHeader
         title="Listings"
-        subtitle={`${data?.total ?? '…'} listings · ${maxPrice < priceMax ? `€${maxPrice.toLocaleString()} max` : 'any price'}`}
+        subtitle={`${data?.total ?? '…'} listings`}
         actions={
           <Button
             variant="secondary"
@@ -250,8 +262,14 @@ export const Listings: React.FC = () => {
           <FilterRail
             q={q}
             setQ={filters.setQ}
+            minPrice={minPrice}
             maxPrice={maxPrice}
+            setMinPrice={filters.setMinPrice}
             setMaxPrice={filters.setMaxPrice}
+            minArea={minArea}
+            maxArea={maxArea}
+            setMinArea={filters.setMinArea}
+            setMaxArea={filters.setMaxArea}
             districts={districts}
             setDistricts={filters.setDistricts}
             sectors={sectors}
