@@ -69,20 +69,39 @@ export class Persistence {
 
   async markSeen(stubs: ListingStub[]): Promise<void> {
     if (stubs.length === 0) return;
+    // Re-seeing a listing revives it: clear any delist event so a relisted
+    // property doesn't keep a stale delistedAt that would corrupt DOM/absorption.
     await this.prisma.listing.updateMany({
       where: { id: { in: stubs.map((s) => s.id) } },
-      data: { lastSeenAt: new Date(), active: true },
+      data: { lastSeenAt: new Date(), active: true, delistedAt: null, delistReason: null },
     });
   }
 
-  /** Flip active=false on listings whose lastSeenAt is older than `ageMs`. Returns count. */
+  /**
+   * Flip active=false on listings whose lastSeenAt is older than `ageMs`, and
+   * stamp the delist event (delistedAt=now, delistReason="stale_cutoff") so
+   * realized DOM / absorption have a real endpoint. Returns count.
+   */
   async markInactiveOlderThan(ageMs: number): Promise<number> {
     const cutoff = new Date(Date.now() - ageMs);
     const res = await this.prisma.listing.updateMany({
       where: { active: true, lastSeenAt: { lt: cutoff } },
-      data: { active: false },
+      data: { active: false, delistedAt: new Date(), delistReason: 'stale_cutoff' },
     });
     return res.count;
+  }
+
+  /**
+   * One-time/idempotent backfill: estimate delistedAt for inactive rows that
+   * predate the delist-event column. Mirrors the migration's UPDATE so it can
+   * be re-run safely (WHERE active=false AND delistedAt IS NULL). Returns count.
+   */
+  async backfillDelistedEstimate(): Promise<number> {
+    const res = await this.prisma.$executeRaw`
+      UPDATE "Listing"
+      SET "delistedAt" = "lastSeenAt", "delistReason" = 'backfill_estimate'
+      WHERE "active" = false AND "delistedAt" IS NULL`;
+    return res;
   }
 
   async persistDetail(detail: ParsedDetail): Promise<void> {
@@ -121,7 +140,15 @@ export class Persistence {
       await tx.listing.upsert({
         where: { id: detail.id },
         create: { id: detail.id, ...writable, lastSeenAt: now, lastFetchedAt: now },
-        update: { ...writable, lastSeenAt: now, lastFetchedAt: now, active: true },
+        // Re-fetch revives the listing — clear any delist event (see markSeen).
+        update: {
+          ...writable,
+          lastSeenAt: now,
+          lastFetchedAt: now,
+          active: true,
+          delistedAt: null,
+          delistReason: null,
+        },
       });
 
       // Replace, don't merge — otherwise a removed feature on 999.md would
