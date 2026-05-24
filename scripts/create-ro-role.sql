@@ -14,6 +14,16 @@
 
 \set ON_ERROR_STOP on
 
+-- Fail closed: a missing or empty ro_password would otherwise create the role
+-- with a blank password. Print a hint when it's missing, then abort on empty
+-- via a runtime division-by-zero (ON_ERROR_STOP turns it into a non-zero exit).
+\if :{?ro_password}
+\else
+  \echo 'ERROR: create-ro-role.sql requires -v ro_password=<password>'
+  \set ro_password ''
+\endif
+SELECT 1 / (CASE WHEN :'ro_password' = '' THEN 0 ELSE 1 END) AS _require_ro_password;
+
 -- Create the role only if it doesn't exist (idempotent). psql variables are not
 -- interpolated inside DO $$…$$ blocks, so we drive the conditional CREATE with
 -- \gexec and set the password in a plain ALTER where :'ro_password' expands.
