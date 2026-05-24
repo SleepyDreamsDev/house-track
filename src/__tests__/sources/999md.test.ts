@@ -41,7 +41,7 @@ describe('999md source adapter', () => {
     ).toThrow(UnknownGenericFilterValueError);
   });
 
-  it('999md adapter routes price max to postFilter', () => {
+  it('price selection routes into searchInput.filters (not postFilter)', () => {
     const resolved = source999md.resolve({
       ...base,
       filters: [
@@ -49,15 +49,9 @@ describe('999md source adapter', () => {
         { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_EUR', max: '180000' },
       ],
     });
-    expect(resolved.postFilter.maxPriceEur).toBe(180_000);
-  });
-
-  it('no price selection gives sentinel postFilter', () => {
-    const resolved = source999md.resolve(base);
-    expect(resolved.postFilter).toEqual({
-      minPriceEur: 0,
-      maxPriceEur: Number.MAX_SAFE_INTEGER,
-    });
+    const priceGroup = resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceGroup).toBeDefined();
+    expect(resolved).not.toHaveProperty('postFilter');
   });
 
   it('merges range selection into the resolved searchInput.filters', () => {

@@ -135,8 +135,32 @@ describe('999md resolver — boolean kind', () => {
   });
 });
 
-describe('999md resolver — price special-case (filterId 9441)', () => {
-  it('price range goes to postFilter, not searchInput', () => {
+describe('999md resolver — price (filterId 9441) routes to searchInput.filters', () => {
+  it('price range goes into searchInput.filters matching the fixture shape', () => {
+    const filter: GenericFilter = {
+      ...base,
+      filters: [
+        ...base.filters,
+        {
+          kind: 'range',
+          filterId: 9441,
+          featureId: 2,
+          unit: 'UNIT_EUR',
+          min: '50000',
+          max: '180000',
+        },
+      ],
+    };
+    const resolved = source999md.resolve(filter);
+    const group = resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(group).toBeDefined();
+    expect(group).toEqual({
+      filterId: 9441,
+      features: [{ featureId: 2, unit: 'UNIT_EUR', range: { min: '50000', max: '180000' } }],
+    });
+  });
+
+  it('result has no postFilter property', () => {
     const filter: GenericFilter = {
       ...base,
       filters: [
@@ -145,27 +169,32 @@ describe('999md resolver — price special-case (filterId 9441)', () => {
       ],
     };
     const resolved = source999md.resolve(filter);
-    expect(resolved.searchInput.filters.find((f) => f.filterId === 9441)).toBeUndefined();
-    expect(resolved.postFilter.maxPriceEur).toBe(250_000);
+    expect(resolved).not.toHaveProperty('postFilter');
   });
 
-  it('price with min sets minPriceEur', () => {
+  it('USD unit validates (is in feature 2 units[])', () => {
     const filter: GenericFilter = {
       ...base,
       filters: [
         ...base.filters,
-        { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_EUR', min: '50000' },
+        { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_USD', max: '200000' },
       ],
     };
+    expect(() => source999md.resolve(filter)).not.toThrow();
     const resolved = source999md.resolve(filter);
-    expect(resolved.postFilter.minPriceEur).toBe(50_000);
-    expect(resolved.postFilter.maxPriceEur).toBe(Number.MAX_SAFE_INTEGER);
+    const group = resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(group?.features[0]).toMatchObject({ unit: 'UNIT_USD' });
   });
 
-  it('no price selection → sentinels 0 / Number.MAX_SAFE_INTEGER', () => {
-    const resolved = source999md.resolve({ ...base });
-    expect(resolved.postFilter.minPriceEur).toBe(0);
-    expect(resolved.postFilter.maxPriceEur).toBe(Number.MAX_SAFE_INTEGER);
+  it('unknown unit → UnknownGenericFilterValueError', () => {
+    const filter: GenericFilter = {
+      ...base,
+      filters: [
+        ...base.filters,
+        { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_PARSEC', max: '200000' },
+      ],
+    };
+    expect(() => source999md.resolve(filter)).toThrow(UnknownGenericFilterValueError);
   });
 });
 
@@ -246,10 +275,12 @@ describe('999md resolver — default resolves correctly', () => {
     expect(regionGroup).toBeDefined();
   });
 
-  it('default filter price goes to postFilter', () => {
+  it('default filter price is in searchInput.filters (not postFilter)', () => {
     const resolved = source999md.resolve(defaultGenericFilter);
-    expect(resolved.postFilter.maxPriceEur).toBe(250_000);
-    expect(resolved.searchInput.filters.find((f) => f.filterId === 9441)).toBeUndefined();
+    expect(resolved).not.toHaveProperty('postFilter');
+    const priceGroup = resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceGroup).toBeDefined();
+    expect(priceGroup?.features[0]).toMatchObject({ featureId: 2, unit: 'UNIT_EUR' });
   });
 
   it('source field is AD_SOURCE_DESKTOP_REDESIGN', () => {

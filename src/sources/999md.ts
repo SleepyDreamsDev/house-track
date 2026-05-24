@@ -9,8 +9,6 @@ const CATEGORY_SUBCATEGORY_MAP: Record<Category, number> = {
   apartment: 1404,
 };
 
-const PRICE_FILTER_ID = 9441;
-
 interface RawTitle {
   translated?: string;
 }
@@ -165,18 +163,8 @@ function resolve(generic: GenericFilter): ResolvedFilter {
   }
 
   const byFilterId = new Map<number, Map<string, ResolvedFeature>>();
-  let minPriceEur = 0;
-  let maxPriceEur = Number.MAX_SAFE_INTEGER;
 
   for (const sel of generic.filters) {
-    if (sel.kind === 'range' && sel.filterId === PRICE_FILTER_ID) {
-      const filter = getFilter(filterById, sel.filterId);
-      getFeature(filter, sel.featureId);
-      if (sel.unit !== undefined) validateUnit(filter, sel.unit);
-      if (sel.min !== undefined) minPriceEur = Number(sel.min);
-      if (sel.max !== undefined) maxPriceEur = Number(sel.max);
-      continue;
-    }
     const translated = translateSelection(filterById, sel);
     if (translated !== null) {
       mergeIntoFilters(byFilterId, translated.filterId, translated.featureId, translated.feature);
@@ -189,7 +177,6 @@ function resolve(generic: GenericFilter): ResolvedFilter {
       source: 'AD_SOURCE_DESKTOP_REDESIGN',
       filters: buildFilters(byFilterId),
     },
-    postFilter: { minPriceEur, maxPriceEur },
   };
 }
 

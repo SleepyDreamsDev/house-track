@@ -5,15 +5,10 @@
 //
 // Listing detail URL: https://999.md/ro/<id>
 // Price normalization: only UNIT_EUR maps to priceEur. MDL/USD keep priceRaw and
-// priceEur=null — let the post-filter & detail page decide what to do.
+// priceEur=null — the detail page decides what to do.
 
 import { FILTER } from './config.js';
 import type { ListingStub } from './types.js';
-
-export interface PostFilter {
-  minPriceEur: number;
-  maxPriceEur: number;
-}
 
 interface RawAd {
   id: string;
@@ -33,14 +28,6 @@ export function parseIndex(json: unknown): ListingStub[] {
     throw new Error('parseIndex: response missing data.searchAds.ads');
   }
   return ads.map(toStub);
-}
-
-export function applyPostFilter(stubs: ListingStub[], filter: PostFilter): ListingStub[] {
-  return stubs.filter((s) => {
-    if (s.priceEur !== null && s.priceEur < filter.minPriceEur) return false;
-    if (s.priceEur !== null && s.priceEur > filter.maxPriceEur) return false;
-    return true;
-  });
 }
 
 function toStub(ad: RawAd): ListingStub {

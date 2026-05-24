@@ -26,7 +26,6 @@ export function registerFilterRoutes(app: Hono): void {
       })),
       resolved: {
         searchInput: resolved.searchInput,
-        postFilter: resolved.postFilter,
       },
       sourceSlug: resolved.sourceSlug,
     });
@@ -87,7 +86,6 @@ export function registerFilterRoutes(app: Hono): void {
       })),
       resolved: {
         searchInput: resolved.searchInput,
-        postFilter: resolved.postFilter,
       },
       sourceSlug: resolved.sourceSlug,
     });

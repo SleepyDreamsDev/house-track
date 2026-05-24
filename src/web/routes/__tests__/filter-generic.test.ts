@@ -34,15 +34,15 @@ describe('GET /api/filter — new generic shape', () => {
     expect(body.generic.filters.length).toBeGreaterThan(0);
   });
 
-  it('resolved.postFilter has minPriceEur and maxPriceEur (no maxAreaSqm)', async () => {
+  it('resolved has searchInput only (no postFilter); price is in searchInput.filters', async () => {
     const res = await app.request('/api/filter');
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      resolved: { postFilter: Record<string, unknown> };
+      resolved: { searchInput: { filters: Array<{ filterId: number }> } };
     };
-    expect(body.resolved.postFilter).toHaveProperty('minPriceEur');
-    expect(body.resolved.postFilter).toHaveProperty('maxPriceEur');
-    expect(body.resolved.postFilter).not.toHaveProperty('maxAreaSqm');
+    expect(body.resolved).not.toHaveProperty('postFilter');
+    const priceEntry = body.resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceEntry).toBeDefined();
   });
 });
 
@@ -63,10 +63,23 @@ describe('PUT /api/filter — new generic shape', () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      resolved: { postFilter: { maxPriceEur: number } };
+      resolved: {
+        searchInput: {
+          filters: Array<{
+            filterId: number;
+            features: Array<{ featureId: number; unit?: string; range?: { max?: string } }>;
+          }>;
+        };
+      };
       generic: { category: string };
     };
-    expect(body.resolved.postFilter.maxPriceEur).toBe(180_000);
+    expect(body.resolved).not.toHaveProperty('postFilter');
+    const priceEntry = body.resolved.searchInput.filters.find((f) => f.filterId === 9441);
+    expect(priceEntry?.features[0]).toMatchObject({
+      featureId: 2,
+      unit: 'UNIT_EUR',
+      range: { max: '180000' },
+    });
     expect(body.generic.category).toBe('apartment');
 
     const re = await app.request('/api/filter');

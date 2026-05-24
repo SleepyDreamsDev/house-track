@@ -16,10 +16,6 @@ export interface ResolvedSearchInput {
 
 export interface ResolvedFilter {
   searchInput: ResolvedSearchInput;
-  postFilter: {
-    minPriceEur: number;
-    maxPriceEur: number;
-  };
 }
 
 export interface Source {

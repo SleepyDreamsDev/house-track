@@ -44,17 +44,37 @@ function fallback(sourceSlug: string): ResolvedActiveFilter {
     searchInput: {
       subCategoryId: FILTER.searchInput.subCategoryId,
       source: FILTER.searchInput.source,
-      filters: FILTER.searchInput.filters.map((f) => ({
+      filters: (
+        FILTER.searchInput.filters as unknown as Array<{
+          filterId: number;
+          features: Array<{
+            featureId: number;
+            optionIds?: readonly number[];
+            unit?: string;
+            range?: { min?: string; max?: string };
+          }>;
+        }>
+      ).map((f) => ({
         filterId: f.filterId,
-        features: f.features.map((feat) => ({
-          featureId: feat.featureId,
-          optionIds: [...feat.optionIds],
-        })),
+        features: f.features.map((feat) => {
+          if (feat.optionIds !== undefined) {
+            return { featureId: feat.featureId, optionIds: [...feat.optionIds] };
+          }
+          if (feat.range !== undefined) {
+            const entry: {
+              featureId: number;
+              unit?: string;
+              range: { min?: string; max?: string };
+            } = {
+              featureId: feat.featureId,
+              range: { ...feat.range },
+            };
+            if (feat.unit !== undefined) entry.unit = feat.unit;
+            return entry;
+          }
+          return { featureId: feat.featureId };
+        }),
       })),
-    },
-    postFilter: {
-      minPriceEur: FILTER.postFilter.minPriceEur,
-      maxPriceEur: FILTER.postFilter.maxPriceEur,
     },
   };
 }

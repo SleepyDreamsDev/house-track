@@ -42,13 +42,9 @@ export const FILTER = {
       { filterId: 16, features: [{ featureId: 1, optionIds: [776] }] },
       // Chișinău municipality (includes Durlești, Codru, Colonița, etc.).
       { filterId: 32, features: [{ featureId: 7, optionIds: [12900] }] },
+      // Price cap — source-side, EUR, max 250k.
+      { filterId: 9441, features: [{ featureId: 2, unit: 'UNIT_EUR', range: { max: '250000' } }] },
     ],
-  },
-
-  // Client-side price filter (area is now source-level via range selections).
-  postFilter: {
-    minPriceEur: 0,
-    maxPriceEur: 250_000,
   },
 
   // Listings per GraphQL page. 78 matches the browser default; keep it.

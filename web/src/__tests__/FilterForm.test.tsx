@@ -525,6 +525,268 @@ describe('Filter page — taxonomy-driven form', () => {
   });
 });
 
+describe('Filter page — currency/unit picker (sub-project E)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryClient.clear();
+  });
+
+  const MULTI_UNIT_TAXONOMY = [
+    {
+      filterId: 9441,
+      label: 'Preț',
+      kind: 'range',
+      features: [
+        {
+          featureId: 2,
+          label: 'Preț',
+          units: ['UNIT_EUR', 'UNIT_USD', 'UNIT_MDL'],
+        },
+      ],
+    },
+  ];
+
+  const MULTI_UNIT_FILTER_RESPONSE = {
+    generic: { category: 'house', filters: [] },
+    sources: [{ slug: '999md', name: '999.md', active: true }],
+    resolved: { searchInput: { subCategoryId: 1406, filters: [] } },
+    sourceSlug: '999md',
+  };
+
+  function mockMultiUnitApi(overrides?: { filter?: unknown; putReturn?: unknown }) {
+    return async (endpoint: string, opts?: RequestInit) => {
+      if (opts?.method === 'PUT') {
+        return overrides?.putReturn ?? MULTI_UNIT_FILTER_RESPONSE;
+      }
+      if (endpoint === '/filter/taxonomy' || endpoint.startsWith('/filter/taxonomy?category='))
+        return MULTI_UNIT_TAXONOMY;
+      if (endpoint === '/filter') return overrides?.filter ?? MULTI_UNIT_FILTER_RESPONSE;
+      if (endpoint === '/filters') return [];
+      return null;
+    };
+  }
+
+  it('renders a currency <select> for a multi-unit range (price with EUR/USD/MDL)', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation(mockMultiUnitApi());
+
+    const router = createMemoryRouter([{ path: '/', element: <Filter /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const priceSummary = await screen.findByText('Preț');
+    await userEvent.click(priceSummary);
+
+    const unitSelect = await screen.findByRole('combobox', { name: /unit/i });
+    expect(unitSelect).toBeInTheDocument();
+
+    // Default value should be UNIT_EUR (first in units[])
+    expect((unitSelect as HTMLSelectElement).value).toBe('UNIT_EUR');
+
+    // All three options should exist
+    const options = within(unitSelect as HTMLElement).getAllByRole('option');
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual([
+      'UNIT_EUR',
+      'UNIT_USD',
+      'UNIT_MDL',
+    ]);
+  });
+
+  it('changing the currency <select> alone (no min/max) does not create a price FilterSelection', async () => {
+    // Use a taxonomy that has both price (multi-unit) and offer-type (options) so we can
+    // make the form dirty via a different field and verify no price selection was created.
+    const { apiCall } = await import('../lib/api.js');
+    const mixedTaxonomy = [
+      {
+        filterId: 16,
+        label: 'Tip ofertă',
+        kind: 'options',
+        features: [
+          {
+            featureId: 1,
+            label: 'Tip ofertă',
+            options: [
+              { id: 776, label: 'Vânzare' },
+              { id: 777, label: 'Chirie' },
+            ],
+          },
+        ],
+      },
+      ...MULTI_UNIT_TAXONOMY,
+    ];
+    const emptyFilterResponse = {
+      generic: { category: 'house', filters: [] },
+      sources: [{ slug: '999md', name: '999.md', active: true }],
+      resolved: { searchInput: { subCategoryId: 1406, filters: [] } },
+      sourceSlug: '999md',
+    };
+    let putBody: unknown = null;
+    (apiCall as any).mockImplementation(async (endpoint: string, opts?: RequestInit) => {
+      if (opts?.method === 'PUT') {
+        putBody = JSON.parse(opts.body as string);
+        return emptyFilterResponse;
+      }
+      if (endpoint === '/filter/taxonomy' || endpoint.startsWith('/filter/taxonomy?category='))
+        return mixedTaxonomy;
+      if (endpoint === '/filter') return emptyFilterResponse;
+      if (endpoint === '/filters') return [];
+      return null;
+    });
+
+    const router = createMemoryRouter([{ path: '/', element: <Filter /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    // Expand price section and change unit to USD (no min/max)
+    const priceSummary = await screen.findByText('Preț');
+    await userEvent.click(priceSummary);
+    const unitSelect = await screen.findByRole('combobox', { name: /unit/i });
+    await userEvent.selectOptions(unitSelect, 'UNIT_USD');
+
+    // Make form dirty via a different field (toggle Vânzare in offer type)
+    const vanzare = await screen.findByRole('button', { name: 'Vânzare' });
+    await userEvent.click(vanzare);
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    await userEvent.click(save);
+
+    await waitFor(() => expect(putBody).not.toBeNull());
+
+    // No range selection should be emitted for price (no min/max entered, only unit changed)
+    const body = putBody as { generic: { filters: Array<{ filterId: number }> } };
+    const priceFilter = body.generic.filters.find((f) => f.filterId === 9441);
+    expect(priceFilter).toBeUndefined();
+  });
+
+  it('entering min value persists UNIT_EUR by default on the selection', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    let putBody: unknown = null;
+    (apiCall as any).mockImplementation(async (endpoint: string, opts?: RequestInit) => {
+      if (opts?.method === 'PUT') {
+        putBody = JSON.parse(opts.body as string);
+        return MULTI_UNIT_FILTER_RESPONSE;
+      }
+      return mockMultiUnitApi()(endpoint);
+    });
+
+    const router = createMemoryRouter([{ path: '/', element: <Filter /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const priceSummary = await screen.findByText('Preț');
+    await userEvent.click(priceSummary);
+
+    const minInput = await screen.findByPlaceholderText('min');
+    await userEvent.clear(minInput);
+    await userEvent.type(minInput, '50000');
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    await userEvent.click(save);
+
+    await waitFor(() => expect(putBody).not.toBeNull());
+
+    expect(putBody).toMatchObject({
+      generic: {
+        filters: expect.arrayContaining([
+          {
+            kind: 'range',
+            filterId: 9441,
+            featureId: 2,
+            unit: 'UNIT_EUR',
+            min: '50000',
+          },
+        ]),
+      },
+    });
+  });
+
+  it('changing currency then entering min/max persists the chosen unit on the selection', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    let putBody: unknown = null;
+    (apiCall as any).mockImplementation(async (endpoint: string, opts?: RequestInit) => {
+      if (opts?.method === 'PUT') {
+        putBody = JSON.parse(opts.body as string);
+        return MULTI_UNIT_FILTER_RESPONSE;
+      }
+      return mockMultiUnitApi()(endpoint);
+    });
+
+    const router = createMemoryRouter([{ path: '/', element: <Filter /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const priceSummary = await screen.findByText('Preț');
+    await userEvent.click(priceSummary);
+
+    const unitSelect = await screen.findByRole('combobox', { name: /unit/i });
+    await userEvent.selectOptions(unitSelect, 'UNIT_USD');
+
+    const minInput = await screen.findByPlaceholderText('min');
+    const maxInput = screen.getByPlaceholderText('max');
+    await userEvent.type(minInput, '60000');
+    await userEvent.type(maxInput, '200000');
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    await userEvent.click(save);
+
+    await waitFor(() => expect(putBody).not.toBeNull());
+
+    expect(putBody).toMatchObject({
+      generic: {
+        filters: expect.arrayContaining([
+          {
+            kind: 'range',
+            filterId: 9441,
+            featureId: 2,
+            unit: 'UNIT_USD',
+            min: '60000',
+            max: '200000',
+          },
+        ]),
+      },
+    });
+  });
+
+  it('a pre-existing range selection with a unit reflects that unit in the <select>', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    const filterWithSelection = {
+      ...MULTI_UNIT_FILTER_RESPONSE,
+      generic: {
+        category: 'house',
+        filters: [
+          { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_MDL', min: '1000000' },
+        ],
+      },
+    };
+    (apiCall as any).mockImplementation(mockMultiUnitApi({ filter: filterWithSelection }));
+
+    const router = createMemoryRouter([{ path: '/', element: <Filter /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const priceSummary = await screen.findByText('Preț');
+    await userEvent.click(priceSummary);
+
+    const unitSelect = await screen.findByRole('combobox', { name: /unit/i });
+    expect((unitSelect as HTMLSelectElement).value).toBe('UNIT_MDL');
+  });
+});
+
 describe('FilterSelection schema', () => {
   it('options schema accepts valid options selection', async () => {
     const { filterSelectionSchema } = await import('../lib/filterSchema.js');

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { type GenericFilter, type FilterSelection } from '@/lib/filterSchema.js';
 import { FilterSection } from './FilterSection.js';
 import { OptionsField } from './OptionsField.js';
@@ -9,9 +9,8 @@ export interface TaxonomyFeature {
   featureId: number;
   label: string;
   unit?: string;
-  // Multi-unit ranges (e.g. price 9441 → [EUR,USD,MDL], land 1200). We pin to
-  // the base unit (units[0]); the backend enforces price as EUR via postFilter,
-  // so a currency picker would misrepresent what actually gets filtered.
+  // Multi-unit ranges (e.g. price 9441 → [EUR,USD,MDL], land area 1200).
+  // When units.length > 1 RangeField renders a unit <select>.
   units?: string[];
   options?: Array<{ id: number; label: string }>;
 }
@@ -44,14 +43,15 @@ function getRangeSelection(
   filters: FilterSelection[],
   filterId: number,
   featureId: number,
-): { min?: string; max?: string } | null {
+): { min?: string; max?: string; unit?: string } | null {
   const sel = filters.find(
     (f) => f.kind === 'range' && f.filterId === filterId && f.featureId === featureId,
   );
   if (!sel || sel.kind !== 'range') return null;
-  const result: { min?: string; max?: string } = {};
+  const result: { min?: string; max?: string; unit?: string } = {};
   if (sel.min !== undefined) result.min = sel.min;
   if (sel.max !== undefined) result.max = sel.max;
+  if (sel.unit !== undefined) result.unit = sel.unit;
   return result;
 }
 
@@ -72,7 +72,16 @@ function countSelections(filters: FilterSelection[], filterId: number): number {
   return count;
 }
 
+// Key format: `${filterId}:${featureId}`
+function rangeKey(filterId: number, featureId: number): string {
+  return `${filterId}:${featureId}`;
+}
+
 export const FilterForm: React.FC<FilterFormProps> = ({ taxonomy, draft, onChange }) => {
+  // Tracks the unit chosen in the picker before any min/max is entered.
+  // Once a selection exists, the unit lives on the selection itself.
+  const [pendingUnits, setPendingUnits] = useState<Record<string, string>>({});
+
   function updateFilters(updater: (prev: FilterSelection[]) => FilterSelection[]) {
     onChange({ ...draft, filters: updater(draft.filters) });
   }
@@ -133,6 +142,21 @@ export const FilterForm: React.FC<FilterFormProps> = ({ taxonomy, draft, onChang
     });
   }
 
+  function updateUnit(filterId: number, featureId: number, newUnit: string) {
+    // Always track the pending unit (for when a selection is created later)
+    setPendingUnits((prev) => ({ ...prev, [rangeKey(filterId, featureId)]: newUnit }));
+    // Also update the selection's unit if one already exists
+    updateFilters((prev) => {
+      const idx = prev.findIndex(
+        (f) => f.kind === 'range' && f.filterId === filterId && f.featureId === featureId,
+      );
+      if (idx === -1) return prev; // no selection yet — pending unit stored above
+      const existing = prev[idx]!;
+      if (existing.kind !== 'range') return prev;
+      return prev.map((f, i) => (i === idx ? { ...existing, unit: newUnit } : f));
+    });
+  }
+
   function toggleBoolean(filterId: number, featureId: number) {
     updateFilters((prev) => {
       const existing = prev.find(
@@ -175,7 +199,13 @@ export const FilterForm: React.FC<FilterFormProps> = ({ taxonomy, draft, onChang
             {entry.kind === 'range' &&
               entry.features.map((feat) => {
                 const range = getRangeSelection(draft.filters, entry.filterId, feat.featureId);
-                const effUnit = feat.unit ?? feat.units?.[0];
+                // For multi-unit ranges, prefer the saved selection's unit, then the pending
+                // unit chosen in the picker (before any min/max), then feat.unit, then units[0].
+                const effUnit =
+                  range?.unit ??
+                  pendingUnits[rangeKey(entry.filterId, feat.featureId)] ??
+                  feat.unit ??
+                  feat.units?.[0];
                 return (
                   <div key={feat.featureId} className="mb-2">
                     {entry.features.length > 1 && (
@@ -185,12 +215,14 @@ export const FilterForm: React.FC<FilterFormProps> = ({ taxonomy, draft, onChang
                       {...(range?.min !== undefined ? { min: range.min } : {})}
                       {...(range?.max !== undefined ? { max: range.max } : {})}
                       {...(effUnit !== undefined ? { unit: effUnit } : {})}
+                      {...(feat.units !== undefined ? { units: feat.units } : {})}
                       onChangeMin={(v) =>
                         updateRange(entry.filterId, feat.featureId, effUnit, 'min', v)
                       }
                       onChangeMax={(v) =>
                         updateRange(entry.filterId, feat.featureId, effUnit, 'max', v)
                       }
+                      onChangeUnit={(u) => updateUnit(entry.filterId, feat.featureId, u)}
                     />
                   </div>
                 );
