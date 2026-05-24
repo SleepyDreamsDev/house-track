@@ -5,6 +5,12 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { deriveSector } from './lib/chisinau-sector.js';
+import {
+  clusterListings,
+  DEFAULT_DEDUP_OPTIONS,
+  type DedupListing,
+  type DedupOptions,
+} from './lib/dedup.js';
 import { bootstrapLutFromConfig, type TaxonomyLut } from './parse-taxonomy.js';
 import type { ListingStub, ParsedDetail, SweepError, SweepStatus } from './types.js';
 
@@ -104,6 +110,65 @@ export class Persistence {
     return res;
   }
 
+  /**
+   * Recompute dedup clusters and write canonicalId. Clusters over current
+   * inventory plus listings delisted in the last 180 days, so a relisting links
+   * back to its (now-delisted) original — giving true cross-relist lineage.
+   *
+   * Convention: a cluster's canonical (earliest-seen) row and all singletons
+   * keep canonicalId = null; only non-canonical members point at the canonical.
+   * Unique inventory is therefore `COUNT(DISTINCT COALESCE(canonicalId, id))`.
+   * Returns the number of multi-member clusters found.
+   */
+  async recomputeClusters(opts: Partial<DedupOptions> = {}): Promise<number> {
+    const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+    const rows = await this.prisma.listing.findMany({
+      where: { OR: [{ active: true }, { delistedAt: { gte: cutoff } }] },
+      select: {
+        id: true,
+        imageUrls: true,
+        street: true,
+        sector: true,
+        rooms: true,
+        areaSqm: true,
+        lat: true,
+        lon: true,
+        firstSeenAt: true,
+      },
+    });
+    const listings: DedupListing[] = rows.map((r) => ({
+      id: r.id,
+      imageUrls: Array.isArray(r.imageUrls)
+        ? r.imageUrls.filter((u): u is string => typeof u === 'string')
+        : [],
+      street: r.street,
+      sector: r.sector,
+      rooms: r.rooms,
+      areaSqm: r.areaSqm,
+      lat: r.lat,
+      lon: r.lon,
+      firstSeenAt: r.firstSeenAt,
+    }));
+
+    const clusters = clusterListings(listings, { ...DEFAULT_DEDUP_OPTIONS, ...opts });
+    await this.prisma.$transaction(async (tx) => {
+      // Clear stale assignments so listings that left their cluster reset.
+      await tx.listing.updateMany({
+        where: { canonicalId: { not: null } },
+        data: { canonicalId: null },
+      });
+      for (const cluster of clusters) {
+        const members = cluster.memberIds.filter((id) => id !== cluster.canonicalId);
+        if (members.length === 0) continue;
+        await tx.listing.updateMany({
+          where: { id: { in: members } },
+          data: { canonicalId: cluster.canonicalId },
+        });
+      }
+    });
+    return clusters.length;
+  }
+
   async persistDetail(detail: ParsedDetail): Promise<void> {
     const now = new Date();
     const writable = {
@@ -131,6 +196,12 @@ export class Persistence {
       sellerType: detail.sellerType,
       postedAt: detail.postedAt,
       bumpedAt: detail.bumpedAt,
+      lat: detail.lat ?? null,
+      lon: detail.lon ?? null,
+      authorId: detail.authorId ?? null,
+      authorName: detail.authorName ?? null,
+      authorType: detail.authorType ?? null,
+      phone: detail.phone ?? null,
       filterValuesEnrichedAt: now,
     };
 

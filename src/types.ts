@@ -43,6 +43,16 @@ export interface ParsedDetail {
   sellerType: string | null;
   postedAt: Date | null;
   bumpedAt: Date | null;
+  // Geo from mapPoint (P2) — optional + null until the next capture pins the
+  // value shape. parseDetail always sets them; older test builders may omit.
+  lat?: number | null;
+  lon?: number | null;
+  // Seller identity (P2) — optional + null until the capture extends the owner
+  // selection and wires the phone-reveal op. phone is PII.
+  authorId?: string | null;
+  authorName?: string | null;
+  authorType?: string | null;
+  phone?: string | null;
   rawHtmlHash: string;
   filterValues: FilterValueTriple[];
 }
