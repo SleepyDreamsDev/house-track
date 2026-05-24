@@ -70,8 +70,10 @@ describe('Listings — sector multi-select', () => {
       </QueryClientProvider>,
     );
 
-    // Wait for listings to settle, then confirm Sector is absent
-    await screen.findByText('District');
+    // Wait for listings to settle, then confirm Sector is absent. "District"
+    // now matches both the filter-rail label and the table column header
+    // (table is the default view), so tolerate multiple matches here.
+    await screen.findAllByText('District');
     expect(screen.queryByText('Sector')).not.toBeInTheDocument();
   });
 });

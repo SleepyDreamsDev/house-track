@@ -71,7 +71,7 @@ export const Listings: React.FC = () => {
   const setSectors = (next: string[]) => setSectorsRaw(Array.from(new Set(next)));
   const sectors = sectorsRaw;
   const [sort, setSort] = useState<'newest' | 'price' | 'eurm2'>('newest');
-  const [view, setView] = useState<'cards' | 'table'>('cards');
+  const [view, setView] = useState<'cards' | 'table'>('table');
   const [hideMislabeled, setHideMislabeled] = useState(false);
   const [page, setPage] = useState(0);
   const [favoritesOnly, setFavoritesOnly] = useState(false);

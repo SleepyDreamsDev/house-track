@@ -59,8 +59,8 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
   });
 
   return (
-    <div className="rounded-sm border border-neutral-200 bg-white overflow-hidden">
-      <table className="w-full text-[12.5px]" data-testid="listings-table">
+    <div className="rounded-sm border border-neutral-200 bg-white overflow-x-auto">
+      <table className="w-full min-w-[860px] text-[12.5px]" data-testid="listings-table">
         <thead>
           <tr className="border-b border-neutral-200">
             <SortableTh
