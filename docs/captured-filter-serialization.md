@@ -64,6 +64,17 @@ field taken from the taxonomy filter's `units[]` (here `UNIT_METER_SQUARE`).
 }
 ```
 
+**Price is the same shape** (captured 2026-05-24): `FILTER_TYPE_RANGE` /
+`FEATURE_PRICE`, filter 9441 / feature 2, with the **currency as the unit**
+(`UNIT_EUR` | `UNIT_USD` | `UNIT_MDL`; sidebar defaults EUR):
+
+```json
+{ "filterId": 9441, "features": [{ "featureId": 2, "unit": "UNIT_EUR", "range": { "min": "50000", "max": "180000" } }] }
+```
+
+So price can filter at the source (sub-project E) rather than the
+EUR-normalized postFilter that #73 used.
+
 ### 4. BOOLEAN amenity (`FILTER_TYPE_FEATURES_AND` / `FEATURE_BOOLEAN`)
 
 e.g. **"Gata de mutat"** (filter 4132, feature 171). The feature is **bare** —

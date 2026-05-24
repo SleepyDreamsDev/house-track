@@ -138,6 +138,8 @@ async function main(): Promise<void> {
     // 999.md auto-applies the sidebar (the result count re-queries live), so
     // each filter change fires a SearchAds. Label before each apply so captures
     // attribute to the right filter.
+    pendingLabel = 'range-price';
+    await applyRange(page, ['Preț', 'Pret', 'Price'], '50000', '180000');
     pendingLabel = 'range-rooms';
     await applyRange(page, ['Număr de camere', 'Number of rooms'], '2', '4');
     pendingLabel = 'range-area';

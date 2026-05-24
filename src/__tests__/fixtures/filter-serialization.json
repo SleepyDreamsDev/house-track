@@ -32,5 +32,13 @@
     "_example": "amenity (Adăugător) = Gata de mutat; bare featureId, presence means ON",
     "filterId": 4132,
     "features": [{ "featureId": 171 }]
+  },
+  "price": {
+    "_type": "FILTER_TYPE_RANGE / FEATURE_PRICE",
+    "_example": "price (Preț) 50000–180000; captured 2026-05-24 — serializes like a unit-range, currency is the unit (UNIT_EUR | UNIT_USD | UNIT_MDL)",
+    "filterId": 9441,
+    "features": [
+      { "featureId": 2, "unit": "UNIT_EUR", "range": { "min": "50000", "max": "180000" } }
+    ]
   }
 }
