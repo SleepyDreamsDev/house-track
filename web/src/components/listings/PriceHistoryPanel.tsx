@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { apiCall } from '@/lib/api.js';
 import { fmt } from '@/lib/format.js';
 
+// Mirrors PricePoint from src/mcp/queries.ts (the API source of truth); the
+// SPA build can't import server types, so keep these in sync by hand.
 interface PricePoint {
   priceEur: number;
   capturedAt: string;
@@ -22,6 +24,7 @@ export const PriceHistoryPanel: React.FC<PriceHistoryPanelProps> = ({ listingId 
   const { data, isLoading, error } = useQuery<PriceHistoryResponse>({
     queryKey: ['price-history', listingId],
     queryFn: () => apiCall<PriceHistoryResponse>(`/listings/${listingId}/price-history`),
+    staleTime: 5 * 60 * 1000, // history is stable within a session; avoid refetch on re-expand
   });
 
   return (
