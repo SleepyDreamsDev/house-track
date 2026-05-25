@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge.js';
 import { PhotoPlaceholder } from '@/components/ui/PhotoPlaceholder.js';
 import { PageHeader } from '@/components/ui/PageHeader.js';
 import { ListingsTable } from '@/components/listings/ListingsTable.js';
+import { PriceHistoryPanel } from '@/components/listings/PriceHistoryPanel.js';
 import { FilterRail, type FilterFacets } from '@/components/filters/FilterRail.js';
 import { useBrowseFilters } from '@/lib/useBrowseFilters.js';
 import { bucketToRoomsValues, type RoomsBucket } from '@/lib/listing-type.js';
@@ -358,13 +359,15 @@ export const Listings: React.FC = () => {
           {error && <p className="text-sm text-error">Error loading listings</p>}
           {view === 'cards' &&
             visibleListings.map((l) => (
-              <ListingCard
-                key={l.id}
-                l={l}
-                selected={selectedId === l.id}
-                autoScroll={highlightId === l.id}
-                onSelect={() => setSelectedId((cur) => (cur === l.id ? null : l.id))}
-              />
+              <React.Fragment key={l.id}>
+                <ListingCard
+                  l={l}
+                  selected={selectedId === l.id}
+                  autoScroll={highlightId === l.id}
+                  onSelect={() => setSelectedId((cur) => (cur === l.id ? null : l.id))}
+                />
+                {selectedId === l.id && <PriceHistoryPanel listingId={l.id} />}
+              </React.Fragment>
             ))}
           {view === 'table' && (
             <ListingsTable
@@ -373,6 +376,7 @@ export const Listings: React.FC = () => {
               onRowClick={(r) => setSelectedId((cur) => (cur === r.id ? null : r.id))}
               onToggleFavorite={(id, next) => toggleFavoriteMutation.mutate({ id, next })}
               onToggleExclude={(id, next) => toggleExcludeMutation.mutate({ id, next })}
+              renderExpanded={(r) => <PriceHistoryPanel listingId={r.id} />}
             />
           )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { Listings } from '../pages/Listings.js';
@@ -244,5 +244,139 @@ describe('Listings', () => {
     await user.click(screen.getByLabelText('Hide mislabeled'));
     expect(screen.queryByText('Casă duplex')).not.toBeInTheDocument();
     expect(screen.getByText('Casă bună')).toBeInTheDocument();
+  });
+
+  it('expanding a table row shows its price history', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint.includes('/price-history')) {
+        return Promise.resolve({
+          points: [
+            {
+              priceEur: 50_000,
+              capturedAt: '2026-05-10T10:00:00Z',
+              deltaPct: null,
+              direction: 'baseline',
+            },
+            {
+              priceEur: 48_000,
+              capturedAt: '2026-05-20T10:00:00Z',
+              deltaPct: -4.0,
+              direction: 'down',
+            },
+          ],
+        });
+      }
+      if (endpoint.startsWith('/listings/facets')) {
+        return Promise.resolve({
+          total: 1,
+          districts: ['Centru'],
+          price: { min: 0, max: 0 },
+          rooms: { min: 1, max: 5 },
+          areaSqm: { min: 30, max: 200 },
+          types: [],
+          roomsValues: [],
+        });
+      }
+      return Promise.resolve({
+        listings: [
+          {
+            id: 'h-1',
+            url: 'https://example.test/1',
+            title: 'Row one',
+            priceEur: 48_000,
+            areaSqm: 50,
+            rooms: 3,
+            district: 'Centru',
+            firstSeenAt: '2026-05-01T10:00:00Z',
+          },
+        ],
+        total: 1,
+      });
+    });
+
+    const user = userEvent.setup();
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const row = await screen.findByText('Row one');
+    await user.click(row);
+
+    const panel = await screen.findByTestId('price-history-panel');
+    expect(panel).toBeInTheDocument();
+    expect(await within(panel).findByText('€48,000')).toBeInTheDocument();
+    expect(within(panel).getByText(/-4\.0%/)).toBeInTheDocument();
+  });
+
+  it('expanding a card shows its price history', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint.includes('/price-history')) {
+        return Promise.resolve({
+          points: [
+            {
+              priceEur: 50_000,
+              capturedAt: '2026-05-10T10:00:00Z',
+              deltaPct: null,
+              direction: 'baseline',
+            },
+            {
+              priceEur: 48_000,
+              capturedAt: '2026-05-20T10:00:00Z',
+              deltaPct: -4.0,
+              direction: 'down',
+            },
+          ],
+        });
+      }
+      if (endpoint.startsWith('/listings/facets')) {
+        return Promise.resolve({
+          total: 1,
+          districts: ['Centru'],
+          price: { min: 0, max: 0 },
+          rooms: { min: 1, max: 5 },
+          areaSqm: { min: 30, max: 200 },
+          types: [],
+          roomsValues: [],
+        });
+      }
+      return Promise.resolve({
+        listings: [
+          {
+            id: 'h-1',
+            url: 'https://example.test/1',
+            title: 'Card one',
+            priceEur: 48_000,
+            areaSqm: 50,
+            rooms: 3,
+            district: 'Centru',
+            firstSeenAt: '2026-05-01T10:00:00Z',
+          },
+        ],
+        total: 1,
+      });
+    });
+
+    const user = userEvent.setup();
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole('tab', { name: 'Cards' }));
+    await user.click(await screen.findByText('Card one'));
+
+    const panel = await screen.findByTestId('price-history-panel');
+    expect(panel).toBeInTheDocument();
+    expect(await within(panel).findByText('€48,000')).toBeInTheDocument();
+    expect(within(panel).getByText(/-4\.0%/)).toBeInTheDocument();
   });
 });
