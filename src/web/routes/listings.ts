@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import type { PrismaClient } from '@prisma/client';
-import { searchListings, getListing } from '../../mcp/queries.js';
+import { searchListings, getListing, getPriceHistory } from '../../mcp/queries.js';
 import { Persistence } from '../../persist.js';
 import { deriveType } from '../../lib/listing-type.js';
 import { classifyListing } from '../../lib/listing-classification.js';
@@ -188,6 +188,15 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     }
 
     return c.json(result);
+  });
+
+  app.get('/api/listings/:id/price-history', async (c) => {
+    const id = c.req.param('id');
+    const points = await getPriceHistory(prisma, id);
+    if (points === null) {
+      return c.json({ error: 'Listing not found' }, 404);
+    }
+    return c.json({ points });
   });
 
   // Toggle the operator's "always refresh me first" flag for one listing.
