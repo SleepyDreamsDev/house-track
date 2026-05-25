@@ -124,6 +124,17 @@ export interface GetListingResult {
   filterValues: FilterValueRow[];
 }
 
+export interface PricePoint {
+  /** Price at this point, in EUR. */
+  priceEur: number;
+  /** ISO timestamp of the snapshot that introduced this price. */
+  capturedAt: string;
+  /** Percent change vs the prior kept point, rounded to 1 decimal. Null for the baseline. */
+  deltaPct: number | null;
+  /** 'baseline' for the first point; 'up'/'down' for subsequent changes. */
+  direction: 'up' | 'down' | 'baseline';
+}
+
 const DEFAULT_LIMIT = 50;
 const SAMPLE_LIMIT = 3;
 
@@ -390,6 +401,53 @@ export async function getListing(
       numericValue: f.numericValue,
     })),
   };
+}
+
+/**
+ * Full, all-time price timeline for one listing, collapsed to price-distinct
+ * points. The snapshot stream contains a new row for ANY HTML change (price,
+ * description, bump), so consecutive equal prices are deduped here. Null-priced
+ * snapshots are skipped. Both increases and decreases are kept.
+ *
+ * Returns null when the listing does not exist; [] when it exists but has no
+ * priced snapshots.
+ */
+export async function getPriceHistory(
+  prisma: PrismaClient,
+  id: string,
+): Promise<PricePoint[] | null> {
+  const listing = await prisma.listing.findUnique({ where: { id }, select: { id: true } });
+  if (!listing) return null;
+
+  const snapshots = await prisma.listingSnapshot.findMany({
+    where: { listingId: id, priceEur: { not: null } },
+    orderBy: { capturedAt: 'asc' },
+    select: { priceEur: true, capturedAt: true },
+  });
+
+  const points: PricePoint[] = [];
+  for (const s of snapshots) {
+    const price = s.priceEur as number; // non-null by the where clause
+    const prev = points[points.length - 1];
+    if (prev && prev.priceEur === price) continue; // collapse consecutive equals
+    if (!prev) {
+      points.push({
+        priceEur: price,
+        capturedAt: s.capturedAt.toISOString(),
+        deltaPct: null,
+        direction: 'baseline',
+      });
+    } else {
+      const deltaPct = Math.round(((price - prev.priceEur) / prev.priceEur) * 1000) / 10;
+      points.push({
+        priceEur: price,
+        capturedAt: s.capturedAt.toISOString(),
+        deltaPct,
+        direction: price > prev.priceEur ? 'up' : 'down',
+      });
+    }
+  }
+  return points;
 }
 
 // Defense-in-depth: even though the JSONB column is shape-typed by Prisma as
