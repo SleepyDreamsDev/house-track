@@ -1,4 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+// Browse filters persist for the browser session under one key, so the values
+// survive switching between the Listings and Analytics pages (and a reload
+// within the same tab). Cleared when the tab closes.
+const STORAGE_KEY = 'house-track:browse-filters';
+
+function readSnapshot(): Partial<BrowseFilterState> {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Partial<BrowseFilterState>) : {};
+  } catch {
+    return {};
+  }
+}
 
 export interface Bounds {
   min: number | null;
@@ -66,26 +82,29 @@ export interface UseBrowseFilters {
   setHideMislabeled: (v: boolean) => void;
 }
 
-// Owns the browse-filter state shared by the Listings and Analytics pages. Each
-// page instantiates its own — state is per-page and resets on nav. Range
-// filters default to null (unbounded); the rail seeds bounds as placeholders.
+// Owns the browse-filter state shared by the Listings and Analytics pages.
+// Seeded from (and persisted to) sessionStorage so values survive switching
+// between pages within a session. Range filters default to null (unbounded);
+// the rail seeds bounds as placeholders.
 export function useBrowseFilters(): UseBrowseFilters {
-  const [q, setQ] = useState('');
-  const [minPrice, setMinPrice] = useState<number | null>(null);
-  const [maxPrice, setMaxPrice] = useState<number | null>(null);
-  const [minArea, setMinArea] = useState<number | null>(null);
-  const [maxArea, setMaxArea] = useState<number | null>(null);
-  const [minLand, setMinLand] = useState<number | null>(null);
-  const [maxLand, setMaxLand] = useState<number | null>(null);
-  const [minFloors, setMinFloors] = useState<number | null>(null);
-  const [maxFloors, setMaxFloors] = useState<number | null>(null);
-  const [districts, setDistrictsRaw] = useState<string[]>([]);
-  const [sectors, setSectorsRaw] = useState<string[]>([]);
-  const [type, setType] = useState('all');
-  const [rooms, setRooms] = useState('all');
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [showExcluded, setShowExcluded] = useState(false);
-  const [hideMislabeled, setHideMislabeled] = useState(false);
+  // Read once on mount (lazy) so re-renders don't re-parse storage.
+  const [initial] = useState(readSnapshot);
+  const [q, setQ] = useState(initial.q ?? '');
+  const [minPrice, setMinPrice] = useState<number | null>(initial.minPrice ?? null);
+  const [maxPrice, setMaxPrice] = useState<number | null>(initial.maxPrice ?? null);
+  const [minArea, setMinArea] = useState<number | null>(initial.minArea ?? null);
+  const [maxArea, setMaxArea] = useState<number | null>(initial.maxArea ?? null);
+  const [minLand, setMinLand] = useState<number | null>(initial.minLand ?? null);
+  const [maxLand, setMaxLand] = useState<number | null>(initial.maxLand ?? null);
+  const [minFloors, setMinFloors] = useState<number | null>(initial.minFloors ?? null);
+  const [maxFloors, setMaxFloors] = useState<number | null>(initial.maxFloors ?? null);
+  const [districts, setDistrictsRaw] = useState<string[]>(initial.districts ?? []);
+  const [sectors, setSectorsRaw] = useState<string[]>(initial.sectors ?? []);
+  const [type, setType] = useState(initial.type ?? 'all');
+  const [rooms, setRooms] = useState(initial.rooms ?? 'all');
+  const [favoritesOnly, setFavoritesOnly] = useState(initial.favoritesOnly ?? false);
+  const [showExcluded, setShowExcluded] = useState(initial.showExcluded ?? false);
+  const [hideMislabeled, setHideMislabeled] = useState(initial.hideMislabeled ?? false);
 
   // De-dupe at the setter so any entry point (URL hydration, "select all",
   // paste-from-saved-filter) can't produce duplicate chips that a SQL IN clause
@@ -111,6 +130,35 @@ export function useBrowseFilters(): UseBrowseFilters {
     showExcluded,
     hideMislabeled,
   };
+
+  // Persist the whole snapshot whenever any field changes. districts/sectors
+  // get a fresh array reference from their setters, so reference-equality deps
+  // fire correctly.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // ignore quota / unavailable storage
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    q,
+    minPrice,
+    maxPrice,
+    minArea,
+    maxArea,
+    minLand,
+    maxLand,
+    minFloors,
+    maxFloors,
+    districts,
+    sectors,
+    type,
+    rooms,
+    favoritesOnly,
+    showExcluded,
+    hideMislabeled,
+  ]);
 
   return {
     state,

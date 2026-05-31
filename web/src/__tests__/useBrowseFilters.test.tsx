@@ -58,3 +58,28 @@ describe('useBrowseFilters — setters', () => {
     expect(result.current.state.districts).toEqual(['Centru', 'Botanica']);
   });
 });
+
+describe('useBrowseFilters — session persistence', () => {
+  it('restores values from a previous instance (page switch within a session)', () => {
+    const first = renderHook(() => useBrowseFilters());
+    act(() => {
+      first.result.current.setMinPrice(75000);
+      first.result.current.setDistricts(['Buiucani']);
+      first.result.current.setType('Villa');
+    });
+    // A different page mounts a fresh hook instance.
+    first.unmount();
+    const second = renderHook(() => useBrowseFilters());
+    expect(second.result.current.state.minPrice).toBe(75000);
+    expect(second.result.current.state.districts).toEqual(['Buiucani']);
+    expect(second.result.current.state.type).toBe('Villa');
+  });
+
+  it('writes the snapshot to sessionStorage', () => {
+    const { result } = renderHook(() => useBrowseFilters());
+    act(() => result.current.setRooms('3'));
+    const raw = sessionStorage.getItem('house-track:browse-filters');
+    expect(raw).toBeTruthy();
+    expect(JSON.parse(raw!).rooms).toBe('3');
+  });
+});
