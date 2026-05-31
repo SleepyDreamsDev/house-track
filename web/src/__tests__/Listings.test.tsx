@@ -379,4 +379,35 @@ describe('Listings', () => {
     expect(await within(panel).findByText('€48,000')).toBeInTheDocument();
     expect(within(panel).getByText(/-4\.0%/)).toBeInTheDocument();
   });
+
+  it('shows a Back to Best buys link when arriving with ?from=best-buys', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }], {
+      initialEntries: ['/?from=best-buys&highlight=abc'],
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const back = await screen.findByRole('link', { name: /Back to Best buys/ });
+    expect(back).toHaveAttribute('href', '/analytics?tab=best-buys');
+  });
+
+  it('omits the Back link in the normal (non-best-buys) entry', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByRole('link', { name: /Back to Best buys/ })).toBeNull();
+  });
 });

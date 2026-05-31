@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
@@ -94,6 +94,9 @@ export const Listings: React.FC = () => {
   const lastFetchedAfter = searchParams.get('lastFetchedAfter') ?? undefined;
   const fromSweep = searchParams.get('fromSweep');
   const highlightId = searchParams.get('highlight');
+  // ?from=best-buys means we arrived via an analytics Best-buys "View" link;
+  // show a back affordance returning to that tab.
+  const fromView = searchParams.get('from');
   const sweepFilterActive = firstSeenAfter || lastFetchedAfter;
 
   // Selected card — driven by clicks on the listings grid OR seeded from
@@ -246,6 +249,17 @@ export const Listings: React.FC = () => {
           </Button>
         }
       />
+
+      {fromView === 'best-buys' && (
+        <div className="mb-4">
+          <Link
+            to="/analytics?tab=best-buys"
+            className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900 hover:underline"
+          >
+            ← Back to Best buys
+          </Link>
+        </div>
+      )}
 
       {sweepFilterActive && (
         <div className="mb-4 flex items-center gap-2 rounded-sm border border-accent/30 bg-accent/5 px-3 py-2 text-xs">

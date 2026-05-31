@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { KStat } from '@/components/ui/KStat.js';
@@ -68,8 +69,24 @@ function buildQueryParams(state: BrowseFilterState): URLSearchParams {
   return p;
 }
 
+const TAB_IDS: readonly TabId[] = ['overview', 'best-buys', 'price-drops'];
+
 export const Analytics: React.FC = () => {
-  const [tab, setTab] = useState<TabId>('overview');
+  // Tab lives in the URL (?tab=best-buys) so a round-trip to a listing and back
+  // returns to the same tab, and the tab is shareable/deep-linkable.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: TabId = TAB_IDS.includes(tabParam as TabId) ? (tabParam as TabId) : 'overview';
+  const setTab = (t: TabId) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (t === 'overview') next.delete('tab');
+        else next.set('tab', t);
+        return next;
+      },
+      { replace: true },
+    );
   const [dropPeriod, setDropPeriod] = useState<DropPeriod>('30d');
 
   const { data: facets } = useQuery<ListingsFacetsResponse>({
@@ -364,6 +381,7 @@ const BestBuysPanel: React.FC<{
   rows: BestBuyRow[];
   railProps: Omit<RailProps, 'extraSlot'>;
 }> = ({ rows, railProps }) => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const invalidateBestBuys = () =>
     queryClient.invalidateQueries({ queryKey: ['analytics', 'best-buys'] });
@@ -454,6 +472,9 @@ const BestBuysPanel: React.FC<{
             onSortChange={setColumnSort}
             onToggleFavorite={(id, next) => toggleFavorite.mutate({ id, next })}
             onToggleExclude={(id, next) => toggleExclude.mutate({ id, next })}
+            onOpenListing={(id) =>
+              navigate(`/listings?highlight=${encodeURIComponent(id)}&from=best-buys`)
+            }
           />
         </Card>
       </div>

@@ -44,6 +44,7 @@ export const BestBuysTable: React.FC<{
   defaultSort?: SortState | null;
   onToggleFavorite?: (id: string, next: boolean) => void;
   onToggleExclude?: (id: string, next: boolean) => void;
+  onOpenListing?: (id: string) => void;
 }> = ({
   rows,
   compact = false,
@@ -55,8 +56,9 @@ export const BestBuysTable: React.FC<{
   defaultSort = { key: 'score', dir: 'desc' },
   onToggleFavorite,
   onToggleExclude,
+  onOpenListing,
 }) => {
-  const hasActions = !!onToggleFavorite || !!onToggleExclude;
+  const hasActions = !!onToggleFavorite || !!onToggleExclude || !!onOpenListing;
   const { sortedRows, sortKey, sortDir, requestSort } = useSortableTable({
     rows,
     accessors: bestBuyAccessors,
@@ -224,7 +226,7 @@ export const BestBuysTable: React.FC<{
             </td>
             {hasActions ? (
               <td className="py-1.5 text-right">
-                <div className="flex justify-end">
+                <div className="flex items-center justify-end gap-1.5">
                   <RowActions
                     id={r.id}
                     watchlist={r.watchlist}
@@ -232,6 +234,20 @@ export const BestBuysTable: React.FC<{
                     onToggleFavorite={onToggleFavorite}
                     onToggleExclude={onToggleExclude}
                   />
+                  {onOpenListing && (
+                    <button
+                      type="button"
+                      aria-label="View in Listings"
+                      title="View in Listings"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenListing(r.id);
+                      }}
+                      className="rounded-sm border border-neutral-300 px-1.5 py-0.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50"
+                    >
+                      View →
+                    </button>
+                  )}
                 </div>
               </td>
             ) : (
