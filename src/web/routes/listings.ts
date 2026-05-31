@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { searchListings, getListing, getPriceHistory } from '../../mcp/queries.js';
 import { Persistence } from '../../persist.js';
 import { deriveType } from '../../lib/listing-type.js';
-import { classifyListing } from '../../lib/listing-classification.js';
+import { classifyListing, isMunicipalityLocality } from '../../lib/listing-classification.js';
 
 export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   app.get('/api/listings', async (c) => {
@@ -105,6 +105,10 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       orderBy: { district: 'asc' },
     });
     const districts = districtRows.map((r) => r.district).filter((d): d is string => d !== null);
+    // Observed districts that belong to the Chișinău municipality. The rail's
+    // "Chișinău (municipality)" group expands to exactly these — sending the
+    // real district strings keeps the query a plain exact-match `IN (...)`.
+    const municipality = districts.filter((d) => isMunicipalityLocality(d));
 
     const aggregates = await prisma.listing.aggregate({
       where: { active: true, excluded: false },
@@ -165,6 +169,7 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     return c.json({
       total: aggregates._count,
       districts,
+      ...(municipality.length > 0 ? { municipality } : {}),
       ...(sectors.length > 0 ? { sectors } : {}),
       price: { min: aggregates._min.priceEur, max: aggregates._max.priceEur },
       rooms: { min: aggregates._min.rooms, max: aggregates._max.rooms },

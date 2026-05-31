@@ -166,7 +166,11 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
     await backfillUnenriched(deps, result, controller.signal, sweepId);
     await staleRefresh(deps, result, controller.signal, sweepId);
 
-    await deps.persist.markSeen(seenStubs);
+    // Mark EVERY listing present in the index as seen — not the cap-sliced
+    // `seenStubs`. The cap bounds expensive detail fetches (10s each); markSeen
+    // is a free lastSeenAt bump, so capping it would age out live listings that
+    // simply fell beyond the per-sweep detail budget.
+    await deps.persist.markSeen(diff.seen);
     await publishProgress(deps, sweepId, result);
     // Only age out when this sweep saw a complete index. A partial sweep means
     // some listings would be missing for a reason unrelated to delisting, so

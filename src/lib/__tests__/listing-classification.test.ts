@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { detectType, isRegionMismatch, classifyListing, fold } from '../listing-classification.js';
+import {
+  detectType,
+  isRegionMismatch,
+  isMunicipalityLocality,
+  classifyListing,
+  fold,
+} from '../listing-classification.js';
 
 describe('detectType', () => {
   it('plain house title stays House', () => {
@@ -77,6 +83,21 @@ describe('isRegionMismatch', () => {
 
   it('whitespace-only district is not flagged', () => {
     expect(isRegionMismatch('   ')).toBe(false);
+  });
+});
+
+describe('isMunicipalityLocality', () => {
+  it.each(['Chișinău', 'Codru', 'Durlești', 'Bîc', 'Sângera'])('includes member %s', (d) => {
+    expect(isMunicipalityLocality(d)).toBe(true);
+  });
+
+  it.each(['Bălți', 'Orhei', 'Ialoveni'])('excludes outsider %s', (d) => {
+    expect(isMunicipalityLocality(d)).toBe(false);
+  });
+
+  it('null and whitespace are not members', () => {
+    expect(isMunicipalityLocality(null)).toBe(false);
+    expect(isMunicipalityLocality('   ')).toBe(false);
   });
 });
 

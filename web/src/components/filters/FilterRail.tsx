@@ -37,12 +37,15 @@ const FilterGroupVertical: React.FC<{
 );
 
 // Empty `values` means "all" — same sentinel as the rest of the rail.
+// `groups` are convenience selectors (e.g. "Chișinău (municipality)") that set
+// the selection to a fixed set of member options in one click.
 const MultiSelectGroupVertical: React.FC<{
   label: string;
   values: string[];
   setValues: (v: string[]) => void;
   options: string[];
-}> = ({ label, values, setValues, options }) => {
+  groups?: { label: string; members: string[] }[];
+}> = ({ label, values, setValues, options, groups }) => {
   const allActive = values.length === 0;
   const toggle = (o: string) => {
     if (values.includes(o)) setValues(values.filter((v) => v !== o));
@@ -65,6 +68,23 @@ const MultiSelectGroupVertical: React.FC<{
         >
           All
         </button>
+        {(groups ?? []).map((g) => {
+          const active = g.members.length > 0 && g.members.every((m) => values.includes(m));
+          return (
+            <button
+              key={g.label}
+              onClick={() => setValues(g.members)}
+              aria-pressed={active}
+              className={`rounded-md px-2 py-1 text-[12px] ring-1 ring-inset ${
+                active
+                  ? 'bg-neutral-900 text-white ring-neutral-900'
+                  : 'bg-white text-neutral-700 ring-neutral-200 hover:bg-neutral-50'
+              }`}
+            >
+              {g.label}
+            </button>
+          );
+        })}
         {options.map((o) => {
           const active = values.includes(o);
           return (
@@ -99,10 +119,12 @@ const RangeField: React.FC<{
   setMin: (v: number | null) => void;
   setMax: (v: number | null) => void;
 }> = ({ label, unit, bounds, min, max, setMin, setMax }) => {
+  // Negative bounds are never valid for price/area/floors/land — treat them as
+  // empty (unbounded) rather than sending a nonsensical -1 to the API.
   const parse = (s: string) => {
     if (s.trim() === '') return null;
     const n = Number(s);
-    return Number.isNaN(n) ? null : n;
+    return Number.isNaN(n) || n < 0 ? null : n;
   };
   const inputCls =
     'w-full rounded-md px-2 py-1 text-[12px] tabular-nums ring-1 ring-inset ring-neutral-200 focus:ring-neutral-400 focus:outline-none';
@@ -116,6 +138,7 @@ const RangeField: React.FC<{
         <input
           type="number"
           inputMode="numeric"
+          min={0}
           value={min ?? ''}
           placeholder={bounds.min != null ? String(bounds.min) : 'min'}
           aria-label={`${label} min`}
@@ -126,6 +149,7 @@ const RangeField: React.FC<{
         <input
           type="number"
           inputMode="numeric"
+          min={0}
           value={max ?? ''}
           placeholder={bounds.max != null ? String(bounds.max) : 'max'}
           aria-label={`${label} max`}
@@ -249,6 +273,7 @@ export const FilterRail: React.FC<FilterRailProps> = ({
   searchPlaceholder = 'Title…',
 }) => {
   const districtOptions = facets?.districts ?? [];
+  const municipalityMembers = facets?.municipality ?? [];
   const sectorOptions = (facets?.sectors ?? []).map((s) => s.name);
   const types = facets?.types ?? [];
   const buckets = bucketsFromFacets(facets?.roomsValues ?? []);
@@ -321,6 +346,9 @@ export const FilterRail: React.FC<FilterRailProps> = ({
           values={districts}
           setValues={setDistricts}
           options={districtOptions}
+          {...(municipalityMembers.length > 0
+            ? { groups: [{ label: 'Chișinău (municipality)', members: municipalityMembers }] }
+            : {})}
         />
       )}
       {sectorOptions.length > 0 && (

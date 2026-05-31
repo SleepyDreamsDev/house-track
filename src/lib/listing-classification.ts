@@ -98,6 +98,15 @@ export function isRegionMismatch(district: string | null): boolean {
   return !MUNICIPALITY_ALLOWLIST.has(f);
 }
 
+// True when `district` is a locality of the Chișinău municipality (the city
+// proper or one of its towns/communes). Drives the "Chișinău (municipality)"
+// District filter group, which expands to every observed member locality.
+export function isMunicipalityLocality(district: string | null): boolean {
+  if (district == null) return false;
+  const f = fold(district);
+  return f !== '' && MUNICIPALITY_ALLOWLIST.has(f);
+}
+
 export interface Classification {
   derivedType: DerivedType;
   typeMismatch: boolean;
