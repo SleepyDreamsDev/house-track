@@ -75,7 +75,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               className="px-3"
             />
             <SortableTh
-              label="District"
+              label="Locality"
               sortKey="district"
               activeKey={sortKey}
               activeDir={sortDir}

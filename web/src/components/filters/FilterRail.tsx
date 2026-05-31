@@ -230,6 +230,7 @@ export interface FilterRailProps {
   facets: FilterFacets | undefined;
   extraSlot?: React.ReactNode;
   searchPlaceholder?: string;
+  onClearAll?: () => void;
 }
 
 // The unified browse-filter rail shared by Listings and Analytics. Every group
@@ -271,9 +272,27 @@ export const FilterRail: React.FC<FilterRailProps> = ({
   facets,
   extraSlot,
   searchPlaceholder = 'Title…',
+  onClearAll,
 }) => {
   const districtOptions = facets?.districts ?? [];
   const municipalityMembers = facets?.municipality ?? [];
+  const hasActiveFilters =
+    q !== '' ||
+    minPrice != null ||
+    maxPrice != null ||
+    minArea != null ||
+    maxArea != null ||
+    minLand != null ||
+    maxLand != null ||
+    minFloors != null ||
+    maxFloors != null ||
+    districts.length > 0 ||
+    sectors.length > 0 ||
+    type !== 'all' ||
+    rooms !== 'all' ||
+    favoritesOnly ||
+    showExcluded ||
+    Boolean(hideMislabeled);
   const sectorOptions = (facets?.sectors ?? []).map((s) => s.name);
   const types = facets?.types ?? [];
   const buckets = bucketsFromFacets(facets?.roomsValues ?? []);
@@ -283,8 +302,19 @@ export const FilterRail: React.FC<FilterRailProps> = ({
 
   return (
     <div className="space-y-4 text-[13px]" data-testid="filter-rail">
-      <div className="text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500">
-        Filters
+      <div className="flex items-center justify-between">
+        <div className="text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500">
+          Filters
+        </div>
+        {onClearAll && hasActiveFilters && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="text-[11px] font-medium text-neutral-500 hover:text-neutral-800 hover:underline"
+          >
+            Clear all
+          </button>
+        )}
       </div>
       <div>
         <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
@@ -342,7 +372,7 @@ export const FilterRail: React.FC<FilterRailProps> = ({
       )}
       {districtOptions.length > 0 && (
         <MultiSelectGroupVertical
-          label="District"
+          label="Locality"
           values={districts}
           setValues={setDistricts}
           options={districtOptions}

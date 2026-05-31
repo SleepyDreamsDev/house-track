@@ -86,7 +86,7 @@ describe('FilterRail — group visibility', () => {
     expect(screen.getByLabelText('Land area max')).toBeInTheDocument();
     expect(screen.getByText('Floors')).toBeInTheDocument();
     expect(screen.getByLabelText('Floors min')).toBeInTheDocument();
-    expect(screen.getByText('District')).toBeInTheDocument();
+    expect(screen.getByText('Locality')).toBeInTheDocument();
     expect(screen.getByText('Sector')).toBeInTheDocument();
     expect(screen.getByText('Property type')).toBeInTheDocument();
     expect(screen.getByText('Rooms')).toBeInTheDocument();
@@ -106,9 +106,9 @@ describe('FilterRail — group visibility', () => {
     expect(screen.queryByText('Surface area (m²)')).not.toBeInTheDocument();
   });
 
-  it('hides District when there are no districts', () => {
+  it('hides Locality when there are no districts', () => {
     renderRail({ facets: { ...FULL_FACETS, districts: [] } });
-    expect(screen.queryByText('District')).not.toBeInTheDocument();
+    expect(screen.queryByText('Locality')).not.toBeInTheDocument();
   });
 
   it('hides Sector when there are no sectors', () => {
@@ -238,7 +238,7 @@ describe('FilterRail — options sourcing and handlers', () => {
     render(<FilterRail {...baseProps({ facets: undefined })} />);
     expect(screen.getByTestId('filter-rail')).toBeInTheDocument();
     expect(screen.getByLabelText('Search listings')).toBeInTheDocument();
-    expect(screen.queryByText('District')).not.toBeInTheDocument();
+    expect(screen.queryByText('Locality')).not.toBeInTheDocument();
     expect(screen.queryByText('Price (€)')).not.toBeInTheDocument();
   });
 
@@ -299,5 +299,22 @@ describe('FilterRail — options sourcing and handlers', () => {
     render(<FilterRail {...baseProps({ facets, setMinPrice })} />);
     fireEvent.change(screen.getByLabelText('Price min'), { target: { value: '-5' } });
     expect(setMinPrice).not.toHaveBeenCalledWith(-5);
+  });
+
+  it('shows Clear all only when a filter is active and invokes onClearAll', () => {
+    const onClearAll = vi.fn();
+    // No active filters → button hidden even with the handler present.
+    const { rerender } = render(<FilterRail {...baseProps({ facets, onClearAll })} />);
+    expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull();
+
+    // A set district makes filters active → button appears.
+    rerender(<FilterRail {...baseProps({ facets, onClearAll, districts: ['Centru'] })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    expect(onClearAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits Clear all when no onClearAll handler is provided', () => {
+    render(<FilterRail {...baseProps({ facets, districts: ['Centru'] })} />);
+    expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull();
   });
 });

@@ -33,6 +33,7 @@ function detail(overrides: Partial<ParsedDetail>): ParsedDetail {
     areaSqm: 100,
     landAre: null,
     district: 'Chișinău',
+    zone: null,
     street: 'str. Test',
     floors: null,
     yearBuilt: null,
@@ -62,5 +63,20 @@ describe('persistDetail sets sector', () => {
     );
     const row = await prisma.listing.findUnique({ where: { id: 'sec-2' } });
     expect(row?.sector).toBeNull();
+  });
+
+  it("prefers 999's structured zone over the free-text heuristic", async () => {
+    // Title/description say "Centru" but 999's zone (feature 9) is Ciocana —
+    // the authoritative zone must win (the bug: "3 km până la centru" houses).
+    await new Persistence(prisma).persistDetail(
+      detail({
+        id: 'sec-3',
+        zone: 'Ciocana',
+        title: 'Casă, Chișinău',
+        description: '3 km până la centru',
+      }),
+    );
+    const row = await prisma.listing.findUnique({ where: { id: 'sec-3' } });
+    expect(row?.sector).toBe('Ciocana');
   });
 });

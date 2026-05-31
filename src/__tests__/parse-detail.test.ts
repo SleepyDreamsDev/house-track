@@ -51,6 +51,17 @@ describe('parseDetail', () => {
     expect(parseDetail(ID, json).street).toBe('str. Tohatin');
   });
 
+  it('Extracts the Chișinău zone from feature 9 (FEATURE_OPTIONS)', async () => {
+    const json = (await loadAdvert()) as { data: { advert: Record<string, unknown> } };
+    json.data.advert.zone = { id: 9, type: 'FEATURE_OPTIONS', value: { translated: 'Ciocana' } };
+    expect(parseDetail(ID, json).zone).toBe('Ciocana');
+  });
+
+  it('Leaves zone null when feature 9 is absent', async () => {
+    const json = await loadAdvert();
+    expect(parseDetail(ID, json).zone).toBeNull();
+  });
+
   it('Uses body.value.ro as the description', async () => {
     const json = await loadAdvert();
 

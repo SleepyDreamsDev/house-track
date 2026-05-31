@@ -195,12 +195,18 @@ export class Persistence {
       areaSqm: detail.areaSqm,
       landAre: detail.landAre,
       district: detail.district,
-      sector: deriveSector({
-        district: detail.district,
-        street: detail.street,
-        title: detail.title,
-        description: detail.description,
-      }),
+      // Prefer 999's structured zone (feature 9) when present; fall back to the
+      // free-text heuristic only when the listing carries no zone. The heuristic
+      // false-positives on phrases like "3 km până la centru", so the
+      // authoritative value wins whenever 999 supplies it.
+      sector:
+        detail.zone ??
+        deriveSector({
+          district: detail.district,
+          street: detail.street,
+          title: detail.title,
+          description: detail.description,
+        }),
       street: detail.street,
       floors: detail.floors,
       yearBuilt: detail.yearBuilt,

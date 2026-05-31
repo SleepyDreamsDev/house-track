@@ -1,6 +1,9 @@
 // scripts/backfill-sectors.ts
-// One-time/idempotent backfill: compute Listing.sector for Chișinău rows that
-// don't have one yet. Safe to re-run. Usage: pnpm tsx scripts/backfill-sectors.ts
+// Idempotent backfill: RE-derive Listing.sector for every Chișinău row from its
+// stored street/title/description. Re-derives (not just fills nulls) so a change
+// to the zone heuristic — e.g. de-collapsing Telecentru/Sculeni — corrects
+// existing rows without waiting for each listing to be re-fetched. Safe to
+// re-run. Usage: node --env-file=.env --import tsx scripts/backfill-sectors.ts
 import { PrismaClient } from '@prisma/client';
 import { deriveSector } from '../src/lib/chisinau-sector.js';
 
@@ -8,18 +11,32 @@ const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
   const rows = await prisma.listing.findMany({
-    where: { district: 'Chișinău', sector: null },
-    select: { id: true, district: true, street: true, title: true, description: true },
+    where: { district: 'Chișinău' },
+    select: {
+      id: true,
+      district: true,
+      street: true,
+      title: true,
+      description: true,
+      sector: true,
+    },
   });
   let updated = 0;
+  const tally = new Map<string, number>();
   for (const r of rows) {
     const sector = deriveSector(r);
-    if (sector) {
+    tally.set(sector ?? '∅', (tally.get(sector ?? '∅') ?? 0) + 1);
+    if (sector !== r.sector) {
       await prisma.listing.update({ where: { id: r.id }, data: { sector } });
       updated += 1;
     }
   }
-  console.warn(`backfill-sectors: examined ${rows.length}, classified ${updated}`);
+  const dist = [...tally.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k}:${v}`)
+    .join('  ');
+  console.warn(`backfill-sectors: examined ${rows.length}, changed ${updated}`);
+  console.warn(`distribution → ${dist}`);
 }
 
 main()

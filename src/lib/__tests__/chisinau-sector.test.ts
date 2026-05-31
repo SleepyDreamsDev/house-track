@@ -16,8 +16,28 @@ describe('deriveSector', () => {
     expect(deriveSector({ ...base, description: 'apartament in riscani' })).toBe('Râșcani');
   });
 
-  it('Gazetteer neighborhood classifies when no sector keyword is present', () => {
-    expect(deriveSector({ ...base, street: 'str. Sculeni' })).toBe('Buiucani');
+  // The four neighborhood zones 999 lists alongside the official sectors now
+  // resolve to themselves instead of being collapsed into a sector.
+  it('Sculeni is its own zone (not Buiucani)', () => {
+    expect(deriveSector({ ...base, street: 'str. Sculeni' })).toBe('Sculeni');
+  });
+
+  it('Telecentru is its own zone (not Centru)', () => {
+    expect(deriveSector({ ...base, title: 'Casă, Telecentru' })).toBe('Telecentru');
+  });
+
+  it('Poșta Veche is its own zone', () => {
+    expect(deriveSector({ ...base, description: 'casă în Poșta Veche' })).toBe('Poșta Veche');
+  });
+
+  it('Aeroport is recognized as a zone', () => {
+    expect(deriveSector({ ...base, street: 'zona Aeroport' })).toBe('Aeroport');
+  });
+
+  it('Telecentru wins over the bare Centru keyword', () => {
+    expect(deriveSector({ ...base, description: 'în telecentru, aproape de centru' })).toBe(
+      'Telecentru',
+    );
   });
 
   it('A Chișinău listing with no signal is left unclassified', () => {
@@ -38,7 +58,17 @@ describe('deriveSector', () => {
     expect(deriveSector({ ...base, district: null, street: 'str. Botanica' })).toBeNull();
   });
 
-  it('exposes the five official sectors', () => {
-    expect([...CHISINAU_SECTORS]).toEqual(['Centru', 'Botanica', 'Râșcani', 'Ciocana', 'Buiucani']);
+  it('exposes all nine Chișinău zones', () => {
+    expect([...CHISINAU_SECTORS]).toEqual([
+      'Centru',
+      'Botanica',
+      'Râșcani',
+      'Ciocana',
+      'Buiucani',
+      'Telecentru',
+      'Sculeni',
+      'Poșta Veche',
+      'Aeroport',
+    ]);
   });
 });

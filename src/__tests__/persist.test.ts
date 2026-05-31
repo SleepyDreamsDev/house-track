@@ -58,6 +58,7 @@ const detail = (id: string, overrides: Partial<ParsedDetail> = {}): ParsedDetail
   areaSqm: 120,
   landAre: 600,
   district: 'Buiucani',
+  zone: null,
   street: 'Strada Test 1',
   floors: 2,
   yearBuilt: 2010,

@@ -80,6 +80,7 @@ export interface UseBrowseFilters {
   setFavoritesOnly: (v: boolean) => void;
   setShowExcluded: (v: boolean) => void;
   setHideMislabeled: (v: boolean) => void;
+  clearAll: () => void;
 }
 
 // Owns the browse-filter state shared by the Listings and Analytics pages.
@@ -111,6 +112,27 @@ export function useBrowseFilters(): UseBrowseFilters {
   // would silently collapse.
   const setDistricts = (next: string[]) => setDistrictsRaw(Array.from(new Set(next)));
   const setSectors = (next: string[]) => setSectorsRaw(Array.from(new Set(next)));
+
+  // Reset every filter to its default. The persistence effect then writes the
+  // cleared snapshot back to sessionStorage.
+  const clearAll = () => {
+    setQ('');
+    setMinPrice(null);
+    setMaxPrice(null);
+    setMinArea(null);
+    setMaxArea(null);
+    setMinLand(null);
+    setMaxLand(null);
+    setMinFloors(null);
+    setMaxFloors(null);
+    setDistrictsRaw([]);
+    setSectorsRaw([]);
+    setType('all');
+    setRooms('all');
+    setFavoritesOnly(false);
+    setShowExcluded(false);
+    setHideMislabeled(false);
+  };
 
   const state: BrowseFilterState = {
     q,
@@ -178,5 +200,6 @@ export function useBrowseFilters(): UseBrowseFilters {
     setFavoritesOnly,
     setShowExcluded,
     setHideMislabeled,
+    clearAll,
   };
 }

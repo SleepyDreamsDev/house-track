@@ -36,6 +36,9 @@ export interface ParsedDetail {
   areaSqm: number | null;
   landAre: number | null;
   district: string | null;
+  // Chișinău intra-city zone (feature 9), localized name; null when 999 has no
+  // zone set for the listing. Authoritative source for `sector`.
+  zone: string | null;
   street: string | null;
   floors: number | null;
   yearBuilt: number | null;
