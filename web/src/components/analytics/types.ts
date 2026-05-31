@@ -34,6 +34,8 @@ export interface BestBuyRow {
   priceDrop: boolean;
   dropPct: number;
   rooms: number;
+  watchlist?: boolean;
+  excluded?: boolean;
 }
 
 export interface PriceDropRow {

@@ -123,4 +123,28 @@ describe('BestBuysTable (sortable)', () => {
     const eurHeader = screen.getByRole('button', { name: /€\/m²/ }).closest('th')!;
     expect(eurHeader).toHaveAttribute('aria-sort', 'ascending');
   });
+
+  it('renders favorite + exclude actions and invokes their handlers', async () => {
+    const onToggleFavorite = vi.fn();
+    const onToggleExclude = vi.fn();
+    render(
+      <BestBuysTable
+        rows={[{ ...rows[0]!, id: 'a', watchlist: false, excluded: false }]}
+        fullCols
+        onToggleFavorite={onToggleFavorite}
+        onToggleExclude={onToggleExclude}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Add favorite' }));
+    expect(onToggleFavorite).toHaveBeenCalledWith('a', true);
+    await user.click(screen.getByRole('button', { name: 'Exclude' }));
+    expect(onToggleExclude).toHaveBeenCalledWith('a', true);
+  });
+
+  it('omits action buttons when no handlers are provided', () => {
+    render(<BestBuysTable rows={rows} fullCols />);
+    expect(screen.queryByRole('button', { name: 'Add favorite' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Exclude' })).toBeNull();
+  });
 });
