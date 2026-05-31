@@ -120,7 +120,10 @@ export interface GetListingResult {
   heatingType: string | null;
   description: string | null;
   imageUrls: string[];
+  primaryImage: string | null;
   active: boolean;
+  watchlist: boolean;
+  excluded: boolean;
   firstSeenAt: string;
   lastSeenAt: string;
   lastFetchedAt: string;
@@ -393,7 +396,10 @@ export async function getListing(
     heatingType: row.heatingType,
     description: row.description,
     imageUrls: coerceStringArray(row.imageUrls),
+    primaryImage: primaryThumb(row.imageUrls),
     active: row.active,
+    watchlist: row.watchlist,
+    excluded: row.excluded,
     firstSeenAt: row.firstSeenAt.toISOString(),
     lastSeenAt: row.lastSeenAt.toISOString(),
     lastFetchedAt: row.lastFetchedAt.toISOString(),

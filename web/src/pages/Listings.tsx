@@ -196,6 +196,16 @@ export const Listings: React.FC = () => {
     },
   });
 
+  // When deep-linked to a specific listing (e.g. from Best buys), the row may
+  // sit on any page of the paginated list — fetch it directly and pin it at
+  // the top so it's always visible regardless of page/sort/view.
+  const highlightQuery = useQuery<Listing>({
+    queryKey: ['listing-highlight', highlightId],
+    queryFn: () => apiCall(`/listings/${highlightId}`),
+    enabled: !!highlightId,
+  });
+  const highlightedListing = highlightId ? highlightQuery.data : undefined;
+
   const clearSweepFilter = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('firstSeenAfter');
@@ -228,9 +238,11 @@ export const Listings: React.FC = () => {
   });
 
   const total = data?.total ?? 0;
-  const visibleListings = (data?.listings ?? []).filter(
-    (l) => !hideMislabeled || !(l.typeMismatch || l.regionMismatch),
-  );
+  const visibleListings = (data?.listings ?? [])
+    .filter((l) => !hideMislabeled || !(l.typeMismatch || l.regionMismatch))
+    // The highlighted listing is pinned above; don't render it twice if it also
+    // falls on the current page.
+    .filter((l) => !(highlightedListing && l.id === highlightedListing.id));
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   // Client-side hide can empty a server page; don't offer "Next" into nothing.
   const onLastPage = page >= pageCount - 1 || (hideMislabeled && visibleListings.length === 0);
@@ -258,6 +270,16 @@ export const Listings: React.FC = () => {
           >
             ← Back to Best buys
           </Link>
+        </div>
+      )}
+
+      {highlightedListing && (
+        <div className="mb-5" data-testid="highlighted-listing">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+            Selected listing
+          </div>
+          <ListingCard l={highlightedListing} selected autoScroll={false} onSelect={() => {}} />
+          <PriceHistoryPanel listingId={highlightedListing.id} />
         </div>
       )}
 

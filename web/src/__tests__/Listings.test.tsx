@@ -397,6 +397,43 @@ describe('Listings', () => {
     expect(back).toHaveAttribute('href', '/analytics?tab=best-buys');
   });
 
+  it('pins the highlighted listing at the top so it is visible regardless of page', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint.startsWith('/listings/abc')) {
+        return Promise.resolve({
+          id: 'abc',
+          url: 'https://999.md/ro/abc',
+          title: 'Pinned Casă',
+          priceEur: 99000,
+          areaSqm: 120,
+          rooms: 3,
+          district: 'Centru',
+          firstSeenAt: new Date().toISOString(),
+          primaryImage: null,
+          watchlist: false,
+          excluded: false,
+        });
+      }
+      if (endpoint.includes('price-history')) return Promise.resolve({ points: [] });
+      // The paginated list does NOT contain abc (it's on another page).
+      return Promise.resolve({ listings: [], total: 0 });
+    });
+
+    const router = createMemoryRouter([{ path: '/', element: <Listings /> }], {
+      initialEntries: ['/?highlight=abc&from=best-buys'],
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const pinned = await screen.findByTestId('highlighted-listing');
+    expect(within(pinned).getByText('Pinned Casă')).toBeInTheDocument();
+    expect(screen.getByText('Selected listing')).toBeInTheDocument();
+  });
+
   it('omits the Back link in the normal (non-best-buys) entry', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockResolvedValue({ listings: [], total: 0 });
