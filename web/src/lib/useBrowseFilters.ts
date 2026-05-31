@@ -10,6 +10,9 @@ export interface Bounds {
 // Analytics consume the same endpoint (shared ['listings-facets'] query key).
 export interface FilterFacets {
   districts: string[];
+  // Observed districts inside the Chișinău municipality. Backs the District
+  // rail's "Chișinău (municipality)" group, which selects all of them at once.
+  municipality?: string[];
   sectors?: { name: string; count: number }[];
   types: string[];
   roomsValues: number[];

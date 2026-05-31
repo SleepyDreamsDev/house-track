@@ -262,6 +262,31 @@ describe('runSweep', () => {
     expect(env.markInactiveOlderThan).toHaveBeenCalledWith(3 * HOUR);
   });
 
+  it('markSeen marks the FULL index diff, not the detail-fetch-capped slice', async () => {
+    // The targetListings cap exists only to bound expensive detail fetches.
+    // markSeen (a free lastSeenAt bump) must mark every listing present in the
+    // index — otherwise live listings beyond the cap get aged out as stale.
+    const env = makeEnv();
+    env.deps.targetListingsThisSweep = 2;
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.parseIndex.mockReturnValueOnce([stub('A'), stub('B'), stub('C'), stub('D')]);
+    env.parseIndex.mockReturnValueOnce([]);
+    env.fetchAdvert.mockResolvedValue(envelope({}));
+    env.parseDetail.mockReturnValue(detail('X'));
+    // 1 new (A) + 3 seen (B, C, D); cap of 2 → only A + B get detail-fetched.
+    env.diffAgainstDb.mockResolvedValueOnce({
+      new: [stub('A')],
+      seen: [stub('B'), stub('C'), stub('D')],
+    });
+
+    await runSweep(env.deps);
+
+    expect(env.persistDetail).toHaveBeenCalledTimes(2);
+    expect(env.markSeen).toHaveBeenCalledOnce();
+    expect(env.markSeen.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['B', 'C', 'D']);
+  });
+
   it('Seen stubs are persisted so ListingSnapshot accumulates price-change history', async () => {
     const env = makeEnv();
     env.fetchSearchPage.mockResolvedValueOnce(envelope({}));

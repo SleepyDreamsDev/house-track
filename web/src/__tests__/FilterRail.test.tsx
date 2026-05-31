@@ -265,4 +265,39 @@ describe('FilterRail — options sourcing and handlers', () => {
     expect(sector.getByText('Sector')).toBeInTheDocument();
     expect(sector.getByRole('button', { name: 'Centru' })).toBeInTheDocument();
   });
+
+  it('renders a Chișinău (municipality) group button that selects all member districts', () => {
+    const setDistricts = vi.fn();
+    render(
+      <FilterRail
+        {...baseProps({
+          setDistricts,
+          facets: {
+            ...facets,
+            districts: ['Chișinău', 'Codru', 'Bălți'],
+            municipality: ['Chișinău', 'Codru'],
+          },
+        })}
+      />,
+    );
+    const rail = within(screen.getByTestId('filter-rail'));
+    fireEvent.click(rail.getByRole('button', { name: 'Chișinău (municipality)' }));
+    expect(setDistricts).toHaveBeenCalledWith(['Chișinău', 'Codru']);
+  });
+
+  it('does not render the municipality group when facets omit it', () => {
+    render(<FilterRail {...baseProps({ facets })} />);
+    expect(
+      within(screen.getByTestId('filter-rail')).queryByRole('button', {
+        name: 'Chișinău (municipality)',
+      }),
+    ).toBeNull();
+  });
+
+  it('negative range input does not propagate a negative value', () => {
+    const setMinPrice = vi.fn();
+    render(<FilterRail {...baseProps({ facets, setMinPrice })} />);
+    fireEvent.change(screen.getByLabelText('Price min'), { target: { value: '-5' } });
+    expect(setMinPrice).not.toHaveBeenCalledWith(-5);
+  });
 });

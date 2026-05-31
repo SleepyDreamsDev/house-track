@@ -117,6 +117,18 @@ describe('GET /api/listings/facets — toggle counts', () => {
     expect(f).toHaveProperty('floors');
   });
 
+  it('municipality lists observed districts inside the Chișinău allowlist', async () => {
+    await seed({ id: 'd1', district: 'Chișinău' });
+    await seed({ id: 'd2', district: 'Codru' });
+    await seed({ id: 'd3', district: 'Durlești' });
+    // Outside the municipality — must not appear in the group.
+    await seed({ id: 'd4', district: 'Bălți' });
+    await seed({ id: 'd5', district: 'Orhei' });
+
+    const f = await facets();
+    expect(f.municipality).toEqual(['Chișinău', 'Codru', 'Durlești']);
+  });
+
   it('reports zero counts on an empty catalog', async () => {
     const f = await facets();
     expect(f.favoritesCount).toBe(0);
