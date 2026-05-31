@@ -130,11 +130,14 @@ export class Fetcher {
     url: string,
     opts: RequestOptions,
   ): Promise<{ res: FetchResult; attempts: number }> {
-    await this.maybeWaitBetweenRequests(opts.delayMs);
+    await this.maybeWaitBetweenRequests(opts.delayMs, opts.signal);
+    // A cancel during the politeness wait should stop here, not fire a doomed
+    // request — the caller (sweep) treats this throw as a clean cancellation.
+    if (opts.signal?.aborted) throw abortError();
     return this.attempt(url, opts, 0);
   }
 
-  private async maybeWaitBetweenRequests(overrideMs?: number): Promise<void> {
+  private async maybeWaitBetweenRequests(overrideMs?: number, signal?: AbortSignal): Promise<void> {
     if (this.lastRequestAt === 0) {
       this.lastRequestAt = Date.now();
       return;
@@ -143,8 +146,24 @@ export class Fetcher {
     const base = overrideMs ?? this.deps.config.baseDelayMs;
     const target = base + this.jitter();
     const wait = Math.max(0, target - elapsed);
-    if (wait > 0) await this.sleep(wait);
+    if (wait > 0) await this.sleepAbortable(wait, signal);
     this.lastRequestAt = Date.now();
+  }
+
+  // The politeness gap is the longest blocking wait in a sweep; without honoring
+  // the abort signal a cancel would stall up to ~10s. Races the (injectable)
+  // sleep against the signal so a cancel resolves the wait immediately.
+  private sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
+    if (signal === undefined) return this.sleep(ms);
+    if (signal.aborted) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const done = (): void => {
+        signal.removeEventListener('abort', done);
+        resolve();
+      };
+      void this.sleep(ms).then(done);
+      signal.addEventListener('abort', done, { once: true });
+    });
   }
 
   private async attempt(
@@ -160,7 +179,12 @@ export class Fetcher {
     } catch (err) {
       const backoff = this.deps.config.retryBackoffsMs[attemptIdx];
       if (backoff !== undefined) {
-        await this.sleep(backoff);
+        await this.sleepAbortable(backoff, opts.signal);
+        // Cancelled during the backoff — stop retrying, surface as a clean abort.
+        if (opts.signal?.aborted) {
+          annotateAttempts(err, attempts);
+          throw err;
+        }
         return this.attempt(url, opts, attemptIdx + 1);
       }
       // Exhausted retries — surface attempt count to the caller via the error.
@@ -179,7 +203,8 @@ export class Fetcher {
     if (res.status >= 500) {
       const backoff = this.deps.config.retryBackoffsMs[attemptIdx];
       if (backoff !== undefined) {
-        await this.sleep(backoff);
+        await this.sleepAbortable(backoff, opts.signal);
+        if (opts.signal?.aborted) throw abortError();
         return this.attempt(url, opts, attemptIdx + 1);
       }
       const err = new Error(`5xx after retries: ${res.status} ${url}`);
@@ -235,6 +260,15 @@ export class Fetcher {
 
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+// Thrown when a request is short-circuited by an aborted signal. The sweep's
+// outer catch keys cancellation off `controller.signal.aborted`, so the exact
+// error type doesn't matter — this just gives it a clear name in logs.
+function abortError(): Error {
+  const e = new Error('Request aborted');
+  e.name = 'AbortError';
+  return e;
+}
 
 const defaultJitter =
   (range: number): (() => number) =>

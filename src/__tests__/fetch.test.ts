@@ -209,6 +209,25 @@ describe('Fetcher', () => {
     expect(interRequestSleeps[0]).toBeLessThanOrEqual(8_500);
   });
 
+  it('A cancel during the inter-request wait aborts immediately without firing the request', async () => {
+    const pool = mockAgent.get(ORIGIN);
+    pool.intercept({ path: '/a' }).reply(200, '');
+    // No interceptor for /b: if the request fired despite the abort, undici
+    // would throw a "no matching interceptor" error instead of our AbortError.
+
+    const fetcher = makeFetcher();
+    await fetcher.fetchPage(`${ORIGIN}/a`); // sets lastRequestAt → next call must wait
+
+    // The politeness sleep never resolves on its own; only the abort releases it.
+    sleep.mockReturnValue(new Promise<void>(() => {}));
+
+    const ac = new AbortController();
+    const p = fetcher.fetchPage(`${ORIGIN}/b`, ac.signal);
+    ac.abort();
+
+    await expect(p).rejects.toThrow(/abort/i);
+  });
+
   it('A network error is retried then bubbles', async () => {
     const pool = mockAgent.get(ORIGIN);
     for (let i = 0; i < 4; i++) {

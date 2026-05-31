@@ -305,7 +305,9 @@ async function fetchAndPersistDetails(
     try {
       envelope = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
-      if (err instanceof CircuitTrippingError) throw err;
+      // Propagate a cancel out to runSweep's catch so the sweep records
+      // 'cancelled' (not 'partial') and stops immediately.
+      if (err instanceof CircuitTrippingError || signal.aborted) throw err;
       record(result, { url: s.url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
@@ -363,7 +365,9 @@ async function fetchAndPersistDetails(
     try {
       envelope = await deps.fetchAdvert(s.id, signal);
     } catch (err) {
-      if (err instanceof CircuitTrippingError) throw err;
+      // Propagate a cancel out to runSweep's catch so the sweep records
+      // 'cancelled' (not 'partial') and stops immediately.
+      if (err instanceof CircuitTrippingError || signal.aborted) throw err;
       record(result, { url: s.url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
@@ -431,7 +435,9 @@ async function backfillUnenriched(
     try {
       envelope = await deps.fetchAdvert(id, signal);
     } catch (err) {
-      if (err instanceof CircuitTrippingError) throw err;
+      // Propagate a cancel out to runSweep's catch so the sweep records
+      // 'cancelled' (not 'partial') and stops immediately.
+      if (err instanceof CircuitTrippingError || signal.aborted) throw err;
       record(result, { url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);
@@ -483,7 +489,9 @@ async function staleRefresh(
     try {
       envelope = await deps.fetchAdvert(id, signal);
     } catch (err) {
-      if (err instanceof CircuitTrippingError) throw err;
+      // Propagate a cancel out to runSweep's catch so the sweep records
+      // 'cancelled' (not 'partial') and stops immediately.
+      if (err instanceof CircuitTrippingError || signal.aborted) throw err;
       record(result, { url, status: null, msg: String(err), attempts: attemptsOf(err) });
       result.status = 'partial';
       await publishProgress(deps, sweepId, result);

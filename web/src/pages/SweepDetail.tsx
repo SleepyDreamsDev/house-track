@@ -82,26 +82,34 @@ interface SmokeAssertions {
 
 type Tab = 'overview' | 'http' | 'events' | 'errors' | 'config';
 
-// Tiny count-up since the current fetch started. It climbs through the ~8–10s
-// politeness gap and resets each fetch, so the operator can see the loop is
-// alive and politely ticking even when the counters aren't moving.
-const FetchTimer: React.FC<{ startedAt: number }> = ({ startedAt }) => {
+// Tiny countdown of the politeness gap: ~windowMs down to 0, resetting each
+// fetch, so the operator can see the loop is alive and politely waiting even
+// when the counters aren't moving. Approximate (jitter + fetch time aren't
+// modelled) — it's a liveness vibe, not a precise clock.
+const FetchTimer: React.FC<{ startedAt: number; windowMs: number }> = ({ startedAt, windowMs }) => {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const secs = Math.max(0, Math.round((now - startedAt) / 1000));
+  const secs = Math.max(0, Math.ceil((windowMs - (now - startedAt)) / 1000));
   return (
     <span
       className="inline-flex items-center gap-1 tabular-nums text-neutral-400"
-      title="time on current fetch (politeness gap)"
+      title="≈ politeness gap remaining before the next fetch"
     >
       <StatusDot tone="warning" pulse />
       {secs}s
     </span>
   );
 };
+
+// Nominal politeness window (base + max jitter) from the sweep's config
+// snapshot, with the POLITENESS defaults as fallback.
+function politenessWindowMs(config: Record<string, unknown>): number {
+  const num = (k: string, d: number) => (typeof config[k] === 'number' ? (config[k] as number) : d);
+  return num('politeness.baseDelayMs', 8000) + num('politeness.jitterMs', 2000);
+}
 
 export const SweepDetail: React.FC = () => {
   const { id = '' } = useParams();
@@ -210,7 +218,10 @@ export const SweepDetail: React.FC = () => {
                 <span className="flex items-center gap-2 text-neutral-600">
                   Listings fetched
                   {detail.currentlyFetching && (
-                    <FetchTimer startedAt={detail.currentlyFetching.startedAt} />
+                    <FetchTimer
+                      startedAt={detail.currentlyFetching.startedAt}
+                      windowMs={politenessWindowMs(detail.config)}
+                    />
                   )}
                 </span>
                 <span className="tabular-nums text-neutral-600">
