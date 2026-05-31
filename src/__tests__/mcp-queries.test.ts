@@ -282,6 +282,29 @@ describe('getListing', () => {
     const r = await getListing(prisma, 'IMG');
 
     expect(r?.imageUrls).toEqual(['a.jpg', 'b.jpg']);
+    // primaryImage is the first image as a full CDN thumbnail URL.
+    expect(r?.primaryImage).toBe('https://i.simpalsmedia.com/999.md/BoardImages/320x240/a.jpg');
+  });
+
+  it('Returns watchlist/excluded state and a null primaryImage when imageless', async () => {
+    const now = new Date();
+    await prisma.listing.create({
+      data: {
+        id: 'STATE',
+        url: 'https://999.md/ro/STATE',
+        title: 'X',
+        lastSeenAt: now,
+        lastFetchedAt: now,
+        watchlist: true,
+        excluded: true,
+      },
+    });
+
+    const r = await getListing(prisma, 'STATE');
+
+    expect(r?.watchlist).toBe(true);
+    expect(r?.excluded).toBe(true);
+    expect(r?.primaryImage).toBeNull();
   });
 
   it('Returns empty array when imageUrls column contains a non-array value', async () => {
