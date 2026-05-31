@@ -1,5 +1,6 @@
 import type { Hono } from 'hono';
 import type { PrismaClient } from '@prisma/client';
+import { optInt, positiveIntId } from '../params.js';
 import { findInProgressSweep, getSweepAbortControllers } from '../../sweep.js';
 import { runSweep } from '../../sweep.js';
 import { Circuit } from '../../circuit.js';
@@ -110,9 +111,8 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
     };
   }
   app.get('/api/sweeps', async (c) => {
-    const limit = parseInt(c.req.query('limit') || '20');
-    const offsetRaw = c.req.query('offset');
-    const offset = offsetRaw ? Math.max(0, parseInt(offsetRaw)) : 0;
+    const limit = optInt(c.req.query('limit')) ?? 20;
+    const offset = Math.max(0, optInt(c.req.query('offset')) ?? 0);
 
     const [sweeps, total] = await Promise.all([
       prisma.sweepRun.findMany({
@@ -166,7 +166,8 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
 
   app.get('/api/sweeps/:id/errors', async (c) => {
     try {
-      const id = parseInt(c.req.param('id'));
+      const id = positiveIntId(c.req.param('id'));
+      if (id === null) return c.json({ error: 'Invalid sweep id' }, 400);
       const sweep = await prisma.sweepRun.findUnique({ where: { id } });
 
       if (!sweep) {
@@ -271,7 +272,8 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
   // run inline; cheap enough to compute on each request.
   app.get('/api/sweeps/:id/smoke-assertions', async (c) => {
     try {
-      const id = parseInt(c.req.param('id'));
+      const id = positiveIntId(c.req.param('id'));
+      if (id === null) return c.json({ error: 'Invalid sweep id' }, 400);
       const sweep = await prisma.sweepRun.findUnique({ where: { id } });
       if (!sweep) return c.json({ error: 'Sweep not found' }, 404);
       if (sweep.trigger !== 'smoke') {
@@ -293,7 +295,8 @@ export function registerSweepsRoutes(app: Hono, prisma: PrismaClient): void {
 
   app.post('/api/sweeps/:id/cancel', async (c) => {
     try {
-      const id = parseInt(c.req.param('id'));
+      const id = positiveIntId(c.req.param('id'));
+      if (id === null) return c.json({ error: 'Invalid sweep id' }, 400);
       const sweep = await prisma.sweepRun.findUnique({ where: { id } });
 
       if (!sweep) {
