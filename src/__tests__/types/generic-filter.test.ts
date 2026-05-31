@@ -104,9 +104,9 @@ describe('new GenericFilter (category + filters[])', () => {
     expect(r.success).toBe(true);
   });
 
-  it('defaultGenericFilter has category:house and 3 filter selections', () => {
+  it('defaultGenericFilter has category:house and 7 filter selections', () => {
     expect(defaultGenericFilter.category).toBe('house');
-    expect(defaultGenericFilter.filters).toHaveLength(3);
+    expect(defaultGenericFilter.filters).toHaveLength(7);
   });
 
   it('defaultGenericFilter first selection is offer-type sale', () => {
@@ -119,21 +119,35 @@ describe('new GenericFilter (category + filters[])', () => {
     });
   });
 
-  it('defaultGenericFilter second selection is region Chișinău mun.', () => {
+  it('defaultGenericFilter second selection is region by Localitate (feature 8)', () => {
+    // Region uses feature 8 (Localitate: Chișinău + Durlești + Codru), NOT
+    // feature 7 (Regiune). See memory project_filter_undercount_240_vs_482.
     const sel = defaultGenericFilter.filters[1];
     expect(sel).toMatchObject({
       kind: 'options',
       filterId: 32,
-      featureId: 7,
-      optionIds: [12900],
+      featureId: 8,
+      optionIds: [13859, 13917, 13942],
     });
   });
 
-  it('defaultGenericFilter third selection is price max 250000 EUR', () => {
+  it('defaultGenericFilter third selection is total area ≥90 m² (1073/244)', () => {
+    // Total area (Suprafață totală), NOT living area 1194/239 (Suprafață
+    // locuibilă) — the latter is mostly undeclared and matched only 240/482.
     const sel = defaultGenericFilter.filters[2];
     expect(sel).toMatchObject({
       kind: 'range',
-      filterId: 9441,
+      filterId: 1073,
+      featureId: 244,
+      unit: 'UNIT_METER_SQUARE',
+      min: '90',
+    });
+  });
+
+  it('defaultGenericFilter includes the price cap (max 250000 EUR)', () => {
+    const sel = defaultGenericFilter.filters.find((f) => f.filterId === 9441);
+    expect(sel).toMatchObject({
+      kind: 'range',
       featureId: 2,
       unit: 'UNIT_EUR',
       max: '250000',
