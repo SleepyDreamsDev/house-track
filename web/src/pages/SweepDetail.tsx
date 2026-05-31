@@ -82,6 +82,27 @@ interface SmokeAssertions {
 
 type Tab = 'overview' | 'http' | 'events' | 'errors' | 'config';
 
+// Tiny count-up since the current fetch started. It climbs through the ~8–10s
+// politeness gap and resets each fetch, so the operator can see the loop is
+// alive and politely ticking even when the counters aren't moving.
+const FetchTimer: React.FC<{ startedAt: number }> = ({ startedAt }) => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const secs = Math.max(0, Math.round((now - startedAt) / 1000));
+  return (
+    <span
+      className="inline-flex items-center gap-1 tabular-nums text-neutral-400"
+      title="time on current fetch (politeness gap)"
+    >
+      <StatusDot tone="warning" pulse />
+      {secs}s
+    </span>
+  );
+};
+
 export const SweepDetail: React.FC = () => {
   const { id = '' } = useParams();
   const nav = useNavigate();
@@ -186,7 +207,12 @@ export const SweepDetail: React.FC = () => {
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center mb-3">
             <div>
               <div className="flex justify-between mb-1 text-xs">
-                <span className="text-neutral-600">Listings fetched</span>
+                <span className="flex items-center gap-2 text-neutral-600">
+                  Listings fetched
+                  {detail.currentlyFetching && (
+                    <FetchTimer startedAt={detail.currentlyFetching.startedAt} />
+                  )}
+                </span>
                 <span className="tabular-nums text-neutral-600">
                   {detail.progress.pagesDone} / {detail.progress.pagesTotal}
                 </span>
