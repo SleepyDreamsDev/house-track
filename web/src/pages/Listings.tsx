@@ -439,6 +439,14 @@ const ListingCard: React.FC<ListingCardProps> = ({ l, selected, autoScroll, onSe
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['listings'] }),
   });
+  const toggleExclude = useMutation({
+    mutationFn: () =>
+      apiCall(`/listings/${l.id}/excluded`, {
+        method: 'PUT',
+        body: JSON.stringify({ excluded: !l.excluded }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['listings'] }),
+  });
   return (
     <div
       ref={ref}
@@ -545,15 +553,31 @@ const ListingCard: React.FC<ListingCardProps> = ({ l, selected, autoScroll, onSe
           )}
           <div className="text-xs tabular-nums text-neutral-400">€{eurm2}/m²</div>
         </div>
-        <a
-          href={l.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="rounded-sm border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
-        >
-          Open ↗
-        </a>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={l.excluded ? 'Unexclude' : 'Exclude'}
+            title={l.excluded ? 'Unexclude' : 'Exclude'}
+            disabled={toggleExclude.isPending}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleExclude.mutate();
+            }}
+            className={`rounded-sm border px-1.5 py-1 text-xs font-medium leading-none transition-colors ${l.excluded ? 'border-error/40 bg-error/10 text-error' : 'border-neutral-300 text-neutral-400 hover:border-neutral-400 hover:text-neutral-600'}`}
+          >
+            ✕
+          </button>
+          <a
+            href={l.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="rounded-sm border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            Open ↗
+          </a>
+        </div>
       </div>
     </div>
   );

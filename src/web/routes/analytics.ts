@@ -79,6 +79,8 @@ interface BestBuyRow {
   priceDrop: boolean;
   dropPct: number;
   rooms: number;
+  watchlist: boolean;
+  excluded: boolean;
 }
 
 interface PriceDropRow {
@@ -927,6 +929,8 @@ analyticsRouter.get('/analytics/best-buys', async (c) => {
       district: true,
       yearBuilt: true,
       firstSeenAt: true,
+      watchlist: true,
+      excluded: true,
       snapshots: { orderBy: { capturedAt: 'asc' }, select: { priceEur: true, capturedAt: true } },
     },
   });
@@ -994,6 +998,8 @@ analyticsRouter.get('/analytics/best-buys', async (c) => {
       priceDrop,
       dropPct: Math.round(dropPct * 10) / 10,
       rooms: l.rooms ?? 0,
+      watchlist: l.watchlist,
+      excluded: l.excluded,
     };
   });
 

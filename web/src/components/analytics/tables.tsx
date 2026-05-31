@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/Badge.js';
 import { SortableTh } from '@/components/ui/SortableTh.js';
 import { fmt } from '@/lib/format.js';
 import { useSortableTable, type Accessors, type SortState } from '@/lib/useSortableTable.js';
+import { RowActions } from '@/components/listings/RowActions.js';
 import type { BestBuyRow, PriceDropRow } from './types.js';
 
 const ScoreBar: React.FC<{ score: number }> = ({ score }) => {
@@ -41,6 +42,8 @@ export const BestBuysTable: React.FC<{
   sort?: SortState | null;
   onSortChange?: (next: SortState) => void;
   defaultSort?: SortState | null;
+  onToggleFavorite?: (id: string, next: boolean) => void;
+  onToggleExclude?: (id: string, next: boolean) => void;
 }> = ({
   rows,
   compact = false,
@@ -50,7 +53,10 @@ export const BestBuysTable: React.FC<{
   sort,
   onSortChange,
   defaultSort = { key: 'score', dir: 'desc' },
+  onToggleFavorite,
+  onToggleExclude,
 }) => {
+  const hasActions = !!onToggleFavorite || !!onToggleExclude;
   const { sortedRows, sortKey, sortDir, requestSort } = useSortableTable({
     rows,
     accessors: bestBuyAccessors,
@@ -148,7 +154,7 @@ export const BestBuysTable: React.FC<{
             onSort={requestSort}
             className="w-32"
           />
-          {fullCols && <th className="py-2 w-6" />}
+          {hasActions ? <th className="py-2 w-16" /> : fullCols && <th className="py-2 w-6" />}
         </tr>
       </thead>
       <tbody className="divide-y divide-neutral-100">
@@ -216,7 +222,21 @@ export const BestBuysTable: React.FC<{
             <td className="py-1.5">
               <ScoreBar score={r.score} />
             </td>
-            {fullCols && <td className="py-1.5 text-neutral-300">›</td>}
+            {hasActions ? (
+              <td className="py-1.5 text-right">
+                <div className="flex justify-end">
+                  <RowActions
+                    id={r.id}
+                    watchlist={r.watchlist}
+                    excluded={r.excluded}
+                    onToggleFavorite={onToggleFavorite}
+                    onToggleExclude={onToggleExclude}
+                  />
+                </div>
+              </td>
+            ) : (
+              fullCols && <td className="py-1.5 text-neutral-300">›</td>
+            )}
           </tr>
         ))}
       </tbody>

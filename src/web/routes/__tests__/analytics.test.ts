@@ -40,6 +40,8 @@ interface BestBuyRow {
   priceDrop: boolean;
   dropPct: number;
   rooms?: number;
+  watchlist?: boolean;
+  excluded?: boolean;
 }
 
 interface PriceDropRow {
@@ -212,6 +214,33 @@ describe('Analytics routes', () => {
           expect(prev.score).toBeGreaterThanOrEqual(cur.score);
         }
       }
+    });
+
+    it('rows carry watchlist/excluded state so the table can render row actions', async () => {
+      const now = new Date();
+      await prisma.listing.create({
+        data: {
+          id: 'star-1',
+          url: 'https://999.md/star-1',
+          title: 'Casă Centru',
+          priceEur: 100_000,
+          areaSqm: 100,
+          rooms: 3,
+          district: 'Centru',
+          yearBuilt: 2010,
+          active: true,
+          watchlist: true,
+          firstSeenAt: now,
+          lastSeenAt: now,
+          lastFetchedAt: now,
+        },
+      });
+
+      const res = await app.request('/api/analytics/best-buys');
+      const body = (await res.json()) as BestBuyRow[];
+      const row = body.find((r) => r.id === 'star-1');
+      expect(row?.watchlist).toBe(true);
+      expect(row?.excluded).toBe(false);
     });
 
     it('filters by district=Centru and rooms=3 — every row has matching district and rooms', async () => {

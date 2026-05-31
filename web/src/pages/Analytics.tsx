@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { KStat } from '@/components/ui/KStat.js';
@@ -364,6 +364,26 @@ const BestBuysPanel: React.FC<{
   rows: BestBuyRow[];
   railProps: Omit<RailProps, 'extraSlot'>;
 }> = ({ rows, railProps }) => {
+  const queryClient = useQueryClient();
+  const invalidateBestBuys = () =>
+    queryClient.invalidateQueries({ queryKey: ['analytics', 'best-buys'] });
+  const toggleFavorite = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: boolean }) =>
+      apiCall(`/listings/${id}/watchlist`, {
+        method: 'PUT',
+        body: JSON.stringify({ watchlist: next }),
+      }),
+    onSuccess: invalidateBestBuys,
+  });
+  const toggleExclude = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: boolean }) =>
+      apiCall(`/listings/${id}/excluded`, {
+        method: 'PUT',
+        body: JSON.stringify({ excluded: next }),
+      }),
+    onSuccess: invalidateBestBuys,
+  });
+
   const [columnSort, setColumnSort] = useState<{ key: string; dir: 'asc' | 'desc' }>(
     BEST_BUY_PRESETS.Score!,
   );
@@ -427,7 +447,14 @@ const BestBuysPanel: React.FC<{
               </div>
             }
           />
-          <BestBuysTable rows={rows} fullCols sort={columnSort} onSortChange={setColumnSort} />
+          <BestBuysTable
+            rows={rows}
+            fullCols
+            sort={columnSort}
+            onSortChange={setColumnSort}
+            onToggleFavorite={(id, next) => toggleFavorite.mutate({ id, next })}
+            onToggleExclude={(id, next) => toggleExclude.mutate({ id, next })}
+          />
         </Card>
       </div>
     </div>
