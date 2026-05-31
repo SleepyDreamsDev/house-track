@@ -347,6 +347,7 @@ export const Listings: React.FC = () => {
             hideMislabeled={hideMislabeled}
             setHideMislabeled={filters.setHideMislabeled}
             facets={facets}
+            onClearAll={filters.clearAll}
             searchPlaceholder="Title, district…"
           />
         </Card>

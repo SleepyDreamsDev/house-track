@@ -43,8 +43,8 @@ describe('Listings', () => {
     expect(await screen.findByText('Price (€)')).toBeInTheDocument();
     expect(screen.getByLabelText('Search listings')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Title, district…')).toBeInTheDocument();
-    // District appears once facets load (rail) and as a table column header.
-    expect(screen.getAllByText('District').length).toBeGreaterThan(0);
+    // Locality appears once facets load (rail) and as a table column header.
+    expect(screen.getAllByText('Locality').length).toBeGreaterThan(0);
   });
 
   it('renders the sort segmented control', async () => {

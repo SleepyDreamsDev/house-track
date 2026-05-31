@@ -291,6 +291,7 @@ export const GET_ADVERT_QUERY = `query GetAdvert($input: AdvertInput!) {
     body: feature(id: 13) { ...AdvertFeatureValue __typename }
     region: feature(id: 7) { ...AdvertFeatureValue __typename }
     city: feature(id: 8) { ...AdvertFeatureValue __typename }
+    zone: feature(id: 9) { ...AdvertFeatureValue __typename }
     street: feature(id: 10) { ...AdvertFeatureValue __typename }
     floors: feature(id: 249) { ...AdvertFeatureValue __typename }
     landArea: feature(id: 245) { ...AdvertFeatureValue __typename }

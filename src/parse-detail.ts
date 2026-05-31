@@ -21,6 +21,9 @@ interface RawAdvert {
   price?: { value?: { measurement?: string; unit?: string; value?: number } };
   body?: { value?: { ro?: string; ru?: string; translated?: string } };
   city?: { value?: { translated?: string } };
+  // zone is feature(id 9): the intra-city sub-district (the 9 Chișinău zones).
+  // FEATURE_OPTIONS — value.translated is the localized name. Often unset.
+  zone?: { value?: { translated?: string } };
   street?: { value?: string };
   images?: { value?: string[] };
   // mapPoint is feature(id 3); value shape confirmed from live traffic:
@@ -96,6 +99,7 @@ export function parseDetail(id: string, json: unknown): ParsedDetail {
     areaSqm: parseAreaFromTitle(title),
     landAre: featureNumber(advert.landArea),
     district: advert.city?.value?.translated ?? null,
+    zone: advert.zone?.value?.translated ?? null,
     street: advert.street?.value ?? null,
     floors: extractFloors(advert),
     yearBuilt: null,

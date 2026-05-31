@@ -47,7 +47,7 @@ describe('ListingsTable', () => {
     render(<ListingsTable rows={rows} />);
     for (const label of [
       'Title',
-      'District',
+      'Locality',
       'Price',
       '€/m²',
       'Area',

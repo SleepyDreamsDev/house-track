@@ -199,6 +199,7 @@ export const Analytics: React.FC = () => {
     showExcluded,
     setShowExcluded: filters.setShowExcluded,
     facets,
+    onClearAll: filters.clearAll,
   };
 
   return (

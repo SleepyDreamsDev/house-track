@@ -36,6 +36,7 @@ const detail = (id: string): ParsedDetail => ({
   areaSqm: 120,
   landAre: 600,
   district: 'Buiucani',
+  zone: null,
   street: 'Test',
   floors: 2,
   yearBuilt: 2010,

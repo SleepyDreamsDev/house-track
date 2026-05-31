@@ -83,3 +83,30 @@ describe('useBrowseFilters — session persistence', () => {
     expect(JSON.parse(raw!).rooms).toBe('3');
   });
 });
+
+describe('useBrowseFilters — clearAll', () => {
+  it('resets every filter to its default and persists the cleared snapshot', () => {
+    const { result } = renderHook(() => useBrowseFilters());
+    act(() => {
+      result.current.setQ('casa');
+      result.current.setMinPrice(50000);
+      result.current.setDistricts(['Centru']);
+      result.current.setType('Villa');
+      result.current.setRooms('3');
+      result.current.setFavoritesOnly(true);
+    });
+    act(() => result.current.clearAll());
+
+    const s = result.current.state;
+    expect(s.q).toBe('');
+    expect(s.minPrice).toBeNull();
+    expect(s.districts).toEqual([]);
+    expect(s.type).toBe('all');
+    expect(s.rooms).toBe('all');
+    expect(s.favoritesOnly).toBe(false);
+
+    const snap = JSON.parse(sessionStorage.getItem('house-track:browse-filters')!);
+    expect(snap.q).toBe('');
+    expect(snap.districts).toEqual([]);
+  });
+});
