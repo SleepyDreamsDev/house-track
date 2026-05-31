@@ -4,30 +4,23 @@ import { searchListings, getListing, getPriceHistory } from '../../mcp/queries.j
 import { Persistence } from '../../persist.js';
 import { deriveType } from '../../lib/listing-type.js';
 import { classifyListing, isMunicipalityLocality } from '../../lib/listing-classification.js';
+import { optFloat, optInt } from '../params.js';
 
 export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   app.get('/api/listings', async (c) => {
-    const limit = parseInt(c.req.query('limit') || '50');
-    const offsetRaw = c.req.query('offset');
-    const offset = offsetRaw ? Math.max(0, parseInt(offsetRaw)) : undefined;
-    const minPrice = c.req.query('minPrice') ? parseInt(c.req.query('minPrice')!) : undefined;
-    const maxPrice = c.req.query('maxPrice') ? parseInt(c.req.query('maxPrice')!) : undefined;
-    const minRooms = c.req.query('minRooms') ? parseInt(c.req.query('minRooms')!) : undefined;
-    const maxRooms = c.req.query('maxRooms') ? parseInt(c.req.query('maxRooms')!) : undefined;
-    const minAreaSqm = c.req.query('minAreaSqm')
-      ? parseFloat(c.req.query('minAreaSqm')!)
-      : undefined;
-    const maxAreaSqm = c.req.query('maxAreaSqm')
-      ? parseFloat(c.req.query('maxAreaSqm')!)
-      : undefined;
-    const minLandAre = c.req.query('minLandAre')
-      ? parseFloat(c.req.query('minLandAre')!)
-      : undefined;
-    const maxLandAre = c.req.query('maxLandAre')
-      ? parseFloat(c.req.query('maxLandAre')!)
-      : undefined;
-    const minFloors = c.req.query('minFloors') ? parseInt(c.req.query('minFloors')!) : undefined;
-    const maxFloors = c.req.query('maxFloors') ? parseInt(c.req.query('maxFloors')!) : undefined;
+    const limit = optInt(c.req.query('limit')) ?? 50;
+    const offsetParsed = optInt(c.req.query('offset'));
+    const offset = offsetParsed !== undefined ? Math.max(0, offsetParsed) : undefined;
+    const minPrice = optInt(c.req.query('minPrice'));
+    const maxPrice = optInt(c.req.query('maxPrice'));
+    const minRooms = optInt(c.req.query('minRooms'));
+    const maxRooms = optInt(c.req.query('maxRooms'));
+    const minAreaSqm = optFloat(c.req.query('minAreaSqm'));
+    const maxAreaSqm = optFloat(c.req.query('maxAreaSqm'));
+    const minLandAre = optFloat(c.req.query('minLandAre'));
+    const maxLandAre = optFloat(c.req.query('maxLandAre'));
+    const minFloors = optInt(c.req.query('minFloors'));
+    const maxFloors = optInt(c.req.query('maxFloors'));
     // Accept `?district=A,B` and `?district=A&district=B`. Reject the
     // present-but-empty shape (`?district=`, `?district=,,,`, `?district=%20`)
     // with 400 — otherwise it silently widens to "all districts" and masks
