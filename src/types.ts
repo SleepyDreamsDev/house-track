@@ -10,6 +10,9 @@ export interface ListingStub {
   priceRaw: string | null;
   areaSqm: number | null;
   postedAt: Date | null;
+  // Image filenames (feature 14) — already present in every SearchAds index
+  // response, so capturing them at index time costs no extra request.
+  imageUrls: string[];
 }
 
 // One filter triple observed on a listing detail. Mirrors ListingFilterValue

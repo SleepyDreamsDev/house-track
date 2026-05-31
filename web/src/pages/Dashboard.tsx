@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge.js';
 import { KStat } from '@/components/ui/KStat.js';
 import { Sparkline } from '@/components/ui/Sparkline.js';
 import { StatusDot } from '@/components/ui/StatusDot.js';
-import { PhotoPlaceholder } from '@/components/ui/PhotoPlaceholder.js';
+import { ListingThumb } from '@/components/ui/ListingThumb.js';
 import { PageHeader, SectionHeader } from '@/components/ui/PageHeader.js';
 import { apiCall } from '@/lib/api.js';
 import { fmt } from '@/lib/format.js';
@@ -28,6 +28,7 @@ interface Listing {
   flags?: string[];
   isNew?: boolean;
   priceDrop?: boolean;
+  primaryImage?: string | null;
 }
 interface DistrictRow {
   name: string;
@@ -277,7 +278,13 @@ const LeadRow: React.FC<{ listing: Listing; kind: 'new' | 'drop' }> = ({ listing
       rel="noopener noreferrer"
       className="group flex items-center gap-4 rounded-sm bg-white p-3 border border-neutral-200 hover:border-neutral-400 transition-colors"
     >
-      <PhotoPlaceholder id={l.id} className="h-16 w-24 shrink-0" label="999.md" />
+      <ListingThumb
+        id={l.id}
+        src={l.primaryImage}
+        className="h-16 w-24 shrink-0"
+        label="999.md"
+        alt={l.title}
+      />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           {kind === 'new' && <Badge variant="default">NEW · {fmt.rel(l.firstSeenAt)}</Badge>}

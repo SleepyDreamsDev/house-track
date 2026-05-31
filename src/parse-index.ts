@@ -14,6 +14,7 @@ interface RawAd {
   id: string;
   title: string;
   price?: { value?: { measurement?: string; unit?: string; value?: number } };
+  images?: { value?: string[] };
 }
 
 interface SearchAdsResponse {
@@ -40,6 +41,7 @@ function toStub(ad: RawAd): ListingStub {
     priceRaw,
     areaSqm: parseAreaFromTitle(ad.title),
     postedAt: null,
+    imageUrls: ad.images?.value ?? [],
   };
 }
 

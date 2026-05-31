@@ -93,6 +93,22 @@ describe('parseIndex', () => {
     expect(stubs[0]?.priceRaw).toBe('7500000 MDL');
   });
 
+  it('Captures the image filename array from each ad (free — already in the payload)', async () => {
+    const json = (await loadSearchAds()) as {
+      data: { searchAds: { ads: { images?: { value?: string[] } }[] } };
+    };
+    const stubs = parseIndex(json);
+    expect(stubs[0]?.imageUrls).toEqual(json.data.searchAds.ads[0]?.images?.value);
+    expect(stubs[0]?.imageUrls[0]).toBe('5e4fb07cefeaf4a77106ba424637bfde.jpg');
+  });
+
+  it('Returns [] imageUrls when an ad carries no images', () => {
+    const json = {
+      data: { searchAds: { ads: [{ id: '999', title: 'Casă', price: {} }], count: 1 } },
+    };
+    expect(parseIndex(json)[0]?.imageUrls).toEqual([]);
+  });
+
   it('Returns an empty array when the response has no ads', () => {
     const json = { data: { searchAds: { ads: [], count: 0 } } };
 

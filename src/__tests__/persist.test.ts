@@ -44,6 +44,7 @@ const stub = (id: string, overrides: Partial<ListingStub> = {}): ListingStub => 
   priceRaw: '€100000',
   areaSqm: 120,
   postedAt: null,
+  imageUrls: [],
   ...overrides,
 });
 
@@ -105,6 +106,29 @@ describe('Persistence', () => {
     const row = await prisma.listing.findUniqueOrThrow({ where: { id: 'X' } });
     expect(Date.now() - row.lastSeenAt.getTime()).toBeLessThan(1_000);
     expect(row.active).toBe(true);
+  });
+
+  it('markSeen fills imageUrls from the index payload (free thumbnail capture)', async () => {
+    await seedListing('IMG', {});
+    await persist.markSeen([stub('IMG', { imageUrls: ['a.jpg', 'b.jpg'] })]);
+    const row = await prisma.listing.findUniqueOrThrow({ where: { id: 'IMG' } });
+    expect(row.imageUrls).toEqual(['a.jpg', 'b.jpg']);
+  });
+
+  it('markSeen leaves imageUrls untouched when the index ad carries no images', async () => {
+    await prisma.listing.create({
+      data: {
+        id: 'KEEP',
+        url: 'https://999.md/ro/KEEP',
+        title: 'Title KEEP',
+        lastSeenAt: new Date(),
+        lastFetchedAt: new Date(),
+        imageUrls: ['old.jpg'],
+      },
+    });
+    await persist.markSeen([stub('KEEP', { imageUrls: [] })]);
+    const row = await prisma.listing.findUniqueOrThrow({ where: { id: 'KEEP' } });
+    expect(row.imageUrls).toEqual(['old.jpg']);
   });
 
   it('markInactiveOlderThan flips listings whose lastSeenAt is older than the cutoff', async () => {
