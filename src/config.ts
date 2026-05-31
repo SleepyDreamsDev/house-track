@@ -33,14 +33,21 @@ export const FILTER = {
   // Listing URL base — append /<id> for detail pages.
   listingBaseUrl: 'https://999.md/ro',
 
-  // GraphQL search input for SearchAds operation.
+  // NOT the live search filter — that comes from the Setting('filter.generic')
+  // row resolved through sources/999md.ts (see src/types/filter.ts
+  // defaultGenericFilter for the operator default). This block has two narrow
+  // jobs: (1) the resolve() fallback when the active source is missing, and
+  // (2) seeding the featureId→filterId persistence LUT (parse-taxonomy
+  // bootstrapLutFromConfig). Region therefore stays on feature 7 (Regiune) —
+  // that is the geo feature listings actually carry; feature 8 (Localitate) is
+  // a search-only refinement and lives in defaultGenericFilter, not here.
   searchInput: {
     subCategoryId: 1406,
     source: 'AD_SOURCE_DESKTOP_REDESIGN' as const,
     filters: [
       // Sale listings only ("Vând").
       { filterId: 16, features: [{ featureId: 1, optionIds: [776] }] },
-      // Chișinău municipality (includes Durlești, Codru, Colonița, etc.).
+      // Chișinău municipality (region anchor — feature 7, the value listings carry).
       { filterId: 32, features: [{ featureId: 7, optionIds: [12900] }] },
       // Price cap — source-side, EUR, max 250k.
       { filterId: 9441, features: [{ featureId: 2, unit: 'UNIT_EUR', range: { max: '250000' } }] },
@@ -49,7 +56,7 @@ export const FILTER = {
 
   // Listings per GraphQL page. 78 matches the browser default; keep it.
   pageSize: 78,
-  maxPagesPerSweep: 50, // 50 * 78 = 3900 — covers the full 3302 count with headroom
+  maxPagesPerSweep: 50, // 50 * 78 = 3900 — full headroom over the ~482 matched set
 } as const;
 
 export const POLITENESS = {
@@ -106,7 +113,10 @@ export const SWEEP = {
   // Variable sweep size: each tick targets a random draw from
   // [mean - jitter, mean + jitter] listings; pagination stops once
   // accumulated listings cross the draw. Set jitter to 0 to disable.
-  targetListingsPerSweep: 400,
+  // Mean must exceed the matched set (~482 for the current filter) by more than
+  // the jitter, else a low draw truncates pagination and starves the long tail.
+  // 700 − 130 = 570 ≥ 482, with headroom for catalog growth.
+  targetListingsPerSweep: 700,
   targetListingsJitter: 130,
   // Cron-fire jitter: the actual tick is deferred by setTimeout(random(0, N))
   // after the cron expression fires. Defangs pattern-detection on fixed

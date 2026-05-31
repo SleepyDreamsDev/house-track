@@ -1747,7 +1747,253 @@
               "seoAlias": null,
               "presentInDynamicFilters": true,
               "__typename": "Feature",
-              "options": []
+              "options": [
+                {
+                  "id": 12919,
+                  "title": {
+                    "translated": "Гидигич",
+                    "original": "Ghidighici"
+                  }
+                },
+                {
+                  "id": 12926,
+                  "title": {
+                    "translated": "Ставчены",
+                    "original": "Stăuceni"
+                  }
+                },
+                {
+                  "id": 12934,
+                  "title": {
+                    "translated": "Ватра",
+                    "original": "Vatra"
+                  }
+                },
+                {
+                  "id": 12952,
+                  "title": {
+                    "translated": "Трушены",
+                    "original": "Trușeni"
+                  }
+                },
+                {
+                  "id": 12978,
+                  "title": {
+                    "translated": "Гульбоака",
+                    "original": "Hulboaca"
+                  }
+                },
+                {
+                  "id": 13017,
+                  "title": {
+                    "translated": "Кондрица",
+                    "original": "Condrița"
+                  }
+                },
+                {
+                  "id": 13826,
+                  "title": {
+                    "translated": "Добружа",
+                    "original": "Dobrogea"
+                  }
+                },
+                {
+                  "id": 13859,
+                  "title": {
+                    "translated": "Кишинёв",
+                    "original": "Chișinău"
+                  }
+                },
+                {
+                  "id": 13915,
+                  "title": {
+                    "translated": "Колоница",
+                    "original": "Colonița"
+                  }
+                },
+                {
+                  "id": 13917,
+                  "title": {
+                    "translated": "Дурлешты",
+                    "original": "Durlești"
+                  }
+                },
+                {
+                  "id": 13925,
+                  "title": {
+                    "translated": "Тогатин",
+                    "original": "Tohatin"
+                  }
+                },
+                {
+                  "id": 13930,
+                  "title": {
+                    "translated": "Страйстены",
+                    "original": "Străisteni"
+                  }
+                },
+                {
+                  "id": 13931,
+                  "title": {
+                    "translated": "Ревака",
+                    "original": "Revaca"
+                  }
+                },
+                {
+                  "id": 13933,
+                  "title": {
+                    "translated": "Думбрава",
+                    "original": "Dumbrava"
+                  }
+                },
+                {
+                  "id": 13938,
+                  "title": {
+                    "translated": "Браила",
+                    "original": "Brăila"
+                  }
+                },
+                {
+                  "id": 13942,
+                  "title": {
+                    "translated": "Кодру",
+                    "original": "Codru"
+                  }
+                },
+                {
+                  "id": 13945,
+                  "title": {
+                    "translated": "Хумулешть",
+                    "original": "Humulești"
+                  }
+                },
+                {
+                  "id": 13980,
+                  "title": {
+                    "translated": "Будешты",
+                    "original": "Budești"
+                  }
+                },
+                {
+                  "id": 14000,
+                  "title": {
+                    "translated": "Новые Гояны",
+                    "original": "Goianul Nou"
+                  }
+                },
+                {
+                  "id": 14010,
+                  "title": {
+                    "translated": "Гратиешты",
+                    "original": "Grătiești"
+                  }
+                },
+                {
+                  "id": 14011,
+                  "title": {
+                    "translated": "Крузешты",
+                    "original": "Cruzești"
+                  }
+                },
+                {
+                  "id": 14031,
+                  "title": {
+                    "translated": "Криково",
+                    "original": "Cricova"
+                  }
+                },
+                {
+                  "id": 14032,
+                  "title": {
+                    "translated": "Фаурешты",
+                    "original": "Făurești"
+                  }
+                },
+                {
+                  "id": 14033,
+                  "title": {
+                    "translated": "Гоян",
+                    "original": "Goian"
+                  }
+                },
+                {
+                  "id": 14034,
+                  "title": {
+                    "translated": "Вэдулень",
+                    "original": "Văduleni"
+                  }
+                },
+                {
+                  "id": 14061,
+                  "title": {
+                    "translated": "Чореску",
+                    "original": "Ciorescu"
+                  }
+                },
+                {
+                  "id": 14062,
+                  "title": {
+                    "translated": "Вадул-луй-Водэ",
+                    "original": "Vadul lui Vodă"
+                  }
+                },
+                {
+                  "id": 14185,
+                  "title": {
+                    "translated": "Бунец",
+                    "original": "Buneți"
+                  }
+                },
+                {
+                  "id": 14222,
+                  "title": {
+                    "translated": "Келтуитор",
+                    "original": "Cheltuitori"
+                  }
+                },
+                {
+                  "id": 14256,
+                  "title": {
+                    "translated": "Чероборта",
+                    "original": "Ceroborta"
+                  }
+                },
+                {
+                  "id": 14398,
+                  "title": {
+                    "translated": "Сынжера",
+                    "original": "Sîngera"
+                  }
+                },
+                {
+                  "id": 14400,
+                  "title": {
+                    "translated": "Фрумушика",
+                    "original": "Frumușica"
+                  }
+                },
+                {
+                  "id": 14401,
+                  "title": {
+                    "translated": "Бачой",
+                    "original": "Bacioi"
+                  }
+                },
+                {
+                  "id": 14402,
+                  "title": {
+                    "translated": "Бубуечь",
+                    "original": "Bubuieci"
+                  }
+                },
+                {
+                  "id": 14403,
+                  "title": {
+                    "translated": "Бык",
+                    "original": "Bîc"
+                  }
+                }
+              ]
             },
             {
               "id": 9,
@@ -1774,7 +2020,11 @@
             "__typename": "I18NTr"
           },
           "collapsed": true,
-          "units": ["UNIT_EUR", "UNIT_USD", "UNIT_MDL"],
+          "units": [
+            "UNIT_EUR",
+            "UNIT_USD",
+            "UNIT_MDL"
+          ],
           "hasSearch": false,
           "onlyFixedPrice": false,
           "__typename": "Filter",
@@ -1931,7 +2181,9 @@
             "__typename": "I18NTr"
           },
           "collapsed": false,
-          "units": ["UNIT_METER_SQUARE"],
+          "units": [
+            "UNIT_METER_SQUARE"
+          ],
           "hasSearch": false,
           "onlyFixedPrice": false,
           "__typename": "Filter",
@@ -2296,7 +2548,10 @@
             "__typename": "I18NTr"
           },
           "collapsed": false,
-          "units": ["UNIT_ARE", "UNIT_HECTARE"],
+          "units": [
+            "UNIT_ARE",
+            "UNIT_HECTARE"
+          ],
           "hasSearch": false,
           "onlyFixedPrice": false,
           "__typename": "Filter",
@@ -2682,7 +2937,9 @@
             "__typename": "I18NTr"
           },
           "collapsed": false,
-          "units": ["UNIT_METER_SQUARE"],
+          "units": [
+            "UNIT_METER_SQUARE"
+          ],
           "hasSearch": false,
           "onlyFixedPrice": false,
           "__typename": "Filter",
@@ -5244,7 +5501,9 @@
             "__typename": "I18NTr"
           },
           "collapsed": false,
-          "units": ["UNIT_METER_SQUARE"],
+          "units": [
+            "UNIT_METER_SQUARE"
+          ],
           "hasSearch": false,
           "onlyFixedPrice": false,
           "__typename": "Filter",
@@ -5274,7 +5533,9 @@
             "__typename": "I18NTr"
           },
           "collapsed": false,
-          "units": ["UNIT_CENTIMETER"],
+          "units": [
+            "UNIT_CENTIMETER"
+          ],
           "hasSearch": false,
           "onlyFixedPrice": false,
           "__typename": "Filter",
@@ -5874,7 +6135,9 @@
             "__typename": "I18NTr"
           },
           "collapsed": false,
-          "units": ["UNIT_METER_SQUARE"],
+          "units": [
+            "UNIT_METER_SQUARE"
+          ],
           "hasSearch": false,
           "onlyFixedPrice": false,
           "__typename": "Filter",

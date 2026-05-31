@@ -24,6 +24,21 @@ describe('999md source adapter', () => {
     expect(resolved.searchInput.subCategoryId).toBe(1406);
   });
 
+  // Regression guards for the 240→482 under-count fix (the stale filter used
+  // feature 7 Regiune + living-area 1194/239; correct is feature 8 Localitate
+  // + total-area 1073/244). See memory project_filter_undercount_240_vs_482.
+  it('default region uses feature 8 (Localitate) with the Chișinău localities', () => {
+    const region = defaultGenericFilter.filters.find((f) => f.filterId === 32);
+    expect(region?.featureId).toBe(8);
+    expect(region?.kind === 'options' && region.optionIds).toContain(13859);
+  });
+
+  it('default area uses total area (1073/244), never living area (1194/239)', () => {
+    const filterIds = defaultGenericFilter.filters.map((f) => f.filterId);
+    expect(filterIds).toContain(1073);
+    expect(filterIds).not.toContain(1194);
+  });
+
   it('source is AD_SOURCE_DESKTOP_REDESIGN', () => {
     const resolved = source999md.resolve(defaultGenericFilter);
     expect(resolved.searchInput.source).toBe('AD_SOURCE_DESKTOP_REDESIGN');

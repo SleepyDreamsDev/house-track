@@ -70,11 +70,20 @@ export const genericFilterSchema = z.object({
   filters: z.array(filterSelectionSchema).min(1),
 });
 
+// Production default — kept in sync with src/config.ts FILTER.searchInput.
+// Region is feature 8 (Localitate: Chișinău + Durlești + Codru), NOT feature 7
+// (Regiune), and area is filter 1073/feature 244 (Suprafață totală), NOT
+// 1194/239 (Suprafață locuibilă). The old feature-7 + living-area encoding
+// matched only 240 of 482 houses; see memory project_filter_undercount_240_vs_482.
 export const defaultGenericFilter: GenericFilter = {
   category: 'house',
   filters: [
     { kind: 'options', filterId: 16, featureId: 1, optionIds: [776] },
-    { kind: 'options', filterId: 32, featureId: 7, optionIds: [12900] },
+    { kind: 'options', filterId: 32, featureId: 8, optionIds: [13859, 13917, 13942] },
+    { kind: 'range', filterId: 1073, featureId: 244, unit: 'UNIT_METER_SQUARE', min: '90' },
+    { kind: 'options', filterId: 4101, featureId: 1311, optionIds: [23321] },
+    { kind: 'options', filterId: 5078, featureId: 1623, optionIds: [27759] },
+    { kind: 'options', filterId: 5079, featureId: 1624, optionIds: [27761] },
     { kind: 'range', filterId: 9441, featureId: 2, unit: 'UNIT_EUR', max: '250000' },
   ],
 };
