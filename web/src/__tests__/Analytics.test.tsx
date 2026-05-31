@@ -116,6 +116,9 @@ describe('Analytics', () => {
     await user.click(bestBuysTab);
 
     expect(router.state.location.pathname).toBe('/analytics');
+    // Tab is URL-synced so a round-trip (open a listing, browser-back) returns
+    // to the same tab.
+    expect(router.state.location.search).toContain('tab=best-buys');
     expect(screen.getByRole('tab', { name: /Best buys/i })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -126,6 +129,33 @@ describe('Analytics', () => {
     );
     expect(screen.getByRole('tabpanel', { name: /Best buys/i })).toBeInTheDocument();
     expect(screen.queryByRole('tabpanel', { name: /Overview/i })).toBeNull();
+  });
+
+  it('Deep-link ?tab=best-buys opens the Best buys tab directly', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockResolvedValue(emptyOverview);
+
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [{ path: 'analytics', element: <Analytics /> }],
+        },
+      ],
+      { initialEntries: ['/analytics?tab=best-buys'] },
+    );
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('tabpanel', { name: /Best buys/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Best buys/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('Page tolerates pending queries without crashing', async () => {

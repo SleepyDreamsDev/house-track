@@ -146,5 +146,15 @@ describe('BestBuysTable (sortable)', () => {
     render(<BestBuysTable rows={rows} fullCols />);
     expect(screen.queryByRole('button', { name: 'Add favorite' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Exclude' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'View in Listings' })).toBeNull();
+  });
+
+  it('View in Listings invokes onOpenListing with the row id', async () => {
+    const onOpenListing = vi.fn();
+    render(
+      <BestBuysTable rows={[{ ...rows[0]!, id: 'a' }]} fullCols onOpenListing={onOpenListing} />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View in Listings' }));
+    expect(onOpenListing).toHaveBeenCalledWith('a');
   });
 });
