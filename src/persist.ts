@@ -81,6 +81,21 @@ export class Persistence {
       where: { id: { in: stubs.map((s) => s.id) } },
       data: { lastSeenAt: new Date(), active: true, delistedAt: null, delistReason: null },
     });
+
+    // Refresh image filenames from the index payload — they ride along in every
+    // SearchAds response (feature 14), so this fills the primary-thumbnail gap
+    // for listings we don't detail-fetch this sweep at zero extra request cost.
+    // Per-row values → one unnest UPDATE instead of N round trips.
+    const withImages = stubs.filter((s) => s.imageUrls.length > 0);
+    if (withImages.length > 0) {
+      const ids = withImages.map((s) => s.id);
+      const jsons = withImages.map((s) => JSON.stringify(s.imageUrls));
+      await this.prisma.$executeRaw`
+        UPDATE "Listing" AS l
+        SET "imageUrls" = data.imgs::jsonb
+        FROM (SELECT * FROM unnest(${ids}::text[], ${jsons}::text[]) AS t(id, imgs)) AS data
+        WHERE l.id = data.id`;
+    }
   }
 
   /**

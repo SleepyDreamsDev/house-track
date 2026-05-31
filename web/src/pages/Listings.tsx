@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
 import { Badge } from '@/components/ui/Badge.js';
-import { PhotoPlaceholder } from '@/components/ui/PhotoPlaceholder.js';
+import { ListingThumb } from '@/components/ui/ListingThumb.js';
 import { PageHeader } from '@/components/ui/PageHeader.js';
 import { ListingsTable } from '@/components/listings/ListingsTable.js';
 import { PriceHistoryPanel } from '@/components/listings/PriceHistoryPanel.js';
@@ -38,6 +38,7 @@ interface Listing {
   typeMismatch?: boolean;
   regionMismatch?: boolean;
   mismatchReasons?: string[];
+  primaryImage?: string | null;
 }
 
 const PAGE_SIZE = 50;
@@ -457,7 +458,13 @@ const ListingCard: React.FC<ListingCardProps> = ({ l, selected, autoScroll, onSe
           : 'border-neutral-200 hover:border-neutral-400'
       }`}
     >
-      <PhotoPlaceholder id={l.id} className="h-[88px]" label={`#${String(l.id).slice(-4)}`} />
+      <ListingThumb
+        id={l.id}
+        src={l.primaryImage}
+        className="h-[88px] w-full"
+        label={`#${String(l.id).slice(-4)}`}
+        alt={l.title}
+      />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 mb-1">
           {l.isNew && <Badge variant="default">NEW</Badge>}

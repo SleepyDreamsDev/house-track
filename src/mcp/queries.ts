@@ -10,6 +10,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { classifyListing, type DerivedType } from '../lib/listing-classification.js';
 import { deriveType } from '../lib/listing-type.js';
+import { primaryThumb } from '../lib/image-url.js';
 import { getFeatureLabel, getFilterLabel, getOptionLabel } from '../taxonomy-labels.js';
 
 export interface FilterGroup {
@@ -90,6 +91,9 @@ export interface SearchListingsRow {
   typeMismatch: boolean;
   regionMismatch: boolean;
   mismatchReasons: string[];
+  // Full CDN thumbnail URL for the first photo, or null when the listing has
+  // no captured images.
+  primaryImage: string | null;
 }
 
 export interface FilterValueRow {
@@ -352,6 +356,7 @@ export async function searchListings(
         typeMismatch: cls.typeMismatch,
         regionMismatch: cls.regionMismatch,
         mismatchReasons: cls.reasons,
+        primaryImage: primaryThumb(r.imageUrls),
       };
     }),
     total,

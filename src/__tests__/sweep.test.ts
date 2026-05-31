@@ -23,6 +23,7 @@ const stub = (id: string): ListingStub => ({
   priceRaw: '100000 EUR',
   areaSqm: 120,
   postedAt: null,
+  imageUrls: [],
 });
 
 const detail = (id: string): ParsedDetail => ({
