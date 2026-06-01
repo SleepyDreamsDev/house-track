@@ -59,6 +59,16 @@ Gate after first live smoke passes; runs over the following 7 days.
 - [ ] Phase 5: makler.md + lara.md sources, cross-source dedup.
 - [ ] Phase 6: Capacitor wrap + Web Push.
 - [ ] Phase 7: Telegram channel ingestion, vision LLM, sold-price calibration.
+- [ ] **Map on Listings page.** Plot listings on an interactive map (markers ↔
+      table rows). Backend geo plumbing already exists: `Listing.lat`/`lon`
+      (migration `20260524130000_add_dedup_identity_geo`), captured via
+      `graphql.ts:298 mapPoint` → `parse-detail.ts extractGeo()` →
+      `persist.ts`. Remaining work: (1) expose `lat`/`lon` in
+      `src/web/routes/listings.feed.ts`; (2) add a map lib to `web/`
+      (`react-leaflet` + `leaflet`, free OSM tiles — none installed today);
+      (3) map component on `web/src/pages/Listings.tsx`. Data dependency:
+      `lat`/`lon` are null until a live capture runs (defensive parse → some
+      listings stay null). ~half a day of frontend + a trivial feed change.
 
 ---
 
