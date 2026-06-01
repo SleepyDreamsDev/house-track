@@ -33,6 +33,7 @@
     "capture-session": "tsx scripts/capture-session.ts",
     "capture-filters": "node --env-file=.env.local --import tsx scripts/capture-filter-serialization.ts",
     "verify-robots": "tsx scripts/verify-robots.ts",
+    "spec:gate": "tsx scripts/spec-gate.ts",
     "setup:mcp": "tsx scripts/setup-mcp.ts",
     "smoke": "tsx scripts/smoke.ts",
     "backfill:filters": "tsx scripts/backfill-filter-ids.ts",
