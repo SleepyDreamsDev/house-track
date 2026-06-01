@@ -1,2 +1,3 @@
+pnpm exec tsx scripts/spec-gate.ts
 pnpm typecheck
 pnpm test

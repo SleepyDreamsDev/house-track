@@ -46,8 +46,18 @@ criteria: [`docs/poc-spec.md`](./docs/poc-spec.md). Read before editing `src/`.
 - Tests: integration > unit > edge cases. Fixtures in `src/__tests__/fixtures/*.html`.
   Mock `undici` via `MockAgent` — never hit 999.md. Postgres via testcontainers per test file.
   Coverage target 70%.
-- Gherkin specs in `specs/*.feature`, one per feature/PR. Each `Scenario:`
-  maps to one `it()`.
+- **Specs are canonical and live, not per-PR.** `specs/SPEC-<subsystem>.{md,feature}`
+  are the source of intent — **edit them in place** in the same commit as the code
+  they describe (supersedes the framework-generic "one `.feature` per PR" in
+  `tdd-workflow.md`; dated `specs/*.feature` files are kept as history only).
+  Each `Scenario:` maps to one `it()`. Keep _contract_ facts (signatures, route
+  verbs, default values, JSON shapes) in executable tests
+  (`src/__tests__/spec-reconciliation.test.ts`), not prose — prose carries
+  architecture, data flow, and the _why_.
+- **Code↔spec co-change gate** (`scripts/spec-gate.ts`, run by `.husky/pre-push`):
+  changing a subsystem's source without touching its `SPEC-<subsystem>` blocks the
+  push. Genuine no-op refactor → add `[skip-spec]` to a commit message. Path map +
+  matcher in `scripts/lib/spec-gate.ts`; `pnpm spec:gate` runs it by hand.
 
 ## Rules
 
