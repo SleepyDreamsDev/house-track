@@ -708,3 +708,11 @@ Feature: Sweep Orchestration & Crawl Pipeline
     Then:
       - log.error({event: "sweep.unhandled", err}) is emitted
       - tick() returns; the next cron tick still fires
+
+  # The API listen host is env-driven so the same entrypoint works for the
+  # host-local path (loopback) and the container (published-port reachable).
+  Scenario: API bind host is configurable via HOST env
+    Given the crawler boots its Hono API server (index.ts bootstrap)
+    When HOST is set in the environment
+    Then the server binds that host
+    And when HOST is unset it defaults to 127.0.0.1

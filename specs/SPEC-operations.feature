@@ -812,3 +812,18 @@ Feature: Operations: Politeness, Capture-Session, Deployment
     When the operator clicks "Edit overrides"
     Then a JSON editor opens with politeness + filter override fields
     And changes are saved per-source (not global)
+
+  # ── Durable single-container deployment ──
+  Scenario: One container serves both the API and the operator UI
+    Given the runtime image bundles web/dist built from the web SPA
+    And the crawler container runs with restart: unless-stopped
+    When the operator opens http://127.0.0.1:3000
+    Then the SPA loads and its /api calls hit the same origin
+    And no separate web host process is required
+
+  Scenario: Containerised API binds all interfaces so the published port is reachable
+    Given the API listens inside the container
+    When HOST=0.0.0.0 is set in the container environment
+    Then the in-container listener binds 0.0.0.0:3000
+    And the loopback-only published mapping 127.0.0.1:3000:3000 reaches it
+    And host exposure stays limited to 127.0.0.1

@@ -36,6 +36,9 @@ services:
       - NODE_ENV=production
       - TZ=Europe/Chisinau
       - DATABASE_URL=postgresql://house_track:${POSTGRES_PASSWORD}@postgres:5432/house_track
+      # Bind the in-container API to all interfaces so the loopback-only
+      # published port (below) can reach it. Host exposure stays 127.0.0.1.
+      - HOST=0.0.0.0
     ports:
       - '127.0.0.1:3000:3000'
     logging:

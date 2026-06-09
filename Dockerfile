@@ -22,6 +22,19 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN pnpm build
 
+# ---------- web build ----------
+# Build the operator SPA so the runtime image can serve it from the same
+# origin as the API (one durable container, no separate web host process).
+FROM node:${NODE_VERSION}-bookworm-slim AS webbuild
+ARG PNPM_VERSION
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+WORKDIR /app/web
+COPY web/package.json web/pnpm-lock.yaml* ./
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile=false
+COPY web/ ./
+RUN pnpm build
+
 # ---------- runtime ----------
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends tini ca-certificates \
@@ -34,6 +47,7 @@ ENV NODE_ENV=production \
 COPY --from=deps  --chown=node:node /app/node_modules ./node_modules
 COPY --from=deps  --chown=node:node /app/prisma       ./prisma
 COPY --from=build --chown=node:node /app/dist         ./dist
+COPY --from=webbuild --chown=node:node /app/web/dist  ./web/dist
 COPY --chown=node:node package.json pnpm-lock.yaml* ./
 
 USER node

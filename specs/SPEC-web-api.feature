@@ -670,3 +670,27 @@ Feature: Operator Web API (Hono)
     Then response status is 200 for both requests
     And the final value in Postgres is either value1 or value2 (no corruption)
 
+
+  # ── Static SPA hosting (single durable origin) ──
+  Scenario: API server serves the built operator SPA from WEB_ROOT
+    Given the operator SPA is built into web/dist
+    When I send GET / 
+    Then response status is 200
+    And the body is the SPA index.html
+
+  Scenario: Unknown non-API path falls back to index.html for client-side routing
+    When I send GET /listings/123
+    Then response status is 200
+    And the body is the SPA index.html (SPA router handles the path)
+
+  Scenario: Static hosting never shadows the API namespace
+    When I send GET /api/does-not-exist
+    Then response status is 404
+    And response.error is 'not_found'
+    And index.html is NOT returned for /api/* paths
+
+  Scenario: Missing build degrades gracefully
+    Given web/dist/index.html does not exist
+    When I send GET /
+    Then response status is 503
+    And the body is 'operator UI not built'

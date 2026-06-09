@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { getPrisma } from '../db.js';
 import { registerSweepsRoutes } from './routes/sweeps.js';
 import { registerListingsRoutes } from './routes/listings.js';
@@ -43,6 +45,23 @@ export function createApiApp(): Hono {
   // Health check endpoint
   app.get('/api/health', (c) => {
     return c.json({ status: 'ok' });
+  });
+
+  // Serve the built operator SPA from the same origin as the API so a single
+  // durable container serves both — no separate web host process. Registered
+  // AFTER /api/* so API routes always win the match; real asset files
+  // (index.html, /assets/*) are served from WEB_ROOT, and any other non-/api
+  // path falls back to index.html for client-side routing. WEB_ROOT is
+  // relative to cwd (`/app` in the container → `/app/web/dist`).
+  const webRoot = process.env['WEB_ROOT'] ?? 'web/dist';
+  app.use('/*', serveStatic({ root: webRoot }));
+  app.get('/*', (c) => {
+    if (c.req.path.startsWith('/api')) return c.json({ error: 'not_found' }, 404);
+    try {
+      return c.html(readFileSync(`${webRoot}/index.html`, 'utf8'));
+    } catch {
+      return c.text('operator UI not built', 503);
+    }
   });
 
   return app;

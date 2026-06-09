@@ -167,7 +167,9 @@ function bootstrap(): void {
 
   const app = createApiApp();
   const port = 3000;
-  const host = '127.0.0.1';
+  // Default to loopback for the standalone/host path; containers set HOST=0.0.0.0
+  // so the (loopback-only) published port can reach the in-container listener.
+  const host = process.env['HOST'] ?? '127.0.0.1';
 
   serve(
     {
