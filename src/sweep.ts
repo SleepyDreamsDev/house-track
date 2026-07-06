@@ -90,6 +90,7 @@ export interface SweepDeps {
     | 'finishSweep'
     | 'findUnenrichedListings'
     | 'findStaleListings'
+    | 'recomputeClusters'
     | 'snapshotConfig'
     | 'recordSweepProgress'
   >;
@@ -177,6 +178,15 @@ export async function runSweep(deps: SweepDeps, initialSweepId?: number): Promis
     // aging them out would corrupt the active set.
     if (result.status === 'ok') {
       await deps.persist.markInactiveOlderThan(deps.missingThresholdMs);
+      // Clusters are derived, rebuildable data — a clustering failure must not
+      // flip a successful crawl to 'failed'. Runs after age-out because the
+      // recompute window selects on delistedAt stamped just above.
+      try {
+        const clusterCount = await deps.persist.recomputeClusters();
+        deps.log?.info({ event: 'sweep.clusters', clusterCount });
+      } catch (err) {
+        deps.log?.warn({ event: 'sweep.clusters_failed', err: String(err) });
+      }
     }
   } catch (err) {
     if (err instanceof CircuitTrippingError) {
