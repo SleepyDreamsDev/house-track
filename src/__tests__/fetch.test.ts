@@ -34,14 +34,14 @@ function makeCircuit(sentinelPath: string) {
 describe('Fetcher', () => {
   let dir: string;
   let mockAgent: MockAgent;
-  let sleep: ReturnType<typeof vi.fn>;
+  let sleep: ReturnType<typeof vi.fn<(ms: number) => Promise<void>>>;
   let circuit: Circuit;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'fetcher-'));
     mockAgent = new MockAgent();
     mockAgent.disableNetConnect();
-    sleep = vi.fn().mockResolvedValue(undefined);
+    sleep = vi.fn<(ms: number) => Promise<void>>().mockResolvedValue(undefined);
     circuit = makeCircuit(join(dir, '.circuit_open'));
   });
 
