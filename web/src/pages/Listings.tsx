@@ -538,7 +538,15 @@ const ListingCard: React.FC<ListingCardProps> = ({ l, selected, autoScroll, onSe
             {l.watchlist ? '★' : '☆'}
           </button>
         </div>
-        <h3 className="truncate text-sm font-semibold text-neutral-900">{l.title}</h3>
+        <h3 className="truncate text-sm font-semibold text-neutral-900">
+          <Link
+            to={`/listings/${l.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-teal-700 hover:underline"
+          >
+            {l.title}
+          </Link>
+        </h3>
         <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-neutral-600 tabular-nums">
           <span>
             <span className="text-neutral-400">district </span>

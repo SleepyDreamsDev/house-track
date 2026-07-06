@@ -5,6 +5,10 @@ import { Persistence } from '../../persist.js';
 import { deriveType } from '../../lib/listing-type.js';
 import { classifyListing, isMunicipalityLocality } from '../../lib/listing-classification.js';
 import { optFloat, optInt } from '../params.js';
+import { fitHedonic, residualPct, type HedonicSample } from '../../lib/hedonic.js';
+import { districtDomMedians, VALUATION_MIN_SAMPLES } from './analytics.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
   app.get('/api/listings', async (c) => {
@@ -186,6 +190,119 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
     }
 
     return c.json(result);
+  });
+
+  // Negotiation dossier: everything the operator needs before contacting a
+  // seller — exposure vs the district, model-implied fair price, the seller's
+  // other inventory, and any duplicate/relisted copies of the same property.
+  app.get('/api/listings/:id/dossier', async (c) => {
+    const id = c.req.param('id');
+    const listing = await prisma.listing.findUnique({ where: { id } });
+    if (!listing) {
+      return c.json({ error: 'Listing not found' }, 404);
+    }
+
+    const now = new Date();
+    const activeDOM = Math.max(
+      0,
+      Math.floor((now.getTime() - listing.firstSeenAt.getTime()) / DAY_MS),
+    );
+
+    // Active non-excluded slice powers both the district DOM median and the
+    // hedonic fit — same per-request idiom as /analytics/valuation.
+    const slice = await prisma.listing.findMany({
+      where: { active: true, excluded: false },
+      select: {
+        title: true,
+        priceEur: true,
+        areaSqm: true,
+        rooms: true,
+        yearBuilt: true,
+        district: true,
+        sector: true,
+        heatingType: true,
+        firstSeenAt: true,
+      },
+    });
+
+    const domMedians = districtDomMedians(slice, now);
+    const domMedianDistrict = listing.district ? (domMedians.get(listing.district) ?? null) : null;
+
+    const toSample = (r: {
+      title: string;
+      priceEur: number | null;
+      areaSqm: number | null;
+      rooms: number | null;
+      yearBuilt: number | null;
+      sector: string | null;
+      heatingType: string | null;
+    }): HedonicSample => ({
+      priceEur: r.priceEur,
+      areaSqm: r.areaSqm,
+      rooms: r.rooms,
+      yearBuilt: r.yearBuilt,
+      sector: r.sector,
+      heatingType: r.heatingType,
+      type: deriveType(r.title),
+    });
+    const model = fitHedonic(slice.map(toSample));
+    let hedonic: { predictedEur: number; residualPct: number } | null = null;
+    if (
+      model != null &&
+      model.n >= VALUATION_MIN_SAMPLES &&
+      listing.priceEur != null &&
+      listing.areaSqm != null &&
+      listing.areaSqm > 0
+    ) {
+      const predicted = model.predict(toSample(listing));
+      if (predicted != null && predicted > 0) {
+        hedonic = {
+          predictedEur: Math.round(predicted),
+          residualPct: Math.round(residualPct(listing.priceEur, predicted) * 1000) / 1000,
+        };
+      }
+    }
+
+    const memberSelect = {
+      id: true,
+      url: true,
+      title: true,
+      priceEur: true,
+      active: true,
+      delistedAt: true,
+    } as const;
+
+    const authorListings = listing.authorId
+      ? await prisma.listing.findMany({
+          where: { authorId: listing.authorId, id: { not: id } },
+          select: memberSelect,
+          orderBy: { firstSeenAt: 'desc' },
+        })
+      : [];
+
+    // Cluster membership includes delisted siblings — they ARE the relist
+    // story. No active filter on purpose.
+    const canonicalId = listing.canonicalId ?? listing.id;
+    const members = await prisma.listing.findMany({
+      where: {
+        OR: [{ canonicalId }, { id: canonicalId }],
+        id: { not: id },
+      },
+      select: { ...memberSelect, firstSeenAt: true },
+      orderBy: { firstSeenAt: 'asc' },
+    });
+    const cluster = members.length > 0 ? { canonicalId, members } : null;
+
+    return c.json({
+      activeDOM,
+      domMedianDistrict,
+      hedonic,
+      postedAt: listing.postedAt,
+      bumpedAt: listing.bumpedAt,
+      authorName: listing.authorName,
+      authorListings,
+      cluster,
+    });
   });
 
   app.get('/api/listings/:id/price-history', async (c) => {

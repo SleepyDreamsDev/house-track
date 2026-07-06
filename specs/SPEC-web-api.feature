@@ -252,6 +252,30 @@ Feature: Operator Web API (Hono)
     Then response status is 200
     And response.points is a 3-element array with priceEur values [100000, 95000, 90000] in order
 
+  # ── Listings: Dossier ──
+  Scenario: GET /api/listings/:id/dossier returns the negotiation context for one listing
+    Given a listing with id "lst-777" in district "Centru" first seen 60 days ago
+    When I send GET /api/listings/lst-777/dossier
+    Then response status is 200
+    And response has activeDOM (days since firstSeenAt), domMedianDistrict (in-slice district DOM median, null when district unknown)
+    And response has postedAt, bumpedAt, authorName
+    And response.authorListings lists other listings sharing authorId (id, url, title, priceEur, active, delistedAt), excluding this listing; empty when authorId is null
+    And response.hedonic is { predictedEur, residualPct } fit over the active non-excluded slice, or null when the listing lacks price/area or the slice is below the 10-sample floor
+
+  Scenario: GET /api/listings/:id/dossier exposes the dedup cluster including delisted siblings
+    Given listing "lst-777" is canonical for a cluster containing delisted listing "lst-778"
+    When I send GET /api/listings/lst-777/dossier
+    Then response.cluster = { canonicalId: "lst-777", members: [...] } with members carrying id, url, title, priceEur, active, delistedAt, firstSeenAt
+    And members include delisted siblings (the relist story) and exclude the listing itself
+    And a listing with no cluster siblings gets cluster = null
+    # Siblings delisted >180d keep a stale canonicalId until a recompute window
+    # drops them — acceptable; the dossier shows them as historical relists.
+
+  Scenario: GET /api/listings/:id/dossier returns 404 for an unknown listing
+    When I send GET /api/listings/nope/dossier
+    Then response status is 404
+    And response.error is 'Listing not found'
+
   # ── Listings: Watchlist & Exclusion ──
   Scenario: PUT /api/listings/:id/watchlist sets watchlist flag
     Given a listing with id "lst-111" has watchlist false

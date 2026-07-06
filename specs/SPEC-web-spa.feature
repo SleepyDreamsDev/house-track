@@ -297,6 +297,28 @@ Feature: Operator SPA (React + Tailwind) — Property browsing & analysis interf
     And GET /api/listings?...&page=0 is called (not page=3)
 
   # ──────────────────────────────────────────────────────────────────
+  # LISTING DOSSIER PAGE — /listings/:id
+  # ──────────────────────────────────────────────────────────────────
+
+  Scenario: Dossier page renders the negotiation context for one listing
+    When the operator navigates to /listings/lst-777
+    Then GET /api/listings/lst-777 and GET /api/listings/lst-777/dossier are called
+    And the header shows the listing title with an external ↗ link to the 999.md url
+    And KStat tiles show price, €/m², DOM vs district median, and vs-model residual ("—" when hedonic is null)
+    And the price history panel renders (self-fetching /price-history)
+    And a "Same seller" card lists the author's other listings when present
+    And a "Duplicates / relists" card lists cluster members (active or delisted) linking to their dossiers
+
+  Scenario: Dossier page handles an unknown listing
+    When the operator navigates to /listings/nope
+    Then a "Listing not found" card is rendered instead of the dossier
+
+  Scenario: Listings and analytics tables deep-link to the dossier
+    When the operator clicks a listing title in the Listings table or cards view
+    Then the SPA navigates to /listings/<id> (the external 999.md link remains a separate ↗ affordance)
+    And Best buys / Motivated sellers "View →" actions navigate to /listings/<id>
+
+  # ──────────────────────────────────────────────────────────────────
   # ANALYTICS PAGE — Multi-Tab Analysis
   # ──────────────────────────────────────────────────────────────────
 
