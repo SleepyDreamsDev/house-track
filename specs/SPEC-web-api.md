@@ -114,7 +114,7 @@ Same as manual, with these differences:
 - `favorite?: 'true'` → restrict to `watchlist=true`
 - `includeExcluded?: 'true'` → include `excluded=true` rows (default: exclude them)
 
-**GET /api/analytics/{overview,segments,distress,valuation,market-index,best-buys,price-drops}:**
+**GET /api/analytics/{overview,segments,distress,valuation,market-index,best-buys,price-drops,motivated-sellers}:**
 
 - All listing filters above, parsed by `parseAnalyticsFilters()`. `region` is accepted as a legacy alias for `district` (analytics.ts:161). Same present-but-empty `district`/`sector` → 400 rule.
 - `minRooms?, maxRooms?: number` range takes precedence over legacy single `rooms` exact-match.
@@ -127,6 +127,8 @@ Same as manual, with these differences:
 **GET /api/sweeps/:id (sweeps.detail.ts):** returns `{ id, status (UI status), startedAt, finishedAt?, source (default '999.md'), trigger (default 'cron'), config (=configSnapshot ?? {}), summary, pages, details, errors, logTail (=eventLog ?? []), progress, currentlyFetching }`. `summary` carries live counters (`pagesFetched/detailsFetched/newListings/updatedListings/errors/durationMs`). `progress` = `{ phase, pagesDone (=detailsFetched), pagesTotal (configSnapshot['sweep.detailsTotal'] ?? max(detailsFetched,1)), detailsDone, detailsQueued, newCount, updatedCount, queued (legacy 0) }`. `detailsQueued` and `currentlyFetching` are non-zero/non-null ONLY when `status==='in_progress'` AND the in-memory `getActiveSweepId()` matches this row; after a process restart they fall back to 0 / null even though the DB row is still `in_progress`. Invalid id → 400 `{ error: 'Invalid sweep ID' }` (note: capital "ID" here, differs from other routes); missing row → 404 `{ error: 'not found' }` (lowercase, differs from `'Sweep not found'` elsewhere).
 
 **GET /api/analytics/valuation:** insufficient-sample response is `{ n, minSamples: 10, insufficientData: true, rSquared: null, deals: [], overpriced: [] }`. Sufficient: `{ n, rSquared, coefficients, deals (≤20, most underpriced first), overpriced (≤20, most overpriced first) }`. `deals`/`overpriced` are slices of the same residual-sorted list.
+
+**GET /api/analytics/motivated-sellers:** array (≤50, score desc) of `{ id, url, title, district, sector, type, priceEur, areaSqm, rooms, daysOnMkt, domMedianDistrict, cuts, totalCutPct, residualPct, score, watchlist, excluded }`. Composite score, not a hard AND — three noisy signals over a small catalog would return near-empty tables: `overexposed` (capped DOM overshoot vs in-slice district DOM median), `capitulation` (observed price-cut count from ascending snapshots + all-time first-ask→current cut fraction ×10), `overpriced` (hedonic `residualPct × 5` only when `residualPct > 0.10`). Hedonic model is fit per-request over the filtered slice (same idiom and `VALUATION_MIN_SAMPLES=10` floor as `/analytics/valuation`); below the floor `residualPct` is `null` and the component contributes 0. Rows need price+area+district; zero-snapshot rows rank with `cuts=0`. `districtDomMedians()` is exported from analytics.ts for reuse by the listing dossier route.
 
 **GET /api/analytics/duplicates:** array of `{ canonicalId, canonical, duplicates[], size }` sorted by size desc; `canonical` may be `null` if the canonical row isn't in the catalog.
 

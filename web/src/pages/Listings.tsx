@@ -262,13 +262,13 @@ export const Listings: React.FC = () => {
         }
       />
 
-      {fromView === 'best-buys' && (
+      {(fromView === 'best-buys' || fromView === 'motivated-sellers') && (
         <div className="mb-4">
           <Link
-            to="/analytics?tab=best-buys"
+            to={`/analytics?tab=${fromView}`}
             className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900 hover:underline"
           >
-            ← Back to Best buys
+            ← Back to {fromView === 'best-buys' ? 'Best buys' : 'Motivated sellers'}
           </Link>
         </div>
       )}

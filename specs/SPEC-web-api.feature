@@ -464,6 +464,36 @@ Feature: Operator Web API (Hono)
     And freshnessBoost = 0.4 if daysOnMkt < 1 day, 0.2 if < 7 days, else 0
     And items are sorted by score descending (best-buys first)
 
+  # ── Analytics: Motivated Sellers ──
+  Scenario: GET /api/analytics/motivated-sellers ranks sellers by exposure, capitulation, and overpricing
+    When I send GET /api/analytics/motivated-sellers
+    Then response status is 200
+    And response is an array with at most 50 items sorted by score descending
+    And each item has id, url, title, district, sector, type, priceEur, areaSqm, rooms, daysOnMkt, domMedianDistrict, cuts, totalCutPct, residualPct, score, watchlist, excluded
+    And score = overexposed + capitulation + overpriced where:
+      | component    | formula                                                            |
+      | overexposed  | min(max(daysOnMkt / max(domMedianDistrict, 1) - 1, 0), 3)          |
+      | capitulation | cuts + max(totalCutPct, 0) * 10                                    |
+      | overpriced   | residualPct != null && residualPct > 0.10 ? residualPct * 5 : 0    |
+
+  Scenario: GET /api/analytics/motivated-sellers counts price cuts from ascending snapshots
+    Given a listing with snapshots priced [200000, 190000, 195000, 180000]
+    When I send GET /api/analytics/motivated-sellers
+    Then that listing's cuts = 2 (190000 and 180000; the 195000 rebound is not a cut)
+    And totalCutPct = (1 - 180000/200000) * 100 = 10 (first ask vs current, all-time; totalCutPct is expressed as a fraction of 1 in the score via /100)
+
+  Scenario: GET /api/analytics/motivated-sellers residual is null under the hedonic sample floor
+    Given fewer than 10 listings match the filter slice
+    When I send GET /api/analytics/motivated-sellers
+    Then rows still return with residualPct = null
+    And the overpriced score component is 0 for every row
+
+  Scenario: GET /api/analytics/motivated-sellers honors the shared analytics filters
+    When I send GET /api/analytics/motivated-sellers?district=
+    Then response status is 400 (present-but-empty district rule)
+    And listings without price, area, or district are excluded from the ranking
+    And listings with zero snapshots rank with cuts = 0 and totalCutPct = 0 (no crash)
+
   # ── Analytics: Price Drops ──
   Scenario: GET /api/analytics/price-drops returns drops ≥3% in period
     When I send GET /api/analytics/price-drops?period=30d
