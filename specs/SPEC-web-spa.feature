@@ -300,14 +300,14 @@ Feature: Operator SPA (React + Tailwind) — Property browsing & analysis interf
   # ANALYTICS PAGE — Multi-Tab Analysis
   # ──────────────────────────────────────────────────────────────────
 
-  Scenario: Analytics page loads with three tabs
+  Scenario: Analytics page loads with four tabs
     When the operator navigates to /analytics
-    Then three tabs are visible: "Overview", "Best Buys", "Price Drops"
+    Then four tabs are visible: "Overview", "Best Buys", "Price Drops", "Motivated Sellers"
     And "Overview" tab is selected by default
     And FilterRail is shown on the left with all filter controls
     And the rail state is restored from sessionStorage
 
-  Scenario: FilterRail is shared across all three tabs
+  Scenario: FilterRail is shared across all tabs
     When the operator sets a filter (e.g., maxPrice=200000) on the Overview tab
     And switches to the Best Buys tab
     Then the maxPrice filter is still 200000
@@ -357,10 +357,18 @@ Feature: Operator SPA (React + Tailwind) — Property browsing & analysis interf
     Then GET /api/analytics/price-drops?...&period=7d is called
     And only drops within the last 7 days are shown
 
+  Scenario: Motivated Sellers tab renders ranked table
+    When the Motivated Sellers tab is selected (?tab=motivated-sellers)
+    Then GET /api/analytics/motivated-sellers?... is called with current filters (lazy: only when the tab is active)
+    And a table appears with columns: Rank, Listing, District, Price, DOM vs median, Cuts, Total cut, vs model, Score
+    And rows are sorted by Score descending by default
+    And residualPct renders as "—" when null (hedonic floor not met)
+    And each row has watchlist/exclude actions and a jump to the listing (/listings?highlight=<id>&from=motivated-sellers)
+
   Scenario: Analytics filters apply to all endpoints uniformly
     Given the operator has set: q="Centru", minPrice=100000, type="Villa"
     When viewing Overview, Best Buys, and Price Drops tabs
-    Then all three endpoints receive the same query string: q=Centru&minPrice=100000&type=Villa
+    Then all tab endpoints receive the same query string: q=Centru&minPrice=100000&type=Villa
 
   Scenario: Analytics facets remain union-of-catalog
     Given the operator has filtered to district="Centru" only
@@ -578,7 +586,7 @@ Feature: Operator SPA (React + Tailwind) — Property browsing & analysis interf
   Scenario: Filter state survives Analytics tab switches
     Given the operator sets filters on Overview tab
     When switching between Best Buys → Price Drops → Overview
-    Then all three tabs read the same persisted filter state
+    Then all tabs read the same persisted filter state
     And switching is instant (no re-filtering needed)
 
   Scenario: useBrowseFilters hook reads sessionStorage at mount

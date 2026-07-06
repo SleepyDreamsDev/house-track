@@ -10,25 +10,32 @@ import { apiCall } from '@/lib/api.js';
 import { bucketToRoomsValues, type RoomsBucket } from '@/lib/listing-type.js';
 import {
   type BestBuyRow,
+  type MotivatedSellerRow,
   type OverviewResponse,
   type PriceDropRow,
 } from '@/components/analytics/types.js';
 import { Legend, Segmented } from '@/components/analytics/filters.js';
 import { FilterRail, type FilterFacets } from '@/components/filters/FilterRail.js';
 import { useBrowseFilters, type BrowseFilterState } from '@/lib/useBrowseFilters.js';
-import { BestBuysTable, PriceDropsTable } from '@/components/analytics/tables.js';
+import {
+  BestBuysTable,
+  MotivatedSellersTable,
+  PriceDropsTable,
+} from '@/components/analytics/tables.js';
 import { MultiLineChart } from '@/components/analytics/MultiLineChart.js';
 import { Heatmap } from '@/components/analytics/Heatmap.js';
 import { Scatter } from '@/components/analytics/Scatter.js';
 import { FlowChart } from '@/components/analytics/FlowChart.js';
 import { DOMHistogram } from '@/components/analytics/DOMHistogram.js';
 
-type TabId = 'overview' | 'best-buys' | 'price-drops';
+type TabId = 'overview' | 'best-buys' | 'price-drops' | 'motivated-sellers';
 
 const SUBTITLES: Record<TabId, string> = {
   overview: 'Market signals across active listings · 999.md · last 12 months',
   'best-buys': '50 listings ranked by deviation from district median, freshness, and recent drops',
   'price-drops': '50 listings whose price was reduced in the last 30 days',
+  'motivated-sellers':
+    '50 listings ranked by market overexposure, observed price cuts, and overpricing vs the hedonic model',
 };
 
 type DropPeriod = '7d' | '30d' | '90d';
@@ -69,7 +76,7 @@ function buildQueryParams(state: BrowseFilterState): URLSearchParams {
   return p;
 }
 
-const TAB_IDS: readonly TabId[] = ['overview', 'best-buys', 'price-drops'];
+const TAB_IDS: readonly TabId[] = ['overview', 'best-buys', 'price-drops', 'motivated-sellers'];
 
 export const Analytics: React.FC = () => {
   // Tab lives in the URL (?tab=best-buys) so a round-trip to a listing and back
@@ -165,6 +172,17 @@ export const Analytics: React.FC = () => {
     enabled: tab === 'price-drops',
   });
 
+  const motivatedQ = useQuery<MotivatedSellerRow[]>({
+    queryKey: ['analytics', 'motivated-sellers', queryParams],
+    queryFn: () =>
+      apiCall<MotivatedSellerRow[]>(
+        queryParams
+          ? `/analytics/motivated-sellers?${queryParams}`
+          : '/analytics/motivated-sellers',
+      ),
+    enabled: tab === 'motivated-sellers',
+  });
+
   // Analytics omits hideMislabeled — the FilterRail then hides that toggle
   // (it filters rendered rows, which only the Listings view has).
   const railProps = {
@@ -219,6 +237,11 @@ export const Analytics: React.FC = () => {
           { id: 'overview', label: 'Overview' },
           { id: 'best-buys', label: 'Best buys', count: bestBuysQ.data?.length ?? null },
           { id: 'price-drops', label: 'Price drops', count: priceDropsQ.data?.length ?? null },
+          {
+            id: 'motivated-sellers',
+            label: 'Motivated sellers',
+            count: motivatedQ.data?.length ?? null,
+          },
         ]}
         active={tab}
         onChange={(id) => setTab(id as TabId)}
@@ -245,6 +268,14 @@ export const Analytics: React.FC = () => {
           period={dropPeriod}
           setPeriod={setDropPeriod}
         />
+      </TabPanel>
+
+      <TabPanel
+        id="motivated-sellers"
+        label="Motivated sellers"
+        active={tab === 'motivated-sellers'}
+      >
+        <MotivatedSellersPanel rows={motivatedQ.data ?? []} railProps={railProps} />
       </TabPanel>
     </div>
   );
@@ -475,6 +506,112 @@ const BestBuysPanel: React.FC<{
             onToggleExclude={(id, next) => toggleExclude.mutate({ id, next })}
             onOpenListing={(id) =>
               navigate(`/listings?highlight=${encodeURIComponent(id)}&from=best-buys`)
+            }
+          />
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const MOTIVATED_PRESETS: Record<string, { key: string; dir: 'asc' | 'desc' }> = {
+  Score: { key: 'score', dir: 'desc' },
+  DOM: { key: 'daysOnMkt', dir: 'desc' },
+  Cuts: { key: 'cuts', dir: 'desc' },
+  'vs model': { key: 'residualPct', dir: 'desc' },
+};
+
+const MotivatedSellersPanel: React.FC<{
+  rows: MotivatedSellerRow[];
+  railProps: Omit<RailProps, 'extraSlot'>;
+}> = ({ rows, railProps }) => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ['analytics', 'motivated-sellers'] });
+  const toggleFavorite = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: boolean }) =>
+      apiCall(`/listings/${id}/watchlist`, {
+        method: 'PUT',
+        body: JSON.stringify({ watchlist: next }),
+      }),
+    onSuccess: invalidate,
+  });
+  const toggleExclude = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: boolean }) =>
+      apiCall(`/listings/${id}/excluded`, {
+        method: 'PUT',
+        body: JSON.stringify({ excluded: next }),
+      }),
+    onSuccess: invalidate,
+  });
+
+  const [columnSort, setColumnSort] = useState<{ key: string; dir: 'asc' | 'desc' }>(
+    MOTIVATED_PRESETS.Score!,
+  );
+  const sort =
+    Object.entries(MOTIVATED_PRESETS).find(
+      ([, p]) => p.key === columnSort.key && p.dir === columnSort.dir,
+    )?.[0] ?? '';
+  const setSort = (label: string) => {
+    const preset = MOTIVATED_PRESETS[label];
+    if (preset) setColumnSort(preset);
+  };
+
+  const withCuts = rows.filter((r) => r.cuts > 0).length;
+  const overpriced = rows.filter((r) => r.residualPct != null && r.residualPct > 0.1).length;
+  const overexposed = rows.filter((r) => r.daysOnMkt > Math.max(r.domMedianDistrict, 1)).length;
+  const medianCut = rows.length
+    ? [...rows.map((r) => r.totalCutPct)].sort((a, b) => a - b)[Math.floor(rows.length / 2)]!
+    : 0;
+
+  return (
+    <div>
+      <Card className="!p-0 mb-5">
+        <div className="grid grid-cols-4 divide-x divide-neutral-200">
+          <div className="p-4">
+            <KStat label="With price cuts" value={withCuts} tone="accent" hint="≥1 observed cut" />
+          </div>
+          <div className="p-4">
+            <KStat label="Over district DOM" value={overexposed} hint="stale vs peers" />
+          </div>
+          <div className="p-4">
+            <KStat label="Overpriced" value={overpriced} hint="> +10% vs model" />
+          </div>
+          <div className="p-4">
+            <KStat label="Median total cut" value={`${medianCut}%`} hint="first ask → now" />
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-[260px_1fr] gap-5">
+        <Card className="self-start">
+          <FilterRail {...railProps} />
+        </Card>
+
+        <Card>
+          <SectionHeader
+            title={`Motivated sellers — ${rows.length}`}
+            hint="ranked by exposure, capitulation, and overpricing"
+            right={
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="text-neutral-500">Sort</span>
+                <Segmented
+                  options={['Score', 'DOM', 'Cuts', 'vs model']}
+                  value={sort}
+                  setValue={setSort}
+                />
+              </div>
+            }
+          />
+          <MotivatedSellersTable
+            rows={rows}
+            sort={columnSort}
+            onSortChange={setColumnSort}
+            onToggleFavorite={(id, next) => toggleFavorite.mutate({ id, next })}
+            onToggleExclude={(id, next) => toggleExclude.mutate({ id, next })}
+            onOpenListing={(id) =>
+              navigate(`/listings?highlight=${encodeURIComponent(id)}&from=motivated-sellers`)
             }
           />
         </Card>

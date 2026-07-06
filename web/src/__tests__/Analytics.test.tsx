@@ -207,4 +207,66 @@ describe('Analytics', () => {
     await screen.findByRole('tabpanel', { name: /Price drops/i });
     expect(apiCall).toHaveBeenCalledWith('/analytics/price-drops?period=30d');
   });
+
+  it('Motivated Sellers tab renders ranked table', async () => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation((endpoint: string) => {
+      if (endpoint === '/analytics/overview') return Promise.resolve(emptyOverview);
+      if (endpoint === '/analytics/motivated-sellers')
+        return Promise.resolve([
+          {
+            id: 'm1',
+            url: 'https://999.md/m1',
+            title: 'Casă obosită',
+            district: 'Centru',
+            sector: 'Centru',
+            type: 'House',
+            priceEur: 250000,
+            areaSqm: 120,
+            rooms: 4,
+            daysOnMkt: 120,
+            domMedianDistrict: 40,
+            cuts: 2,
+            totalCutPct: 11.1,
+            residualPct: 0.31,
+            score: 4.2,
+            watchlist: false,
+            excluded: false,
+          },
+          {
+            id: 'm2',
+            url: 'https://999.md/m2',
+            title: 'Casă fără model',
+            district: 'Centru',
+            sector: null,
+            type: 'House',
+            priceEur: 90000,
+            areaSqm: 80,
+            rooms: 3,
+            daysOnMkt: 10,
+            domMedianDistrict: 40,
+            cuts: 0,
+            totalCutPct: 0,
+            residualPct: null,
+            score: 0,
+            watchlist: false,
+            excluded: false,
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+
+    renderAnalytics();
+    await screen.findByText(/Median €\/m²/i);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: /Motivated sellers/i }));
+    await screen.findByRole('tabpanel', { name: /Motivated sellers/i });
+    expect(apiCall).toHaveBeenCalledWith('/analytics/motivated-sellers');
+
+    expect(await screen.findByText('Casă obosită')).toBeInTheDocument();
+    // Null residual renders as an em dash, not 0.
+    const row = screen.getByText('Casă fără model').closest('tr')!;
+    expect(within(row).getByText('—')).toBeInTheDocument();
+  });
 });

@@ -51,6 +51,26 @@ export interface PriceDropRow {
   when: string;
 }
 
+export interface MotivatedSellerRow {
+  id: string;
+  url: string;
+  title: string;
+  district: string;
+  sector: string | null;
+  type: string;
+  priceEur: number;
+  areaSqm: number;
+  rooms: number;
+  daysOnMkt: number;
+  domMedianDistrict: number;
+  cuts: number;
+  totalCutPct: number;
+  residualPct: number | null;
+  score: number;
+  watchlist: boolean;
+  excluded: boolean;
+}
+
 // Color map keyed by district name. New districts that appear in observed
 // data fall back to the teal accent at consumer sites — keeping this static
 // is intentional (fully data-driven theming is a separate concern).

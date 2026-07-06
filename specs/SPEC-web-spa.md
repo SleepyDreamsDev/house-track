@@ -52,12 +52,13 @@ The Operator SPA is a Vite + React 18 + TypeScript SPA frontend, served from the
 
 ### Analytics Page (Multi-Tab)
 
-1. **Mount**: Fetches `/listings/facets` (same cache key as Listings). Three tabs (Overview, Best Buys, Price Drops) share the same FilterRail instance.
+1. **Mount**: Fetches `/listings/facets` (same cache key as Listings). Four tabs (Overview, Best Buys, Price Drops, Motivated Sellers) share the same FilterRail instance.
 2. **Tab-specific endpoints**: Overview → `/analytics/overview?…`, Best Buys → `/analytics/best-buys?…`, Price Drops → `/analytics/price-drops?…`; all accept the same filter query string (q, minPrice, maxPrice, district, type, rooms, etc.).
 3. **Overview tab**: Renders KPI cards (`medianEurPerSqm`, `activeInventory`, `medianDomDays`, `bestDealsCount`, `recentDropsCount`) plus several charts driven by the OverviewResponse: MultiLineChart (`trendByDistrict`/`months`), Heatmap, DOMHistogram (`domBuckets`), a FlowChart (`inventory12w`/`newPerWeek`/`gonePerWeek`), and a Scatter (`scatter`). A district color Legend (`DIST_COLORS`, fallback `#0f766e`) keys the charts. Fetches `/analytics/overview?…` with current filters.
 4. **Best Buys tab**: Table showing ranked properties by score (computed server-side as a weighted combo of discount vs. median €/m², days-on-market, price drop flag). Sortable columns; default sort by score desc. Includes Segmented buttons for quick sort presets (Score, €/m², Discount).
 5. **Price Drops tab**: Similar table; rows filtered to only listings with observed price changes. Segmented Period picker (7d/30d/all) controls the time window for drop detection.
-6. **Shared filter behavior**: All three tabs request data with the same query string; facets update together. If Listings has 10 districts but one is filtered out in Analytics, the facets still show both (facets = union of catalog data, not post-filter).
+   5b. **Motivated Sellers tab** (`?tab=motivated-sellers`): Table ranked by a server-side composite of overexposure (DOM vs in-slice district DOM median), capitulation (observed cuts + all-time first-ask→current cut), and overpricing (hedonic residual > +10%). Lazy-fetched only when active. `residualPct` renders as em dash when the hedonic floor (n<10) isn't met. Sort presets: Score, DOM, Cuts, vs model. Rows carry watchlist/exclude actions and a View → `/listings?highlight=<id>&from=motivated-sellers` jump; Listings shows a matching back link.
+6. **Shared filter behavior**: All tabs request data with the same query string; facets update together. If Listings has 10 districts but one is filtered out in Analytics, the facets still show both (facets = union of catalog data, not post-filter).
 
 ### Filter Editor Page
 

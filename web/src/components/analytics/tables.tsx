@@ -4,7 +4,7 @@ import { SortableTh } from '@/components/ui/SortableTh.js';
 import { fmt } from '@/lib/format.js';
 import { useSortableTable, type Accessors, type SortState } from '@/lib/useSortableTable.js';
 import { RowActions } from '@/components/listings/RowActions.js';
-import type { BestBuyRow, PriceDropRow } from './types.js';
+import type { BestBuyRow, MotivatedSellerRow, PriceDropRow } from './types.js';
 
 const ScoreBar: React.FC<{ score: number }> = ({ score }) => {
   const pct = (Math.min(Math.max(score, 0), 3) / 3) * 100;
@@ -419,6 +419,196 @@ export const PriceDropsTable: React.FC<{
               <td className="py-1.5 text-right tabular-nums text-neutral-500">{r.when}</td>
             )}
             {fullCols && <td className="py-1.5 text-neutral-300">›</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+const motivatedSellerAccessors: Accessors<MotivatedSellerRow> = {
+  title: (r) => r.title,
+  district: (r) => r.district,
+  priceEur: (r) => r.priceEur,
+  daysOnMkt: (r) => r.daysOnMkt,
+  cuts: (r) => r.cuts,
+  totalCutPct: (r) => r.totalCutPct,
+  residualPct: (r) => r.residualPct,
+  score: (r) => r.score,
+};
+
+export const MotivatedSellersTable: React.FC<{
+  rows: MotivatedSellerRow[];
+  sort?: SortState | null;
+  onSortChange?: (next: SortState) => void;
+  defaultSort?: SortState | null;
+  onToggleFavorite?: (id: string, next: boolean) => void;
+  onToggleExclude?: (id: string, next: boolean) => void;
+  onOpenListing?: (id: string) => void;
+}> = ({
+  rows,
+  sort,
+  onSortChange,
+  defaultSort = { key: 'score', dir: 'desc' },
+  onToggleFavorite,
+  onToggleExclude,
+  onOpenListing,
+}) => {
+  const hasActions = !!onToggleFavorite || !!onToggleExclude || !!onOpenListing;
+  const { sortedRows, sortKey, sortDir, requestSort } = useSortableTable({
+    rows,
+    accessors: motivatedSellerAccessors,
+    initial: defaultSort,
+    controlled: sort !== undefined ? sort : undefined,
+    onSortChange,
+  });
+  return (
+    <table className="w-full text-[12.5px]">
+      <thead>
+        <tr className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200">
+          <th className="py-2 w-8">Rank</th>
+          <SortableTh
+            label="Listing"
+            sortKey="title"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+          />
+          <SortableTh
+            label="District"
+            sortKey="district"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+          />
+          <SortableTh
+            label="Price"
+            sortKey="priceEur"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+            align="right"
+          />
+          <SortableTh
+            label="DOM vs median"
+            sortKey="daysOnMkt"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+            align="right"
+          />
+          <SortableTh
+            label="Cuts"
+            sortKey="cuts"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+            align="right"
+          />
+          <SortableTh
+            label="Total cut"
+            sortKey="totalCutPct"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+            align="right"
+          />
+          <SortableTh
+            label="vs model"
+            sortKey="residualPct"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+            align="right"
+          />
+          <SortableTh
+            label="Score"
+            sortKey="score"
+            activeKey={sortKey}
+            activeDir={sortDir}
+            onSort={requestSort}
+            className="w-32"
+          />
+          {hasActions && <th className="py-2 w-16" />}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-neutral-100">
+        {sortedRows.map((r, i) => (
+          <tr key={r.id} className="hover:bg-neutral-50">
+            <td className="py-1.5 tabular-nums text-neutral-400">#{1 + i}</td>
+            <td className="py-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-[11px] text-neutral-400">{r.id.slice(-4)}</span>
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="truncate text-neutral-800 max-w-[220px] hover:text-teal-700 hover:underline"
+                  title={r.title}
+                >
+                  {r.title}
+                </a>
+                {r.cuts > 0 && <Badge variant="warning">{r.cuts} cuts</Badge>}
+              </div>
+            </td>
+            <td className="py-1.5 text-neutral-600">{r.district}</td>
+            <td className="py-1.5 text-right tabular-nums font-medium">{fmt.eur(r.priceEur)}</td>
+            <td className="py-1.5 text-right tabular-nums text-neutral-600">
+              {r.daysOnMkt}d / {r.domMedianDistrict}d
+            </td>
+            <td className="py-1.5 text-right tabular-nums text-neutral-600">{r.cuts}</td>
+            <td className="py-1.5 text-right">
+              {r.totalCutPct > 0 ? (
+                <span className="tabular-nums text-amber-700">−{r.totalCutPct}%</span>
+              ) : (
+                <span className="text-neutral-300">0%</span>
+              )}
+            </td>
+            <td className="py-1.5 text-right">
+              {r.residualPct != null ? (
+                <span
+                  className={`tabular-nums font-medium ${
+                    r.residualPct > 0.1 ? 'text-error' : 'text-neutral-600'
+                  }`}
+                >
+                  {r.residualPct > 0 ? '+' : ''}
+                  {Math.round(r.residualPct * 100)}%
+                </span>
+              ) : (
+                <span className="text-neutral-300">—</span>
+              )}
+            </td>
+            <td className="py-1.5">
+              <ScoreBar score={r.score} />
+            </td>
+            {hasActions && (
+              <td className="py-1.5 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <RowActions
+                    id={r.id}
+                    watchlist={r.watchlist}
+                    excluded={r.excluded}
+                    onToggleFavorite={onToggleFavorite}
+                    onToggleExclude={onToggleExclude}
+                  />
+                  {onOpenListing && (
+                    <button
+                      type="button"
+                      aria-label="View in Listings"
+                      title="View in Listings"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenListing(r.id);
+                      }}
+                      className="rounded-sm border border-neutral-300 px-1.5 py-0.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50"
+                    >
+                      View →
+                    </button>
+                  )}
+                </div>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

@@ -1007,6 +1007,151 @@ analyticsRouter.get('/analytics/best-buys', async (c) => {
   return c.json(rows.slice(0, 50));
 });
 
+interface MotivatedSellerRow {
+  id: string;
+  url: string;
+  title: string;
+  district: string;
+  sector: string | null;
+  type: string;
+  priceEur: number;
+  areaSqm: number;
+  rooms: number;
+  daysOnMkt: number;
+  domMedianDistrict: number;
+  cuts: number;
+  totalCutPct: number;
+  residualPct: number | null;
+  score: number;
+  watchlist: boolean;
+  excluded: boolean;
+}
+
+// In-slice district DOM medians (days since firstSeenAt). Exported for reuse
+// by the listing dossier route — both files map to the web-api spec.
+export function districtDomMedians(
+  rows: { district: string | null; firstSeenAt: Date }[],
+  now: Date,
+): Map<string, number> {
+  const byDistrict = new Map<string, number[]>();
+  for (const r of rows) {
+    if (!r.district) continue;
+    const dom = Math.max(0, Math.floor((now.getTime() - r.firstSeenAt.getTime()) / DAY_MS));
+    const arr = byDistrict.get(r.district) ?? [];
+    arr.push(dom);
+    byDistrict.set(r.district, arr);
+  }
+  const medians = new Map<string, number>();
+  for (const [d, arr] of byDistrict.entries()) medians.set(d, median(arr));
+  return medians;
+}
+
+// Motivated sellers: composite of exposure (DOM vs district median),
+// capitulation (observed price cuts), and overpricing (hedonic residual).
+// A hard AND of three noisy signals over a small catalog would return a
+// near-empty table, so each signal is a score component instead.
+analyticsRouter.get('/analytics/motivated-sellers', async (c) => {
+  const prisma = getPrisma();
+  const parsed = parseAnalyticsFilters(c);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const filters = parsed.filters;
+  const baseWhere = buildListingWhere(filters);
+
+  const listingsRaw = await prisma.listing.findMany({
+    where: baseWhere,
+    select: {
+      id: true,
+      url: true,
+      title: true,
+      priceEur: true,
+      areaSqm: true,
+      rooms: true,
+      yearBuilt: true,
+      district: true,
+      sector: true,
+      heatingType: true,
+      firstSeenAt: true,
+      watchlist: true,
+      excluded: true,
+      snapshots: { orderBy: { capturedAt: 'asc' }, select: { priceEur: true } },
+    },
+  });
+
+  const listings = applyTypeFilter(listingsRaw, filters.type);
+  const filtered = listings.filter(
+    (l) => l.priceEur != null && l.areaSqm != null && l.areaSqm > 0 && !!l.district,
+  );
+
+  const toSample = (r: (typeof filtered)[number]): HedonicSample => ({
+    priceEur: r.priceEur,
+    areaSqm: r.areaSqm,
+    rooms: r.rooms,
+    yearBuilt: r.yearBuilt,
+    sector: r.sector,
+    heatingType: r.heatingType,
+    type: deriveType(r.title),
+  });
+  const model = fitHedonic(filtered.map(toSample));
+  const modelUsable = model != null && model.n >= VALUATION_MIN_SAMPLES;
+
+  const now = new Date();
+  const domMedians = districtDomMedians(filtered, now);
+
+  const rows: MotivatedSellerRow[] = filtered.map((l) => {
+    const daysOnMkt = Math.max(0, Math.floor((now.getTime() - l.firstSeenAt.getTime()) / DAY_MS));
+    const domMedianDistrict = domMedians.get(l.district as string) ?? 0;
+
+    const prices = l.snapshots
+      .map((s) => s.priceEur)
+      .filter((p): p is number => p != null && p > 0);
+    let cuts = 0;
+    for (let i = 1; i < prices.length; i++) {
+      if ((prices[i] as number) < (prices[i - 1] as number)) cuts++;
+    }
+    const firstAsk = prices[0];
+    const current = prices[prices.length - 1];
+    const totalCutPct =
+      firstAsk != null && current != null && firstAsk > 0 ? (1 - current / firstAsk) * 100 : 0;
+
+    let residual: number | null = null;
+    if (modelUsable) {
+      const predicted = model.predict(toSample(l));
+      if (predicted != null && predicted > 0) {
+        residual = residualPct(l.priceEur as number, predicted);
+      }
+    }
+
+    const domRatio = daysOnMkt / Math.max(domMedianDistrict, 1);
+    const overexposed = Math.min(Math.max(domRatio - 1, 0), 3);
+    const capitulation = cuts + Math.max(totalCutPct / 100, 0) * 10;
+    const overpriced = residual != null && residual > 0.1 ? residual * 5 : 0;
+    const score = overexposed + capitulation + overpriced;
+
+    return {
+      id: l.id,
+      url: l.url,
+      title: l.title,
+      district: l.district as string,
+      sector: l.sector,
+      type: deriveType(l.title),
+      priceEur: l.priceEur as number,
+      areaSqm: l.areaSqm as number,
+      rooms: l.rooms ?? 0,
+      daysOnMkt,
+      domMedianDistrict,
+      cuts,
+      totalCutPct: Math.round(totalCutPct * 10) / 10,
+      residualPct: residual != null ? Math.round(residual * 1000) / 1000 : null,
+      score: Math.round(score * 100) / 100,
+      watchlist: l.watchlist,
+      excluded: l.excluded,
+    };
+  });
+
+  rows.sort((a, b) => b.score - a.score);
+  return c.json(rows.slice(0, 50));
+});
+
 analyticsRouter.get('/analytics/price-drops', async (c) => {
   const prisma = getPrisma();
   const period = c.req.query('period') ?? '30d';
