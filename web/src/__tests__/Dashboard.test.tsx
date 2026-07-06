@@ -58,6 +58,84 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Run sweep now')).not.toBeInTheDocument();
   });
 
+  const renderDashboard = () => {
+    const router = createMemoryRouter([{ path: '/', element: <Dashboard /> }]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+  };
+
+  const mockWithLatestSweep = async (latest: unknown) => {
+    const { apiCall } = await import('../lib/api.js');
+    (apiCall as any).mockImplementation(async (path: string) => {
+      if (path === '/sweeps/latest') return latest;
+      if (path === '/circuit') return { open: false };
+      if (path === '/stats/success-rate') return { rate: 1, ok: 1, total: 1, window: 1 };
+      if (path === '/stats/avg-price') return { avgPrice: 0, count: 0 };
+      return [];
+    });
+  };
+
+  it('Dashboard warns when sweep data is stale', async () => {
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    await mockWithLatestSweep({
+      status: 'success',
+      durationMs: 1000,
+      startedAt: twoDaysAgo,
+      finishedAt: twoDaysAgo,
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText(/data may be stale/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sweeps/i })).toHaveAttribute('href', '/sweeps');
+  });
+
+  it('Dashboard shows a failure banner when the latest sweep failed', async () => {
+    const now = new Date().toISOString();
+    await mockWithLatestSweep({
+      status: 'failed',
+      durationMs: 1000,
+      startedAt: now,
+      finishedAt: now,
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText(/last sweep failed/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sweeps/i })).toHaveAttribute('href', '/sweeps');
+  });
+
+  it('No staleness banner on fresh, running, or empty sweep state', async () => {
+    // Fresh success
+    const now = new Date().toISOString();
+    await mockWithLatestSweep({
+      status: 'success',
+      durationMs: 1000,
+      startedAt: now,
+      finishedAt: now,
+    });
+    renderDashboard();
+    expect(await screen.findByText('Crawler health')).toBeInTheDocument();
+    expect(screen.queryByText(/data may be stale/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/last sweep failed/i)).not.toBeInTheDocument();
+  });
+
+  it('No staleness banner while a sweep is running, even if started long ago', async () => {
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    await mockWithLatestSweep({
+      status: 'running',
+      durationMs: 0,
+      startedAt: twoDaysAgo,
+      finishedAt: null,
+    });
+    renderDashboard();
+    expect(await screen.findByText('Crawler health')).toBeInTheDocument();
+    expect(screen.queryByText(/data may be stale/i)).not.toBeInTheDocument();
+  });
+
   it('renders title even while queries are pending', async () => {
     const { apiCall } = await import('../lib/api.js');
     (apiCall as any).mockImplementation(

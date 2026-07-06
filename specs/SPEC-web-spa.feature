@@ -28,6 +28,26 @@ Feature: Operator SPA (React + Tailwind) — Property browsing & analysis interf
     Then the latest sweep section shows "status: running"
     And displays duration in milliseconds
 
+  Scenario: Dashboard warns when sweep data is stale
+    Given the latest sweep finished more than 24 hours ago
+    And its status is not "running"
+    When the operator loads the Dashboard
+    Then a warning banner appears above the KPI strip
+    And it says the data may be stale, showing the relative time of the last sweep
+    And it links to the Sweeps page
+
+  Scenario: Dashboard shows a failure banner when the latest sweep failed
+    Given the latest sweep has status "failed"
+    When the operator loads the Dashboard
+    Then an error banner appears above the KPI strip
+    And it links to the Sweeps page
+
+  Scenario: No staleness banner on fresh, running, or empty sweep state
+    Given the latest sweep finished less than 24 hours ago with status "success",
+      or a sweep is currently running, or no sweep exists yet (fresh database)
+    When the operator loads the Dashboard
+    Then no staleness or failure banner is rendered
+
   Scenario: Dashboard API errors degrade gracefully
     Given the API endpoint GET /listings/new-today fails with 500
     When the operator loads the Dashboard
