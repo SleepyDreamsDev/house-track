@@ -42,11 +42,18 @@ Feature: Operator SPA (React + Tailwind) — Property browsing & analysis interf
     Then an error banner appears above the KPI strip
     And it links to the Sweeps page
 
-  Scenario: No staleness banner on fresh, running, or empty sweep state
+  Scenario: No staleness banner on fresh, recently-running, or empty sweep state
     Given the latest sweep finished less than 24 hours ago with status "success",
-      or a sweep is currently running, or no sweep exists yet (fresh database)
+      or a sweep started less than 24 hours ago is currently running, or no sweep exists yet (fresh database)
     When the operator loads the Dashboard
     Then no staleness or failure banner is rendered
+
+  Scenario: A zombie running sweep does not suppress the staleness banner
+    Given the latest sweep has status "running" but startedAt is more than 24 hours ago
+      (the crawler process died mid-sweep and the row was never finalized)
+    When the operator loads the Dashboard
+    Then the staleness warning banner IS rendered
+    # Real sweeps finish within the hour; "running" for >24h is a dead process, not progress.
 
   Scenario: Dashboard API errors degrade gracefully
     Given the API endpoint GET /listings/new-today fails with 500
@@ -385,6 +392,7 @@ Feature: Operator SPA (React + Tailwind) — Property browsing & analysis interf
     And a table appears with columns: Rank, Listing, District, Price, DOM vs median, Cuts, Total cut, vs model, Score
     And rows are sorted by Score descending by default
     And residualPct renders as "—" when null (hedonic floor not met)
+    And a negative totalCutPct (price was raised since first ask) renders as "+x% raised", not a grey 0%
     And each row has watchlist/exclude actions and a jump to the listing (/listings?highlight=<id>&from=motivated-sellers)
 
   Scenario: Analytics filters apply to all endpoints uniformly

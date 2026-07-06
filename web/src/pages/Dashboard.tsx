@@ -265,11 +265,15 @@ export const Dashboard: React.FC = () => {
 };
 
 const SweepHealthBanner: React.FC<{ sweep: SweepStatus | undefined }> = ({ sweep }) => {
-  if (!sweep || sweep.status === 'running') return null;
+  if (!sweep) return null;
 
   const endedAt = sweep.finishedAt ?? sweep.startedAt;
   const failed = sweep.status === 'failed';
   const stale = Date.now() - new Date(endedAt).getTime() > STALE_SWEEP_THRESHOLD_MS;
+  // A running sweep suppresses the banner only while plausibly alive — real
+  // sweeps finish within the hour, so "running" past the threshold is a dead
+  // process whose row was never finalized, not progress.
+  if (sweep.status === 'running' && !stale) return null;
   if (!failed && !stale) return null;
 
   return (

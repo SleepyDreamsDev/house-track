@@ -123,7 +123,20 @@ describe('Dashboard', () => {
     expect(screen.queryByText(/last sweep failed/i)).not.toBeInTheDocument();
   });
 
-  it('No staleness banner while a sweep is running, even if started long ago', async () => {
+  it('No staleness banner while a recently-started sweep is running', async () => {
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await mockWithLatestSweep({
+      status: 'running',
+      durationMs: 0,
+      startedAt: tenMinAgo,
+      finishedAt: null,
+    });
+    renderDashboard();
+    expect(await screen.findByText('Crawler health')).toBeInTheDocument();
+    expect(screen.queryByText(/data may be stale/i)).not.toBeInTheDocument();
+  });
+
+  it('A zombie running sweep does not suppress the staleness banner', async () => {
     const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     await mockWithLatestSweep({
       status: 'running',
@@ -132,8 +145,7 @@ describe('Dashboard', () => {
       finishedAt: null,
     });
     renderDashboard();
-    expect(await screen.findByText('Crawler health')).toBeInTheDocument();
-    expect(screen.queryByText(/data may be stale/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/data may be stale/i)).toBeInTheDocument();
   });
 
   it('renders title even while queries are pending', async () => {

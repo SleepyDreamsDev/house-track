@@ -225,7 +225,12 @@ export function registerListingsRoutes(app: Hono, prisma: PrismaClient): void {
       },
     });
 
-    const domMedians = districtDomMedians(slice, now);
+    // Median over the priced+area-complete subset — the same population
+    // /analytics/motivated-sellers ranks, so both views report one number.
+    const domMedians = districtDomMedians(
+      slice.filter((l) => l.priceEur != null && l.areaSqm != null && l.areaSqm > 0),
+      now,
+    );
     const domMedianDistrict = listing.district ? (domMedians.get(listing.district) ?? null) : null;
 
     const toSample = (r: {
