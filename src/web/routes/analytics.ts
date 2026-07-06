@@ -739,7 +739,7 @@ analyticsRouter.get('/analytics/distress', async (c) => {
 // Strongly negative residual = a deal (priced below what its attributes
 // warrant); positive = aspirational. Recalibrates automatically as geo/author
 // features land. Cross-portal "sold-price" calibration is a later (P5) slice.
-const VALUATION_MIN_SAMPLES = 10;
+export const VALUATION_MIN_SAMPLES = 10;
 
 analyticsRouter.get('/analytics/valuation', async (c) => {
   const prisma = getPrisma();

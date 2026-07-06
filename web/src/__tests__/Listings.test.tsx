@@ -304,8 +304,9 @@ describe('Listings', () => {
       </QueryClientProvider>,
     );
 
-    const row = await screen.findByText('Row one');
-    await user.click(row);
+    // Title is now a dossier link — expand by clicking elsewhere in the row.
+    const row = (await screen.findByText('Row one')).closest('tr')!;
+    await user.click(within(row as HTMLElement).getByText('Centru'));
 
     const panel = await screen.findByTestId('price-history-panel');
     expect(panel).toBeInTheDocument();
@@ -372,7 +373,9 @@ describe('Listings', () => {
     );
 
     await user.click(await screen.findByRole('tab', { name: 'Cards' }));
-    await user.click(await screen.findByText('Card one'));
+    // Title is now a dossier link — expand by clicking the card body.
+    const card = (await screen.findByText('Card one')).closest('.cursor-pointer')!;
+    await user.click(card as HTMLElement);
 
     const panel = await screen.findByTestId('price-history-panel');
     expect(panel).toBeInTheDocument();

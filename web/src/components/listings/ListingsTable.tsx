@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/Badge.js';
 import { SortableTh } from '@/components/ui/SortableTh.js';
 import { fmt } from '@/lib/format.js';
@@ -166,9 +167,14 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                           Out-of-region: {r.district ?? '?'}
                         </Badge>
                       )}
-                      <span className="truncate font-medium text-neutral-800" title={r.title}>
+                      <Link
+                        to={`/listings/${r.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="truncate font-medium text-neutral-800 hover:text-teal-700 hover:underline"
+                        title={r.title}
+                      >
                         {r.title}
-                      </span>
+                      </Link>
                     </div>
                   </td>
                   <td className="py-2 px-3 text-neutral-600">{r.district ?? '—'}</td>

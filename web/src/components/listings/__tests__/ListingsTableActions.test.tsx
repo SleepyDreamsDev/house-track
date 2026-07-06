@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { ListingsTable, type ListingsTableRow } from '../ListingsTable.js';
 
 const baseRow: ListingsTableRow = {
@@ -18,7 +19,7 @@ const baseRow: ListingsTableRow = {
 
 describe('ListingsTable action toggles', () => {
   it('renders a favorite toggle and an exclude toggle for a row', () => {
-    render(<ListingsTable rows={[baseRow]} />);
+    render(<ListingsTable rows={[baseRow]} />, { wrapper: MemoryRouter });
     const row = screen.getAllByRole('row')[1]!;
     expect(within(row).getByRole('button', { name: /favorite/i })).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: /exclude/i })).toBeInTheDocument();
@@ -35,6 +36,7 @@ describe('ListingsTable action toggles', () => {
         onToggleFavorite={onToggleFavorite}
         onRowClick={onRowClick}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const favBtn = screen.getByRole('button', { name: /favorite/i });
@@ -50,6 +52,7 @@ describe('ListingsTable action toggles', () => {
 
     render(
       <ListingsTable rows={[{ ...baseRow, excluded: false }]} onToggleExclude={onToggleExclude} />,
+      { wrapper: MemoryRouter },
     );
 
     const excludeBtn = screen.getByRole('button', { name: /exclude/i });

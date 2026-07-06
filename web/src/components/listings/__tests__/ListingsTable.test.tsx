@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { ListingsTable, type ListingsTableRow } from '../ListingsTable.js';
 
 const rows: ListingsTableRow[] = [
@@ -44,7 +45,7 @@ const titles = () =>
 
 describe('ListingsTable', () => {
   it('renders the expected sortable column headers', () => {
-    render(<ListingsTable rows={rows} />);
+    render(<ListingsTable rows={rows} />, { wrapper: MemoryRouter });
     for (const label of [
       'Title',
       'Locality',
@@ -60,7 +61,7 @@ describe('ListingsTable', () => {
   });
 
   it('clicking the Price header sorts rows ascending then descending on second click', async () => {
-    render(<ListingsTable rows={rows} />);
+    render(<ListingsTable rows={rows} />, { wrapper: MemoryRouter });
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: /Price/ }));
@@ -71,7 +72,7 @@ describe('ListingsTable', () => {
   });
 
   it('marks the active sort column with the ascending indicator', async () => {
-    render(<ListingsTable rows={rows} />);
+    render(<ListingsTable rows={rows} />, { wrapper: MemoryRouter });
     const user = userEvent.setup();
 
     const priceHeader = screen.getByRole('button', { name: /Price/ });

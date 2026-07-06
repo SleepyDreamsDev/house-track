@@ -504,9 +504,7 @@ const BestBuysPanel: React.FC<{
             onSortChange={setColumnSort}
             onToggleFavorite={(id, next) => toggleFavorite.mutate({ id, next })}
             onToggleExclude={(id, next) => toggleExclude.mutate({ id, next })}
-            onOpenListing={(id) =>
-              navigate(`/listings?highlight=${encodeURIComponent(id)}&from=best-buys`)
-            }
+            onOpenListing={(id) => navigate(`/listings/${encodeURIComponent(id)}`)}
           />
         </Card>
       </div>
@@ -610,9 +608,7 @@ const MotivatedSellersPanel: React.FC<{
             onSortChange={setColumnSort}
             onToggleFavorite={(id, next) => toggleFavorite.mutate({ id, next })}
             onToggleExclude={(id, next) => toggleExclude.mutate({ id, next })}
-            onOpenListing={(id) =>
-              navigate(`/listings?highlight=${encodeURIComponent(id)}&from=motivated-sellers`)
-            }
+            onOpenListing={(id) => navigate(`/listings/${encodeURIComponent(id)}`)}
           />
         </Card>
       </div>
