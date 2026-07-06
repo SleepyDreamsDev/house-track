@@ -147,6 +147,34 @@ describe('GET /api/listings/:id/dossier', () => {
     expect(body.cluster).toBeNull();
   });
 
+  it('computes the district DOM median over the priced subset, matching motivated-sellers', async () => {
+    await seedListing('d10', 100, 100_000, {
+      firstSeenAt: new Date(now.getTime() - 10 * DAY_MS),
+    });
+    await seedListing('d20', 110, 110_000, {
+      firstSeenAt: new Date(now.getTime() - 20 * DAY_MS),
+    });
+    // Unpriced row with a huge DOM — must NOT drag the median up.
+    await prisma.listing.create({
+      data: {
+        id: 'unpriced-ancient',
+        url: 'https://999.md/unpriced-ancient',
+        title: 'Casă individuală',
+        priceEur: null,
+        areaSqm: null,
+        district: 'Centru',
+        active: true,
+        firstSeenAt: new Date(now.getTime() - 1000 * DAY_MS),
+        lastSeenAt: now,
+        lastFetchedAt: now,
+      },
+    });
+
+    const res = await app.request('/api/listings/d10/dossier');
+    const body = (await res.json()) as DossierResponse;
+    expect(body.domMedianDistrict).toBe(15);
+  });
+
   it('returns 404 for an unknown listing', async () => {
     const res = await app.request('/api/listings/nope/dossier');
     expect(res.status).toBe(404);

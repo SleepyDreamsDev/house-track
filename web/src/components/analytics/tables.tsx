@@ -70,7 +70,7 @@ export const BestBuysTable: React.FC<{
     <table className="w-full text-[12.5px]">
       <thead>
         <tr className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200">
-          <th className="py-2 w-8">Rank</th>
+          <th className="py-2 pr-3 w-12">Rank</th>
           <SortableTh
             label="Listing"
             sortKey="title"
@@ -301,7 +301,7 @@ export const PriceDropsTable: React.FC<{
     <table className="w-full text-[12.5px]">
       <thead>
         <tr className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200">
-          <th className="py-2 w-8">Rank</th>
+          <th className="py-2 pr-3 w-12">Rank</th>
           <SortableTh
             label="Listing"
             sortKey="title"
@@ -466,7 +466,7 @@ export const MotivatedSellersTable: React.FC<{
     <table className="w-full text-[12.5px]">
       <thead>
         <tr className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200">
-          <th className="py-2 w-8">Rank</th>
+          <th className="py-2 pr-3 w-12">Rank</th>
           <SortableTh
             label="Listing"
             sortKey="title"
@@ -561,6 +561,8 @@ export const MotivatedSellersTable: React.FC<{
             <td className="py-1.5 text-right">
               {r.totalCutPct > 0 ? (
                 <span className="tabular-nums text-amber-700">−{r.totalCutPct}%</span>
+              ) : r.totalCutPct < 0 ? (
+                <span className="tabular-nums text-error">+{Math.abs(r.totalCutPct)}% raised</span>
               ) : (
                 <span className="text-neutral-300">0%</span>
               )}

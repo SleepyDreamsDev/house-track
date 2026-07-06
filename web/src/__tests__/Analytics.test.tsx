@@ -246,7 +246,7 @@ describe('Analytics', () => {
             daysOnMkt: 10,
             domMedianDistrict: 40,
             cuts: 0,
-            totalCutPct: 0,
+            totalCutPct: -40,
             residualPct: null,
             score: 0,
             watchlist: false,
@@ -268,5 +268,7 @@ describe('Analytics', () => {
     // Null residual renders as an em dash, not 0.
     const row = screen.getByText('Casă fără model').closest('tr')!;
     expect(within(row).getByText('—')).toBeInTheDocument();
+    // A raised price (negative totalCutPct) is surfaced, not hidden as 0%.
+    expect(within(row).getByText(/\+40% raised/i)).toBeInTheDocument();
   });
 });
