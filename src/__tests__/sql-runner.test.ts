@@ -260,7 +260,7 @@ describe('SqlRunner — caching', () => {
   const SQL = 'SELECT count(*) AS c FROM "Listing"';
 
   function dataCalls(spy: ReturnType<typeof vi.spyOn>, wrapped: string): number {
-    return spy.mock.calls.filter((c) => String(c[0]) === wrapped).length;
+    return spy.mock.calls.filter((c: unknown[]) => String(c[0]) === wrapped).length;
   }
 
   it('Serves an identical query from cache without re-running the data query', async () => {
