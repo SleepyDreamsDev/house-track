@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card.js';
 import { Button } from '@/components/ui/Button.js';
@@ -39,7 +39,11 @@ interface SweepStatus {
   status: 'running' | 'success' | 'failed' | 'cancelled';
   durationMs: number;
   startedAt: string;
+  finishedAt: string | null;
 }
+
+// 24h = at least two missed sweeps at the default few-sweeps-per-day cadence.
+const STALE_SWEEP_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 interface CircuitState {
   open: boolean;
 }
@@ -94,6 +98,8 @@ export const Dashboard: React.FC = () => {
         title="Dashboard"
         subtitle={`last sweep ${latestSweep?.startedAt ? fmt.rel(latestSweep.startedAt) : '—'}`}
       />
+
+      <SweepHealthBanner sweep={latestSweep} />
 
       <Card className="!p-0">
         <div className="grid grid-cols-4 divide-x divide-neutral-200">
@@ -255,6 +261,33 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+const SweepHealthBanner: React.FC<{ sweep: SweepStatus | undefined }> = ({ sweep }) => {
+  if (!sweep || sweep.status === 'running') return null;
+
+  const endedAt = sweep.finishedAt ?? sweep.startedAt;
+  const failed = sweep.status === 'failed';
+  const stale = Date.now() - new Date(endedAt).getTime() > STALE_SWEEP_THRESHOLD_MS;
+  if (!failed && !stale) return null;
+
+  return (
+    <Card
+      className={failed ? 'border-error/40 bg-error/5' : 'border-warning/40 bg-amber-50'}
+      data-testid="sweep-health-banner"
+    >
+      <div className="flex items-center justify-between gap-4 text-sm">
+        <span className={failed ? 'text-error' : 'text-amber-800'}>
+          {failed
+            ? `Last sweep failed ${fmt.rel(endedAt)} — listings and prices are not being refreshed.`
+            : `Data may be stale — last sweep finished ${fmt.rel(endedAt)}.`}
+        </span>
+        <Link to="/sweeps" className="shrink-0 font-medium text-teal-700 hover:underline">
+          Sweeps →
+        </Link>
+      </div>
+    </Card>
   );
 };
 

@@ -78,6 +78,7 @@ The Operator SPA is a Vite + React 18 + TypeScript SPA frontend, served from the
 - **Sweeps page**: Lists recent SweepRun rows (status, startedAt, finishedAt, pagesFetched, detailsFetched, newListings, errors). Polled every 5–10s via `/sweeps?limit=20` query with `staleTime: 0` to always refetch.
 - **SweepDetail page**: Single sweep expansion; shows configSnapshot (filter + politeness at time of sweep), pagesDetail (per-page fetch results), detailsDetail (per-listing detail fetch results), eventLog (low-level trace).
 - **Dashboard status**: Displays latestSweep (running/success/failed) + circuit state + success rate (ok/total over the last N days).
+- **Dashboard staleness banner**: Above the KPI strip, driven by `/sweeps/latest` (`finishedAt ?? startedAt`). Error banner when the latest sweep `status === 'failed'`; warning banner when the latest sweep is not running and ended more than `STALE_SWEEP_THRESHOLD_MS` (24h, hardcoded client const — cadence is a few sweeps/day, so 24h means at least two missed sweeps) ago. Both link to `/sweeps`. No banner while a sweep is running (a long-overdue sweep that just started shouldn't warn) or when no sweep exists yet (fresh DB / query error — first-boot stays clean).
 
 ## Contracts & Types
 
