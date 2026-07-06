@@ -63,6 +63,7 @@ interface MockEnv {
   startSweep: ReturnType<typeof vi.fn>;
   finishSweep: ReturnType<typeof vi.fn>;
   findUnenrichedListings: ReturnType<typeof vi.fn>;
+  recomputeClusters: ReturnType<typeof vi.fn>;
   snapshotConfig: ReturnType<typeof vi.fn>;
   recordSweepProgress: ReturnType<typeof vi.fn>;
   parseIndex: ReturnType<typeof vi.fn>;
@@ -84,6 +85,7 @@ function makeEnv(): MockEnv {
   const startSweep = vi.fn().mockResolvedValue({ id: 1 });
   const finishSweep = vi.fn().mockResolvedValue(undefined);
   const findUnenrichedListings = vi.fn().mockResolvedValue([]);
+  const recomputeClusters = vi.fn().mockResolvedValue(0);
   const snapshotConfig = vi.fn().mockResolvedValue({
     'politeness.baseDelayMs': 8000,
     'politeness.jitterMs': 2000,
@@ -103,6 +105,7 @@ function makeEnv(): MockEnv {
       startSweep,
       finishSweep,
       findUnenrichedListings,
+      recomputeClusters,
       snapshotConfig,
       recordSweepProgress,
     } as unknown as Persistence,
@@ -125,6 +128,7 @@ function makeEnv(): MockEnv {
     startSweep,
     finishSweep,
     findUnenrichedListings,
+    recomputeClusters,
     snapshotConfig,
     recordSweepProgress,
     parseIndex,
@@ -262,6 +266,43 @@ describe('runSweep', () => {
     expect(env.markSeen).toHaveBeenCalledOnce();
     expect(env.markSeen.mock.calls[0]?.[0].map((s: ListingStub) => s.id)).toEqual(['A']);
     expect(env.markInactiveOlderThan).toHaveBeenCalledWith(3 * HOUR);
+  });
+
+  it('Successful sweep recomputes dedup clusters after age-out', async () => {
+    const env = makeEnv();
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.parseIndex.mockReturnValueOnce([]);
+
+    await runSweep(env.deps);
+
+    expect(env.recomputeClusters).toHaveBeenCalledOnce();
+    const ageOutOrder = env.markInactiveOlderThan.mock.invocationCallOrder[0];
+    const recomputeOrder = env.recomputeClusters.mock.invocationCallOrder[0];
+    expect(recomputeOrder).toBeGreaterThan(ageOutOrder!);
+  });
+
+  it('Cluster recompute failure does not fail the sweep', async () => {
+    const env = makeEnv();
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.parseIndex.mockReturnValueOnce([]);
+    env.recomputeClusters.mockRejectedValueOnce(new Error('clustering exploded'));
+
+    await runSweep(env.deps);
+
+    expect(env.finishSweep.mock.calls[0]?.[1]).toMatchObject({ status: 'ok' });
+  });
+
+  it('Cluster recompute is skipped on non-ok sweeps', async () => {
+    const env = makeEnv();
+    env.fetchSearchPage.mockResolvedValueOnce(envelope({}));
+    env.parseIndex.mockImplementationOnce(() => {
+      throw new Error('schema drift on index');
+    });
+
+    await runSweep(env.deps);
+
+    expect(env.recomputeClusters).not.toHaveBeenCalled();
+    expect(env.finishSweep.mock.calls[0]?.[1]).toMatchObject({ status: 'partial' });
   });
 
   it('markSeen marks the FULL index diff, not the detail-fetch-capped slice', async () => {

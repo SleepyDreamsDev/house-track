@@ -279,6 +279,30 @@ Feature: Sweep Orchestration & Crawl Pipeline
       - markInactiveOlderThan() is NOT called
       - "MISSING".active remains true (preserved)
 
+  # Cluster Recompute
+
+  Scenario: Successful sweep recomputes dedup clusters after age-out
+    Given a sweep that reached the end of the index (result.status = 'ok')
+    When runSweep finishes its post-detail steps
+    Then:
+      - persist.recomputeClusters() is called exactly once
+      - it is called AFTER markInactiveOlderThan (recompute selects on delistedAt stamped by age-out)
+      - the returned multi-member cluster count is logged as event 'sweep.clusters'
+
+  Scenario: Cluster recompute failure does not fail the sweep
+    Given a sweep that reached the end of the index
+    And persist.recomputeClusters() rejects with an error
+    When runSweep finishes
+    Then:
+      - the error is caught locally and logged as event 'sweep.clusters_failed'
+      - finishSweep still receives result.status = 'ok'
+
+  Scenario: Cluster recompute is skipped on non-ok sweeps
+    Given result.status = 'partial' (pagination broke early)
+    When runSweep finishes
+    Then:
+      - persist.recomputeClusters() is NOT called
+
   Scenario: Mark seen bumps lastSeenAt on all seen stubs
     Given diff.seen = [A, B, C]
     And detail cap sliced seenStubs to [A, B] (skipped C)

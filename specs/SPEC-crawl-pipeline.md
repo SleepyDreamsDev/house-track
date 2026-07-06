@@ -98,10 +98,12 @@ The sweep orchestration subsystem coordinates the periodic crawl of 999.md listi
    - Re-fetch each to capture price/description evolution; prevent long tail from going stale.
    - Fudge: skip any listing touched in this sweep's last 60 seconds.
 
-   g. **Mark seen + age out** (line 169–180):
+   g. **Mark seen + age out + cluster recompute** (line 169–190):
    - Call `persist.markSeen(diff.seen)` → bump `lastSeenAt` on every seen stub (without detail cost).
    - Call `persist.markInactiveOlderThan(missingThresholdMs)` → mark any listing absent for >≈3 sweeps as `active=false`.
-   - Age-out only fires when `status='ok'` (full index reached); skipped on partial sweeps.
+   - Call `persist.recomputeClusters()` → rebuild dedup `canonicalId` assignments over active + recently delisted (≤180d) listings; log the multi-member cluster count as `sweep.clusters`.
+   - Both age-out and cluster recompute only fire when `status='ok'` (full index reached); skipped on partial sweeps.
+   - Recompute runs **after** age-out (it selects on `delistedAt`, which age-out stamps in the same sweep) and is wrapped in its own try/catch: clusters are derived, rebuildable data, so a clustering failure logs `sweep.clusters_failed` and must not flip a successful sweep to `failed`.
 
    h. **Error handling** (line 181–189):
    - `CircuitTrippingError` → set status to `'circuit_open'`.
@@ -148,6 +150,7 @@ interface SweepDeps {
     findStaleListings(opts: { limit; sinceFetched }): Promise<string[]>;
     snapshotConfig(): Promise<Record<string, unknown>>;
     recordSweepProgress(id: number, update: SweepProgressUpdate): Promise<void>;
+    recomputeClusters(): Promise<number>; // returns multi-member cluster count
   };
 
   circuit: {
