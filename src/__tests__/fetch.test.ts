@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MockAgent } from 'undici';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { Circuit } from '../circuit.js';
 import { CircuitTrippingError, Fetcher, type FetcherConfig } from '../fetch.js';
@@ -34,14 +34,14 @@ function makeCircuit(sentinelPath: string) {
 describe('Fetcher', () => {
   let dir: string;
   let mockAgent: MockAgent;
-  let sleep: ReturnType<typeof vi.fn>;
+  let sleep: Mock<(ms: number) => Promise<void>>;
   let circuit: Circuit;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'fetcher-'));
     mockAgent = new MockAgent();
     mockAgent.disableNetConnect();
-    sleep = vi.fn().mockResolvedValue(undefined);
+    sleep = vi.fn<(ms: number) => Promise<void>>().mockResolvedValue(undefined);
     circuit = makeCircuit(join(dir, '.circuit_open'));
   });
 
